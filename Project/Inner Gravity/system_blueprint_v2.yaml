@@ -1,0 +1,163 @@
+schema: universal-production-blueprint/v2
+id: P-INNER-GRAVITY-BP-V2
+status: pre_build_validation
+owner: Elijah-Levi Flowers-Nelson
+
+companion_artifacts:
+  human_guide_markdown: ./System_Blueprint_v2_Visual_Guide.md
+  visual_deck_canva:
+    design_id: DAHbn2Fm68s
+    url: https://canva.link/adetkcchtplz5zf
+  workspace_root: ../../README.md
+
+representation_law:
+  yaml:
+    audience: llm_and_tools
+    purpose: High-density instructions, routing rules, state machines, and machine-validated contracts.
+  markdown_mermaid:
+    audience: humans
+    purpose: Plain-language explanations, diagrams, speaker notes, and editorial judgment.
+  canva:
+    audience: non_technical_stakeholders
+    purpose: Visual system alignment and pre-build viability validation.
+  rule: Keep one controlling source per fact; cross-link views; never duplicate conflicting specs.
+
+two_plane_architecture:
+  speculative_plane:
+    purpose: High-velocity branching, drafting, synthesis, and recombination.
+    reality_access: read_only
+    write_scope: isolated_sandbox_only
+    taint_policy: SPECULATIVE_and_DERIVED_allowed
+    approval_friction: none
+  commitment_boundary:
+    purpose: Narrow deterministic gate between speculative drafts and canonical reality.
+    bypassable: false
+    required_checks:
+      - id: G1_version_match
+        check: All hard dependencies match exact recorded SHA-256 on disk.
+        on_fail: Mark coupled downstream nodes STALE; leave unaffected branches VALID.
+      - id: G2_taint_check
+        check: Zero SPECULATIVE taint in required-for-use slots (unless scope == internal_draft).
+        on_fail: Hold affected release scope; list missing facts with named owners.
+      - id: G3_independent_second_eyes
+        check: Read-only verifier separate from builder inspects candidate against primary spans.
+        on_fail: Attach claim-bound objection to target_sha; block commit until cleared on new SHA.
+      - id: G4_scoped_human_permission
+        check: Approval tuple (artifact_sha, allowed_use, channel, approver) matches target action.
+        on_fail: Route concise decision packet to designated human owner; never infer public permission from preview access.
+  canonical_reality:
+    purpose: Live public releases, approved briefs, merged code, and real audience destinations.
+    mutation_method: atomic_pointer_flip_or_human_actuator
+    feedback_output: observed_outcome_and_receiver_receipt
+
+custody_state_machine:
+  node_states:
+    - PENDING
+    - RUNNING
+    - FAILED
+    - HELD
+    - VERIFIED
+    - STALE
+  dependency_edges:
+    hard: "-->"
+    advisory: "-.->"
+  transition_guard:
+    eligible_to_run: "Every hard dependency is VERIFIED and matches expected_parent_sha."
+    on_hard_dep_failure: "Transition only hard descendants to HELD; keep independent lanes RUNNING."
+    anti_skip_invariant: "Never advance past a FAILED prerequisite on resume (K-ARCH-01)."
+  custody_chain:
+    - assignment
+    - invocation
+    - observed_effect
+    - delivery
+    - receiver_receipt
+    - scoped_human_approval
+  idempotency:
+    operation_key: "sha256(assignment_id + sorted_input_shas + action_type)"
+    retry_rule: "Execute authoritative destination readback before replaying any uncertain side effect."
+
+epistemic_taint_types:
+  OBSERVED:
+    definition: Directly anchored to primary bytes, timecodes, or raw tool output.
+    requires: [source_sha, exact_span]
+  DERIVED:
+    definition: Synthesized strictly from OBSERVED nodes.
+    requires: [parent_claim_ids]
+  SPECULATIVE:
+    definition: Unconfirmed fact, placeholder shot, or unverified assumption.
+    allowed_in: [speculative_plane, internal_draft]
+    blocked_in: [public_release, external_commitment]
+
+components:
+  shared_memory:
+    role: Passive source of truth for IDs, current SHAs, limits, and null results.
+    sources:
+      - ../../Project/Project_Register.md
+      - ../../Knowledge/Knowledge_Register.md
+      - ../../Knowledge/Repository Archaeology/00-Exhibit_Index.md
+  smart_router:
+    role: Assigns active controller based on governing bottleneck and builds bounded packets.
+    lead_handoff_law:
+      audience_or_destination_open: MKT-M
+      capture_crew_or_edit_bottleneck: PROD-M
+      code_or_harness_change: engineering_owner
+  reusable_functions:
+    role: Stateless domain craft and cognitive operators invoked on demand.
+    contract: "immutable_input_revision -> output_artifact + typed_claims + hold_list"
+    catalogs:
+      media_procedures: ../../Knowledge/Media Agency/Skills and Workflows/README.md
+      cognitive_operators: [A01_divergence, A05_remodel, A06_recall, A07_clip_custody, A08_claim_audit]
+  verification_door:
+    role: Enforces G1..G4 before any promotion to canonical reality.
+    tools: [check_artifact.py, ig-evidence-review, hook_v4.py]
+  learning_loop:
+    role: Converts observed misses into minimal diffs + regression fixtures; retains neutral results (K-ARCH-02).
+    rule: Promote a new method to default only when it beats baseline on a real failure mode.
+
+domain_gears:
+  gear_1_video_production:
+    route_id: MA-31
+    primary_inputs: [approved_brief, raw_media_manifest, rights_and_clearances]
+    core_functions: [OP-01, MW-04, MP-01..12]
+    selective_invalidation:
+      cut_changed: [captions, loudness_qc, social_cutdowns]
+      footage_missing: [hold_affected_beats_only, draft_story_alternative]
+    human_actuators: [physical_capture, talent_consent, card_erasure, final_release]
+
+  gear_2_marketing_social_campaign:
+    route_id: MA-32
+    primary_inputs: [audience_need, verified_destination_page, approved_cut]
+    core_functions: [MK-01..10, CH-01..10, CD-01..08]
+    preflight_inversion: "If public destination page is broken or contradictory, route page fix before shooting new media."
+    selective_invalidation:
+      cut_changed: [captions, channel_variants, recipient_copies]
+      copy_only_changed: [wording, destination_check, affected_recipients]
+      preserve_on_copy_change: [cut_timing_verification]
+    human_actuators: [ad_spend, partner_commitments, public_publish]
+
+  gear_3_live_hybrid_events:
+    route_id: MA-33
+    primary_inputs: [learning_objective, attendance_route, crew_cue_plan]
+    core_functions: [MP_live_prep, rehearsal_attendee_check]
+    scope_isolation:
+      in_event_standin: separate_approval_and_rights_required
+      post_event_replay: separate_approval_and_rights_required
+    human_actuators: [live_switching, fallback_activation, replay_publish]
+
+  gear_4_software_and_strategy:
+    route_id: P-INNER-GRAVITY
+    primary_inputs: [git_commit_sha, ast_graph, primary_policy_or_board_records]
+    core_functions: [code_graph_forensic, A01_multi_angle, A05_crucible_subtraction, A09_reconsideration_triggers]
+    selective_invalidation:
+      signature_changed: [all_callers, integration_tests]
+      internal_impl_changed: [local_unit_tests_only]
+    human_actuators: [tier_1_destructive_local, tier_2_remote_push_or_deploy, external_policy_commitment]
+
+llm_operating_directives:
+  - Always read this YAML contract for routing and invariants; refer humans to System_Blueprint_v2_Visual_Guide.md and Canva deck DAHbn2Fm68s.
+  - Never mutate canonical reality directly from the speculative plane.
+  - Always distinguish OBSERVED, DERIVED, and SPECULATIVE claims; never promote SPECULATIVE into required release slots.
+  - Never self-certify completion; require independent read-only verification for consequential claims.
+  - Keep Asana strictly read-only; treat role labels as responsibility only, never as authority grants.
+  - On partial failure, hold only dependent branches and continue independent authorized work.
+  - Preserve neutral or negative evaluation results (K-ARCH-02) and delete complexity that does not beat baseline.

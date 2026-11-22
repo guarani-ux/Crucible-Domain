@@ -1,0 +1,42 @@
+schema: hourly-task-system/v1
+beat_id: BEAT-01
+scheduled_time_local: "02:30 America/Edmonton"
+title: Convergence Audit & Task-as-a-System Architecture
+depends_on_previous_beat: none
+
+objective: >
+  Read and converge all existing Crucible Domain knowledge, the portable CPL handoff
+  (crucible-cpl-handoff/v1), and our 3-Engine synthesis into one grounded architectural
+  contract where every single task operates as a self-contained modular system and feeds
+  a live Content & Release Calendar.
+
+inputs_to_read:
+  - ../../../README.md
+  - ../../Work Operating System/Work_Operating_System_Work_Levels_and_Forks.md
+  - ../../../Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md
+  - ../../../Knowledge/Media Agency/Skills and Workflows/institutional-evidence.md
+  - ../system_blueprint_v2.yaml
+
+research_and_design_questions:
+  - How do Engine 1 (Strategic/Gap Intelligence), Engine 2 (Modular Creative & Production Economy),
+    and Engine 3 (Custody & 6-Gate Handoff Spine) converge inside one single Task-as-a-System YAML unit?
+  - How does the Content & Release Calendar emerge automatically from Task-as-a-System packets
+    rather than becoming a second manual tracker that drifts?
+  - Which exact fields from CH-01..CH-06, WOS forks, and G01..G06 are load-bearing vs. ceremony to cut?
+
+deliverables_to_build:
+  - cpl_handoff_portable.yaml  # Reconciled portable handoff with Content Calendar & Engine 2 criteria added
+  - cpl_pilot_maps.md          # The 5 companion Mermaid maps updated with C->B->A + Calendar link
+  - 01_convergence_architecture.yaml  # Canonical Task-as-a-System schema + 3-Engine blueprint contract
+  - 01_convergence_architecture.md    # Concise human-readable summary & Mermaid convergence map
+
+deterministic_done_gate:
+  checks:
+    - yaml.safe_load succeeds on cpl_handoff_portable.yaml and 01_convergence_architecture.yaml
+    - Privacy scan verifies 0 coworker names and 0 internal Asana task URLs in Project/Inner Gravity/overnight_mvp/
+    - run_state.yaml updated with BEAT-01 status=PASSED and output hashes
+
+hard_boundaries:
+  asana: read_only
+  external_mutations: forbidden
+  preserve_unknown_when_unverified: true

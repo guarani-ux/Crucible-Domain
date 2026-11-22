@@ -1,0 +1,54 @@
+schema: overnight-run-state/v1
+run_id: OVERNIGHT-MVP-2026-11-22
+timezone: America/Edmonton
+window: "2026-11-22 02:30 to 08:00"
+governing_goal: "Converge Crucible Domain, CPL strategy, and live multi-platform research into a working, tested Task-as-a-System MVP and evidence-backed Evergreen Content Calendar without letting ideas outrun implementation."
+hard_invariants:
+  - asana_read_only: true
+  - external_cloud_writes: forbidden
+  - coworker_names_and_asana_urls_in_synced_dir: forbidden
+  - fake_approvals_or_synthetic_live_proof: forbidden
+  - implementation_ceiling: "If Beat N done_gate fails, Beat N+1 must repair Beat N before advancing."
+
+beats:
+  - id: BEAT-01
+    time_local: "02:30"
+    instruction_file: hours/01_0230_convergence_and_system_design.yaml
+    status: PASSED
+    gate_result: PASS_YAML_AND_PRIVACY_VERIFIED
+    completed_at_local: "2026-11-22 02:34"
+    outputs:
+      - {path: cpl_handoff_portable.yaml, sha256_prefix: "9b53877b0844"}
+      - {path: cpl_pilot_maps.md, sha256_prefix: "11923a4c48a8"}
+      - {path: 01_convergence_architecture.yaml, sha256_prefix: "506518ed0bf7"}
+      - {path: 01_convergence_architecture.md, sha256_prefix: "6a30dd53dc92"}
+  - id: BEAT-02
+    time_local: "03:30"
+    instruction_file: hours/02_0330_platform_demographics_and_viewer_behavior.yaml
+    status: PENDING
+    gate_result: NOT_RUN
+    outputs: []
+  - id: BEAT-03
+    time_local: "04:30"
+    instruction_file: hours/03_0430_filmmaking_craft_trends_and_library_niches.yaml
+    status: PENDING
+    gate_result: NOT_RUN
+    outputs: []
+  - id: BEAT-04
+    time_local: "05:30"
+    instruction_file: hours/04_0530_mvp_engine_and_falsifying_tests.yaml
+    status: PENDING
+    gate_result: NOT_RUN
+    outputs: []
+  - id: BEAT-05
+    time_local: "06:30"
+    instruction_file: hours/05_0630_live_cpl_calendar_and_pilot_packets.yaml
+    status: PENDING
+    gate_result: NOT_RUN
+    outputs: []
+  - id: BEAT-06
+    time_local: "07:30"
+    instruction_file: hours/06_0730_independent_audit_and_morning_brief.yaml
+    status: PENDING
+    gate_result: NOT_RUN
+    outputs: []

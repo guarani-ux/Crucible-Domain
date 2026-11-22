@@ -1,0 +1,54 @@
+schema: hourly-task-system/v1
+beat_id: BEAT-03
+scheduled_time_local: "04:30 America/Edmonton"
+title: Lean Filmmaking Craft, Videography Trends & Peer Library / Evergreen Niche Intelligence
+depends_on_previous_beat: BEAT-02
+
+objective: >
+  Conduct live web research on (1) lean 2025-2026 documentary/host-led filmmaking and
+  videography craft for economical 1-to-2 person in-house shoots, and (2) peer public library
+  and educational/civic video niches to sharpen CPL's evergreen formats (PITCH-NQ, PITCH-YCD,
+  Day in the Life, PILOT-ELC) and YouTube front-door architecture.
+
+inputs_to_read:
+  - run_state.yaml
+  - 01_convergence_architecture.yaml
+  - 02_platform_intelligence.yaml
+  - cpl_handoff_portable.yaml
+
+research_mandate:
+  tool: search_web
+  tracks:
+    - track_1_lean_filmmaking_and_videography:
+        questions:
+          - Simultaneous 16:9 YouTube + 9:16 social framing & safe-zone shooting patterns
+          - High-craft low-budget lighting, audio clarity, and natural-space B-roll in public venues
+          - Modern documentary & host-led retention pacing (opening hooks, chapter breaks, visual proof)
+          - Cost-avoidance shoot patterns (batch shooting 2-3 episodes per location setup)
+    - track_2_peer_libraries_and_evergreen_niches:
+        peers: [Toronto Public Library, Edmonton Public Library, Vancouver Public Library, New York Public Library, Seattle Public Library]
+        adjacent_benchmarks: [museum/civic explainers, BookTube/reader-advisory, practical skill tutorials]
+        questions:
+          - Which evergreen niches consistently attract viewers without aging out in 2 weeks?
+          - Where do public libraries default to stiff talking-head promos (whitespace CPL can own)?
+          - How do top channels structure their YouTube homepage entrance and playlist pathways?
+          - How does each niche map cleanly to CPL's 5 official mandates (Collections, Experiences, Expertise, Spaces, Technology) and 3 proposed editorial lenses (Grow, Books and Reading, Community)?
+  evidence_rules:
+    - Public sources with exact URLs only; no claims about private peer analytics.
+    - Stop peer comparisons once concrete design choices for CPL formats and calendar slots are supported.
+
+deliverables_to_build:
+  - 03_craft_and_niche_playbook.yaml  # Machine-readable evergreen format recipes, lean shoot specs & niche map
+  - 03_craft_and_niche_playbook.md    # Practical studio guide for scripting, shooting, and series design
+
+deterministic_done_gate:
+  checks:
+    - yaml.safe_load succeeds on 03_craft_and_niche_playbook.yaml
+    - Both filmmaking craft specs and >= 4 peer/niche findings have verified public URLs
+    - Formats explicitly align with CPL 5 official mandates without renaming them
+    - run_state.yaml updated with BEAT-03 status=PASSED and output hashes
+
+hard_boundaries:
+  asana: read_only
+  external_mutations: forbidden
+  no_fabricated_metrics: true

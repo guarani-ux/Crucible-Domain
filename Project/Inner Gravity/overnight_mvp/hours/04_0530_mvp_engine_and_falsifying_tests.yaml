@@ -1,0 +1,60 @@
+schema: hourly-task-system/v1
+beat_id: BEAT-04
+scheduled_time_local: "05:30 America/Edmonton"
+title: Build Executable Task-as-a-System MVP CLI & Red-Capable Falsifying Test Suite
+depends_on_previous_beat: BEAT-03
+
+objective: >
+  Convert the converged architecture (Beat 1) and platform/craft rulesets (Beats 2-3) into a
+  working, zero-bloat Python MVP CLI (mvp_cli.py) and automated falsifying test suite (test_mvp.py)
+  so implementation catches up to and mechanically enforces the ideas.
+
+inputs_to_read:
+  - run_state.yaml
+  - 01_convergence_architecture.yaml
+  - 02_platform_intelligence.yaml
+  - 03_craft_and_niche_playbook.yaml
+  - cpl_handoff_portable.yaml
+
+mvp_specifications:
+  target_script: mvp_cli.py
+  constraints:
+    - Python stdlib + PyYAML only (zero extra pip installs, zero daemons, zero SQLite bloat).
+    - Zero domain-specific hardcoded if-branches inside core gate/staleness logic (representation invariant).
+  subcommands:
+    - init-task: Create a Task-as-a-System YAML packet binding Engine 1 (mandate/platform fit),
+        Engine 2 (creative vibe/tone/shoot economy/justified derivatives), and Engine 3
+        (hashed sources, G01..G06 gates defaulting to unknown, intervention_log).
+    - check: Run Gate A (source/file presence) and Gate B (CHG-01 Merkle parent-hash staleness,
+        K-WOS-02 scope isolation, K-ARCH-01 failed-prerequisite blocking, unknown authority hold);
+        emit structured JSON and deterministic exit code (0=CLEAR, 1=HELD/BLOCKED).
+    - build-calendar: >
+        Read all task packets + 02_platform_intelligence.yaml + 03_craft_and_niche_playbook.yaml
+        and generate content_calendar.yaml + content_calendar.md covering
+        (1) Evergreen vs. seasonal slots, (2) 4-platform stagger (YouTube/IG/FB/LinkedIn) only where
+        audience-justified, (3) live gate readiness state (PROPOSED/IN_PRODUCTION/HELD/CLEARED), and
+        (4) music-license expiry, seasonal CTA retirement, and quarterly refresh triggers.
+  falsifying_tests_file: test_mvp.py
+  required_test_cases:
+    - test_01_chg01_cut_trim_invalidates_timed_derivatives_keeps_still_valid
+    - test_02_scope_isolation_blocks_inherited_approval_across_channels
+    - test_03_failed_or_held_prerequisite_blocks_dependent_allows_independent
+    - test_04_unknown_release_owner_or_unverified_off_asana_ref_holds
+    - test_05_calendar_auto_propagates_held_gate_and_license_expiry
+    - test_06_representation_invariance_media_and_software_packets_same_cli
+
+deliverables_to_build:
+  - mvp_cli.py
+  - test_mvp.py
+
+deterministic_done_gate:
+  checks:
+    - python -m py_compile mvp_cli.py test_mvp.py exits 0
+    - python -m unittest discover -s "Project/Inner Gravity/overnight_mvp" -v passes 6/6 (exit 0)
+    - Privacy scan passes (0 coworker names / 0 Asana URLs)
+    - run_state.yaml updated with BEAT-04 status=PASSED and output hashes
+
+hard_boundaries:
+  asana: read_only
+  external_mutations: forbidden
+  protected_files_untouched: true

@@ -1,0 +1,46 @@
+schema: hourly-task-system/v1
+beat_id: BEAT-02
+scheduled_time_local: "03:30 America/Edmonton"
+title: Multi-Platform Video Demographics, Viewer Behavior & Trends Research
+depends_on_previous_beat: BEAT-01
+
+objective: >
+  Conduct live, source-verified web research on current (2025-2026) audience demographics,
+  video viewing habits, retention patterns, and content trends across YouTube, Instagram,
+  Facebook, and LinkedIn (prioritizing Canada / North America public data) so the Content
+  Calendar targets real viewer preferences rather than assumptions.
+
+inputs_to_read:
+  - run_state.yaml
+  - 01_convergence_architecture.yaml
+
+research_mandate:
+  tool: search_web
+  platforms: [youtube, instagram, facebook, linkedin]
+  required_dimensions_per_platform:
+    - Core age and demographic profile (Canada / North America where available)
+    - Primary discovery mode (search vs. algorithmic feed vs. community share vs. professional feed)
+    - Preferred video formats, runtimes, aspect ratios, and sound-on vs. sound-off caption reality
+    - Top 2025-2026 evergreen-friendly video trends and retention hooks
+    - What fails on this platform for public institutions / libraries
+    - Specific CPL adaptation rule ("adapt only where it serves the audience")
+  evidence_rules:
+    - Every statistic or platform finding must include an exact public URL and publication year.
+    - Reject unverifiable marketing bundles or undated claims; mark missing local data as unknown.
+    - Distinguish public platform surveys from CPL's own private channel analytics (uninspected).
+
+deliverables_to_build:
+  - 02_platform_intelligence.yaml  # Structured ruleset directly consumable by mvp_cli.py calendar builder
+  - 02_platform_intelligence.md    # Plain-language comparison table & platform play-by-play for studio use
+
+deterministic_done_gate:
+  checks:
+    - yaml.safe_load succeeds on 02_platform_intelligence.yaml
+    - All 4 platforms (youtube, instagram, facebook, linkedin) present with >= 1 verified URL each
+    - Privacy scan passes (0 coworker names / 0 Asana URLs)
+    - run_state.yaml updated with BEAT-02 status=PASSED and output hashes
+
+hard_boundaries:
+  asana: read_only
+  external_mutations: forbidden
+  no_fabricated_metrics: true

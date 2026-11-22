@@ -1,0 +1,191 @@
+schema: crucible-cpl-handoff/v1.1
+as_of: '2026-11-22'
+status: planning_reference_not_execution_authorization
+
+decision_summary:
+  original_handoff_recommendation: A_then_B_or_C
+  reviewed_recommendation: [C_live_ELC_handoff, B_framework_contribution_with_content_calendar, A_targeted_peer_comparison_if_needed]
+  reason: >
+    The existing 213-video audit and draft series are enough to start. Real receiving use reveals
+    whether the next colleague can act without reconstruction; targeted platform/craft/niche research
+    directly feeds the evergreen Content Calendar and Framework without delaying live validation.
+  governing_goal: "Give Levi's editorial judgment reach across people, tools, and knowledge without his attention becoming the cost of every handoff."
+  design_principle: "Capture once where it serves the story; adapt only where it serves the audience."
+  automation_principle: "Use code where the answer can be determined from evidence. Leave editorial quality, permissions, taste, and exceptions to the responsible people."
+  proof_horizon_days: 60
+  proof_status: not_demonstrated
+  implementation_status: overnight_mvp_in_progress
+  handling:
+    asana: read_only
+    authority: "No new outreach, booking, spending, publishing, access changes, or employer writes are authorized by this file."
+    data_boundary: "Portable private copy. Coworker names, internal Asana links, workstation coordinates, internal design links, and draft asset locations are deliberately excluded."
+    resolve_restricted_identities_via: local_private_handoff_outside_synced_dir
+    external_sharing: not_authorized
+    no_change_to_existing_systems: true
+
+evidence_labels:
+  verified_record: "Inspected source on the current host supports this specific claim."
+  source_reported_not_rechecked: "Reported from another host or prior summary; not re-observed in this run."
+  documented_intent: "A source names planned work; no claim it happened."
+  proposed_test: "A check to run if the owner and receiver authorize the live route."
+  unknown: "No verified determination; not false."
+  never_infer: [approval_from_task_completion, delivery_from_export, publication_from_unlisted_upload, adoption_from_review, individual_impact_from_institutional_metrics]
+
+workspace:
+  provenance: verified_record_on_windows_host_2026_11_22
+  inventory:
+    files_baseline_before_overnight_mvp: 89
+    approximate_size_kb: 762
+    markdown_files: 81
+    markdown_lines: 5822
+    words: 98966
+    mermaid_diagrams: 143
+    wired_python_scripts: [observe.py, check_sync.py]
+    other_items: {json: 2, zip: 3, normalized: 1}
+    drive_links: 165
+    relative_links: 13
+    git_directory_observed: false
+    sync_surfaces: [OneDrive_desktop, Google_Drive]
+  empty_operational_folders_local_and_drive: [Calgary_Public_Library, Personal_Work, Graphs]
+  interpretation: "An empty folder or a 0% local record is not proof that no work ran elsewhere."
+  agency_campaigns:
+    provenance: source_reported_not_rechecked
+    reported_and_separately_documented: 3
+    output_scope: briefs_timed_scripts_editable_treatments_and_some_downstream_use
+    thursday_qualification_met: false
+    integration: substantial_coordinator_repair
+    owner_coordination_burden: unknown
+    not_evidence_of: [standalone_autonomy, finished_films, approved_CPL_campaigns, native_placement_clearance]
+  windows_hooks:
+    active_version_observed: '0.1.0'
+    observations_observed: 10
+    hook_events: [SessionStart, Stop]
+    skill_count_observed: 3
+    ideas_state_observed: {active: 1, active_limit: 1, hardened: 1, challenged: 2, raw_sparks: 1}
+    observed_scope: hook_invocation_and_local_parsing
+    invalid_handoff_rejection_in_real_route: unknown
+  drift_register:
+    - id: DRIFT-DOC
+      observed: "Project copy frozen at MA-VR-001 (17 files); Knowledge copy at MA-VR-002 (29 files, 55 procedures); 15 shared files diverged."
+      now: "Do not merge both trees to start CPL work; resolve the controlling artifact only when needed."
+    - id: DRIFT-INSTALL
+      observed: "0.1.1 is staged while active installation is 0.1.0; check_sync.py checks manifest presence without version/hash comparison."
+      now: "Do not label staged work installed."
+    - id: DRIFT-TOOL
+      observed: "ig-evidence-review declares file tools not matching this host's native read_file."
+      now: "Use verified read-only review tools available on this host."
+    - id: DRIFT-PROMOTION
+      observed: "Protected AGENTS.md and acceptance.lock.json unpromoted; hooks.json.normalized staged only; register omissions remain."
+      now: "Not a CPL dependency; no protected file promotion performed unattended."
+    - id: DRIFT-DECK
+      observed: "Slide 3 uses generic context/compliance labels; Slide 7 implies a new cut goes live while held."
+      now: "Flagged for human-authorized Canva edit later; no unattended cloud writes."
+  shelve_for_30_days:
+    - new_general_architecture_or_repository
+    - blanket_folder_cleanup
+    - making_all_55_playbooks_runnable
+    - ungrounded_abstract_frameworks
+
+cpl_strategy_and_portfolio:
+  verified_context:
+    role_started: '2023-10'
+    channel_stewardship: shared_with_another_specialist
+    sole_channel_authority: unknown
+    prior_plan:
+      name: Everyone Belongs at the Library
+      term: '2023-2026'
+      priorities: [Create Purpose Together, Champion a Sense of Belonging, Energize Lifelong Learning]
+      public_source: https://www.calgarylibrary.ca/assets/Uploads/Calgary-Public-Library-2023-2026-Strategic-Plan.pdf
+    next_plan:
+      name: A Better Tomorrow Through Stories
+      development_documented_by: '2025-06-25'
+      public_launch: '2026-10-27'
+      term: '2027-2030'
+      final_board_approval_date: unknown
+      mandates: [Collections, Experiences, Expertise, Spaces, Technology]
+      values: [Curiosity, Collaboration, Equity and Belonging]
+      commitments: [Intellectual Freedom, Truth and Reconciliation, Intentional Innovation]
+      vision_2040: "Three in four Calgarians choose the Library; institutional ambition, not a media or personal KPI."
+      public_source: https://www.calgarylibrary.ca/about-the-library/strategic-plan
+      facility_source: https://www.calgarylibrary.ca/facility-master-plan
+      as_of_phase: post_launch_transition_not_in_force_implementation
+    media_content_framework:
+      lead_role: Media Production lead
+      sponsor_role: executive sponsor for Communications and Engagement
+      authored_by_Levi_alone: not_established
+      verified_Levi_contribution: [completed_inventory_build, completed_inventory_population]
+      phase_one_scope: {videos: 213, from: '2021-01', through: '2026-06', unit: team_audit}
+      phase_one_takeaway: "Discoverability and retention are different problems; evaluate media beyond counts and views."
+      phase_two_adoption: unknown
+      live_online_school_delivery: outside_framework_scope
+      repurposed_program_content: distinct_from_live_delivery
+  editorial_translation:
+    proposed_pillars:
+      Grow: "Practical participation and capability; Experiences, Expertise, and where relevant Technology."
+      Books_and_Reading: "A useful reading decision, discovery route, or activity; Collections and Experiences."
+      Community: "People, participation, and a sense of place; Experiences, Spaces, Equity and Belonging."
+    not_official_mandate_names: true
+    series:
+      - {id: PITCH-NQ, title: The Next Question, angle: "Reader-advisory conversation giving viewers a method to choose their next read.", status: proposed}
+      - {id: PITCH-YCD, title: "You Can Do That Here?", angle: "A host solves an everyday challenge using Library people and resources; full story plus useful standalone excerpts only if warranted.", status: proposed}
+  measurement_chain: [produced, verified_live_at_named_destination, intended_audience_engaged, useful_next_step_taken, patron_outcome]
+  measurement_rule: "Keep each stage distinct. Team channel performance, attendance, membership, and circulation are not individual or causal impact measures."
+
+observed_operating_model:
+  status: "Sampled Asana pattern, not binding CPL policy."
+  gates:
+    G01: {name: scope, set_when: intake_or_scope_change, pass_evidence: named_outcome_audience_use_and_deliverable}
+    G02: {name: ready_for_production, set_when: before_dependent_production, pass_evidence: authoritative_brief_and_confirmed_people_assets_access_or_booking}
+    G03: {name: production_review, set_when: named_review_step_on_exact_version, pass_evidence: exact_reviewed_version_decision_conditions_and_resolution}
+    G04: {name: stakeholder_review, set_when: when_brief_or_later_decision_requires_it, pass_evidence: response_scope_effect_and_any_remaining_hold}
+    G05: {name: receiving_handoff, set_when: before_receiver_uses_artifact, pass_evidence: receiver_opens_exact_version_and_can_perform_intended_action}
+    G06: {name: release_authorization, set_when: when_required_for_named_release_or_explicit_hold, pass_evidence: confirmation_for_exact_asset_destination_and_conditions, default_if_not_recorded: unknown_do_not_release}
+  derivative_rule: "Production and Digital can select from an approved master; the selection and each intended release still need their applicable checks. Do not inherit approval to another cut or destination."
+
+content_calendar_track:
+  purpose: "Generate a live, gate-aware 4-platform Evergreen Content & Release Calendar directly from Task-as-a-System packets instead of maintaining a drifting second tracker."
+  platforms: [youtube, instagram, facebook, linkedin]
+  tracks:
+    - programming_cadence_evergreen_vs_seasonal
+    - shoot_to_multi_surface_stagger_audience_justified
+    - gate_aware_workback_PROPOSED_IN_PRODUCTION_HELD_CLEARED
+    - lifecycle_triggers_music_license_expiry_seasonal_cta_retirement_quarterly_refresh
+  authority_boundary: "Drafts and coordinates YouTube and production cadence; Digital Marketing / channel coordination owns wider editorial calendar placement and live social scheduling."
+
+execution_slices:
+  C:
+    id: PILOT-ELC
+    priority: first
+    status: proposed_not_dispatched
+    real_job: Where Community Begins
+    coordinator_route: authorized_local_assistant_or_coordinator_not_blocked_on_unverified_remote_runtime
+    creative_and_economy_criteria:
+      - story_hook_tone_and_vibe_fit_for_audience
+      - zero_waste_in_house_space_and_footage_economy
+      - evergreen_lifespan_vs_seasonal_hook
+      - audience_justified_news_or_social_derivatives_only
+    planned_discussion_checkpoint: "December 16 noted in November handoff; verify actual booking and attendance."
+    acceptance:
+      pass: "Receiver finds exact materials, states what is approved vs. open, and makes/records the next decision without separate reconstruction from Levi."
+      no_publishing_required: true
+  B:
+    id: FRAMEWORK-B
+    priority: after_C_evidence
+    output: "Concise evidence-led Phase Two contribution to the existing Media Content Framework, including the 4-Track Content & Release Calendar."
+    required_contents: [audience_and_mandate, actual_handoff_evidence, production_and_digital_roles, content_calendar_and_license_lifecycle, review_and_release_limits, workload, next_step_measure]
+  A:
+    id: PEERS-A
+    priority: targeted_for_calendar_and_pitch_decisions
+    candidates: [Toronto, Edmonton, Vancouver, New_York_Public_Library, Seattle]
+    unit_of_comparison: specific_format_or_public_pathway_not_channel_rank
+
+deterministic_change_case:
+  id: CHG-01
+  fixture:
+    original: {asset: CUT-01, version: v1, approval_scope: named_asset_and_destination}
+    change: {asset: CUT-01, version: v2, example: trim_changes_timing}
+    unaffected_example: cleared_still_with_unchanged_version_and_scope
+  expected:
+    - Stop dependent acceptance or release of v2 when only v1 approval exists.
+    - Mark only timing-dependent captions/excerpts STALE while keeping cleared_still VALID.
+    - Allow unrelated editorial development while dependent recheck is held.

@@ -1,0 +1,42 @@
+schema: hourly-task-system/v1
+beat_id: BEAT-05
+scheduled_time_local: "06:30 America/Edmonton"
+title: Dogfood MVP on Real CPL Work — Starter Packets, Generated 4-Platform Content Calendar & Framework B
+depends_on_previous_beat: BEAT-04
+
+objective: >
+  Exercise mvp_cli.py on real sanitized CPL initiatives to produce the first live-generated,
+  research-backed 4-platform Evergreen Content Calendar (YouTube, Instagram, Facebook, LinkedIn),
+  a colleague-ready PILOT-ELC (Where Community Begins) starter packet, starter packets for
+  PITCH-NQ (The Next Question) and PITCH-YCD (You Can Do That Here?), and the FRAMEWORK-B
+  Phase Two contribution draft.
+
+inputs_to_read:
+  - run_state.yaml
+  - cpl_handoff_portable.yaml
+  - 02_platform_intelligence.yaml
+  - 03_craft_and_niche_playbook.yaml
+  - mvp_cli.py
+
+deliverables_to_build:
+  - packets/pilot_elc_where_community_begins.yaml   # Priority 1 (ELC-02 template, honest HOLD on unverified live inputs)
+  - packets/pitch_the_next_question.yaml            # Evergreen Books & Reading series packet
+  - packets/pitch_you_can_do_that_here.yaml         # Evergreen Grow / Expertise host-challenge packet
+  - packets/transition_year_in_review.yaml          # Active seasonal transition packet
+  - content_calendar.yaml                           # Generated directly by mvp_cli.py build-calendar
+  - content_calendar.md                             # Human-readable 4-platform Evergreen Content & Release Calendar
+  - framework_b_phase2_draft.md                     # Concise Phase Two contribution anchored in real evidence & calendar
+
+deterministic_done_gate:
+  checks:
+    - mvp_cli.py check executes on all 4 packets and honestly reports HELD where live human inputs/approvals are unverified (zero false greens)
+    - mvp_cli.py build-calendar exits 0 and regenerates content_calendar.yaml + content_calendar.md cleanly
+    - Every platform slot in content_calendar.md maps back to verified findings in 02_platform_intelligence.yaml and 03_craft_and_niche_playbook.yaml
+    - Privacy scan verifies 0 coworker names and 0 internal Asana task URLs
+    - run_state.yaml updated with BEAT-05 status=PASSED and output hashes
+
+hard_boundaries:
+  asana: read_only
+  external_mutations: forbidden
+  zero_invented_cpl_facts_or_bookings: true
+  keep_dec16_discussion_marked_unverified: true

@@ -1,0 +1,67 @@
+schema: convergence-architecture/v1
+id: OVERNIGHT-CONV-01
+created: '2026-11-22'
+purpose: >
+  Define how every single CPL media/campaign/software task operates as a self-contained
+  modular system (Task-as-a-System) combining all 3 Co-Equal Engines and feeding a live,
+  gate-aware 4-Platform Content & Release Calendar automatically.
+
+core_thesis:
+  whole_system_problem: "Give Levi's editorial and strategic judgment reach across people, tools, and knowledge without his attention becoming the cost of every handoff."
+  anti_bloat_law: "Idea and intent must never outrun verified implementation. Every field in a task-system packet must either guide a real creative/production choice, prevent a real failure mode, or compile into the Content Calendar."
+  design_principle: "Capture once where it serves the story; adapt only where it serves the audience."
+  automation_principle: "Use code where truth can be checked from bytes and schemas; leave taste, permissions, and exceptions to responsible people."
+
+three_coequal_engines:
+  engine_1_strategic_and_gap_intelligence:
+    job: Ground every task in real audience demand, peer/platform evidence, CPL's 5 official mandates, and existing internal assets before committing a shoot.
+    inputs:
+      - 02_platform_intelligence.yaml
+      - 03_craft_and_niche_playbook.yaml
+      - CPL 2027-2030 Strategic Plan mandates
+      - Existing library spaces, staff expertise, and archive footage
+    outputs: [mandate_fit, target_audience_task, evergreen_vs_seasonal_class, reuse_before_shoot_check]
+
+  engine_2_modular_creative_and_production_economy:
+    job: Make one economical in-house shoot deliver compelling creative craft and audience-justified multi-surface assets without unnecessary vendor hires.
+    inputs: [story_angle, vibe_and_tone, location_and_existing_assets, platform_rules]
+    outputs:
+      - modular_script_and_beat_sheet
+      - lean_in_house_shoot_plan_with_16x9_and_9x16_safe_zones
+      - youtube_entrance_packaging_slot
+      - audience_justified_derivatives_menu_for_youtube_ig_fb_linkedin
+
+  engine_3_custody_and_handoff_spine:
+    job: Automatically track source byte hashes, G01-G06 gate status, selective invalidation (CHG-01), off-Asana feedback references, and Levi's real intervention cost.
+    mechanisms:
+      - gate_a_upstream_reality_check: Verify local files exist, hash matches, and prerequisites are not FAILED/HELD.
+      - gate_b_downstream_commitment_check: Reject stale parent SHAs, unknown release authority, inherited approvals, or speculative claims in required slots.
+      - intervention_log: Track normal creative decisions separately from preventable explanations, repairs, and displaced work.
+
+task_as_a_system_schema:
+  schema_id: task-system/v1
+  required_top_keys:
+    - id
+    - title
+    - domain_gear
+    - horizon
+    - locked_goal
+    - engine_1_strategy
+    - engine_2_creative_economy
+    - engine_3_custody
+    - calendar_drops
+    - intervention_log
+  engine_1_strategy_fields: [official_mandates, proposed_editorial_lens, audience_task, existing_assets_checked, peer_or_platform_basis]
+  engine_2_creative_economy_fields: [vibe_and_tone, format_recipe, shoot_economy_plan, derivatives_justified_by_platform]
+  engine_3_custody_fields:
+    sources: "List of {id, path_or_ref, expected_sha256_or_null, status: VERIFIED|UNVERIFIED|MISSING}"
+    artifacts: "List of {id, version, path_or_ref, sha256_or_null, depends_on: {parent_id: parent_sha}, timing_coupled: bool, taint: OBSERVED|DERIVED|SPECULATIVE}"
+    gates: "Map G01..G06 each with {status: PENDING|PASSED|HELD|FAILED|UNKNOWN, owner_role, evidence_ref, off_asana_ref}"
+    approvals: "List of {artifact_id, version, scope, channel, approved_by_role, status: APPROVED|CONDITIONAL|HELD|UNKNOWN}"
+  calendar_drops_fields: "List of {drop_id, platform: youtube|instagram|facebook|linkedin|web_news, role_in_stagger, target_window, asset_id, approval_scope, music_license_expiry, cta_retirement_date}"
+
+what_we_cut_for_tired_tuesday:
+  - No mandatory 7-Mermaid-diagram authoring per assignment (only draw a graph when a dependency changes a decision).
+  - No separate manual Content Calendar spreadsheet (mvp_cli.py build-calendar compiles calendar.md + calendar.yaml directly from task packets).
+  - No forced 4-platform cutdowns when a story only serves 1 or 2 platforms (enforces design_principle).
+  - No manual SHA-256 typing by humans (mvp_cli.py hashes files on disk automatically).

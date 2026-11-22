@@ -1,0 +1,11 @@
+{
+  "inner-gravity-observation": {
+    "enabled": true,
+    "SessionStart": [
+      {"type": "command", "command": "python ./scripts/observe.py session-start", "timeout": 5}
+    ],
+    "Stop": [
+      {"type": "command", "command": "python ./scripts/observe.py stop", "timeout": 5}
+    ]
+  }
+}
