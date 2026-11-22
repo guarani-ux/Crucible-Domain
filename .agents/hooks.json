@@ -1,0 +1,12 @@
+{
+  "crucible-domain-map": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python .agents/scripts/crucible_gate.py session-start",
+        "timeout": 5
+      }
+    ]
+  }
+}
