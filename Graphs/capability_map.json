@@ -1,0 +1,1476 @@
+{
+  "schema": "crucible-capability-map/v1",
+  "total": 146,
+  "counts_by_kind": {
+    "doc": 9,
+    "exhibit": 10,
+    "knowledge": 9,
+    "primitive": 13,
+    "procedure": 55,
+    "project": 10,
+    "role": 12,
+    "skill": 28
+  },
+  "entries": [
+    {
+      "id": "A01",
+      "kind": "exhibit",
+      "title": "A01 · entonkageyoni",
+      "path": "Knowledge/Repository Archaeology/01-entonkageyoni.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit: The early Kageyoni narrative runtime. Source snapshot: April 10, 2026, commit 337488a75359facf0747a52eafa7de05cb34664e. The repository uses the Kageyoni name for this world. A Git ancestry relationship to the later Kageyoni repository has not been established here. Snapshot ## 1. What it se"
+    },
+    {
+      "id": "A02",
+      "kind": "exhibit",
+      "title": "A02 · Kageyoni",
+      "path": "Knowledge/Repository Archaeology/02-kageyoni.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit: Bounded adaptation and qualification in a later Kageyoni engine. Source snapshot: October 28, 2026, commit 18c2763950cdb4d3211df3a18ed92fb9203baff8. This exhibit studies the protected-operation, transfer, and evidence layers of a larger repository. It makes no claim about Git ancestry from "
+    },
+    {
+      "id": "A03",
+      "kind": "exhibit",
+      "title": "03 · Shinobi",
+      "path": "Knowledge/Repository Archaeology/03-shinobi.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit ID: ARCH-SHINOBI Repository evidence: guarani-ux/Shinobi, inspected revision Portfolio relationship: Historical engineering source for bounded agent work and verification. Its patterns can inform the Work Operating System. ## What it was trying to make possible"
+    },
+    {
+      "id": "A04",
+      "kind": "exhibit",
+      "title": "04 · SAMSARA",
+      "path": "Knowledge/Repository Archaeology/04-samsara.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit ID: ARCH-SAMSARA Repository evidence: guarani-ux/SAMSARA, inspected revision Portfolio relationship: Prior art for Crucible Domain's knowledge shelf and selective coordination. The GitHub repository, Komorebi workspace, and any similarly named conversation or runtime need their own identity "
+    },
+    {
+      "id": "A05",
+      "kind": "exhibit",
+      "title": "05 · Constellation",
+      "path": "Knowledge/Repository Archaeology/05-constellation.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit ID A05-CONSTELLATION Repository guarani-ux/Constellation Parent initiative Constellation practice and knowledge. The repository is the portable practice library within that initiative. Source revision v0.1.0 commit, October 3, 2026. Evidence boundary Read-only repository inspection, includin"
+    },
+    {
+      "id": "A06",
+      "kind": "exhibit",
+      "title": "06 · Constellation Knowledge Sidecar",
+      "path": "Knowledge/Repository Archaeology/06-sidecar.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit ID A06-SIDECAR Repository guarani-ux/sidecar Parent initiative Constellation practice and knowledge. The repository is a distinct retrieval and maintenance implementation, which can be understood separately from the parent practice-library repository. Source revision v0.1 implementation, v0."
+    },
+    {
+      "id": "A07",
+      "kind": "exhibit",
+      "title": "07 · Story-Lane",
+      "path": "Knowledge/Repository Archaeology/07-story-lane.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Repository exhibit. A source-media and editorial capability can support Work Operating System production without taking over the whole project. This exhibit inspects Story-Lane at commit 922aae2fda855e30fda9e79503348c126dc8777b and selected historical CI records. ## 1 · Intended outcome and implemen"
+    },
+    {
+      "id": "A08",
+      "kind": "exhibit",
+      "title": "08 · Hagoromo",
+      "path": "Knowledge/Repository Archaeology/08-hagoromo.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Repository exhibit. A multi-domain engineering workspace contains several scoped tools and methods. It is separate from the top-level Work Operating System and can be an evidence source for specific capabilities. Examined at commit 4d60c6b02c9a1b9c2d1a84f92ea00d37db968a4e. ## 1 · Intended outcome an"
+    },
+    {
+      "id": "A09",
+      "kind": "exhibit",
+      "title": "09 · cognitive-os",
+      "path": "Knowledge/Repository Archaeology/09-cognitive-os.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit type: historical repository for the personal cognitive operating-system initiative. Its current status and any formal lineage to Work Operating System are open. The evidence here is pinned to main at 1f10b5d. ## 1. Intended outcome and actual mechanisms The design aims to offload capture, sy"
+    },
+    {
+      "id": "A10",
+      "kind": "exhibit",
+      "title": "10 · Nelson",
+      "path": "Knowledge/Repository Archaeology/10-nelson.md",
+      "line": 1,
+      "domain": "archaeology",
+      "reachability": "local",
+      "summary": "Exhibit type: historical repository for a supervised agent tool and verification harness. The repository calls Nelson the application and Levi its governance and verification component. The evidence here is pinned to main at 150e6458. This audit establishes a transfer candidate for Work Operating Sy"
+    },
+    {
+      "id": "C-CAP",
+      "kind": "project",
+      "title": "Capability Accessibility CLI",
+      "path": "Project/Project_Register.md",
+      "line": 31,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Capability Accessibility CLI · November conversation and file history describe CAP-001 as an experiment about how context, knowledge, tools, and human participation affect results. Recover the current source and runtime evidence before assigning a status."
+    },
+    {
+      "id": "C-COGNITIVE-OS",
+      "kind": "project",
+      "title": "Cognitive OS",
+      "path": "Project/Project_Register.md",
+      "line": 29,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Cognitive OS · October 22 conversation reports a Python and SQLite prototype with capture and event history. A matching GitHub repository was located. Verify the relationship, current branch, and what was demonstrated."
+    },
+    {
+      "id": "C-CONTROL-CENTRE",
+      "kind": "project",
+      "title": "Control Center",
+      "path": "Project/Project_Register.md",
+      "line": 30,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Control Center · October 29–30 conversations describe experimental intake and recovery components. Verify their canonical project, current status, and which reported tests apply to the end-to-end workflow."
+    },
+    {
+      "id": "C-KERNEL-DOMAIN",
+      "kind": "project",
+      "title": "Kernel Domain",
+      "path": "Project/Project_Register.md",
+      "line": 32,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Kernel Domain · Levi described it as both a project and a knowledge source for processes and skills. Recover the current artifact or location and clarify its relationship to Crucible Domain before moving any material."
+    },
+    {
+      "id": "CD-01",
+      "kind": "procedure",
+      "title": "Discover stakeholder needs and verify claims · Skill",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 16,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when a stakeholder asks for coverage or a message that depends on an uncertain programme fact. Return a one-page constraint and fact sheet, a narrow question for the responsible owner and a suggested way forward. Done when a reviewer can point to the exact fact, what it applies to and how to correct the read-b"
+    },
+    {
+      "id": "CD-02",
+      "kind": "procedure",
+      "title": "From intake to a decision meeting · Workflow",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 31,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when a kickoff, resource commitment or direction change requires agreement. Return a short pre-read, decision agenda, decision and dependency log. Done when the coordinator can recover who decided, which version and constraints govern, and what each next worker can start. 1. Prepare from CD-01. In the first li"
+    },
+    {
+      "id": "CD-03",
+      "kind": "procedure",
+      "title": "Frame institutional posture and write for leaders, staff or press · Skill",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 48,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when an authorized team needs a decision memo, executive message, staff briefing, key message or media response. Return a scoped direction note and the requested versions. Done when the owner can verify each consequential claim, the action and the intended audience. 1. Select the document and action. A leaders"
+    },
+    {
+      "id": "CD-04",
+      "kind": "procedure",
+      "title": "Triage a disruption, correction or community referral · Workflow",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 62,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when a report, social comment, media inquiry or service disruption raises a concern. Return a restricted impact log, response option, correction map and check-in route. Done when a named owner can decide what to do, find all affected copies, and check the public or staff outcome when allowed. 1. Capture time r"
+    },
+    {
+      "id": "CD-05",
+      "kind": "procedure",
+      "title": "Translate a content brief into a visual brief · Skill",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 76,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when an asset needs a design direction or exact instructions for a graphic or motion designer. Return a scoped creative brief, content hierarchy, visual options and a review question. Done when a maker can start and the reviewer can judge the proof against a real audience action. 1. Define the first moment: wh"
+    },
+    {
+      "id": "CD-06",
+      "kind": "procedure",
+      "title": "Make static graphics and thumbnails · Skill",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 90,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when social, a web article, a partner package or a channel upload needs a static visual. Return the editable source plus per-surface image files, alt-text guidance and a checked manifest. Done when the receiver can open and modify the source, identify the correct placement file and see what was checked. 1. Lay"
+    },
+    {
+      "id": "CD-07",
+      "kind": "procedure",
+      "title": "Plan, build and check motion graphics · Skill",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 104,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when animated text, data, an explainer beat, title or lower third adds meaning to video. Return a timed storyboard, representative playback proof, editable sources, exact exports and release checks. Done when the editor can inspect the densest moment with all layers and tell what reopens if picture, claims or "
+    },
+    {
+      "id": "CD-08",
+      "kind": "procedure",
+      "title": "Resolve competing feedback and hand off accessible versions · Workflow",
+      "path": "Knowledge/Media Agency/Skills and Workflows/communications-and-design.md",
+      "line": 124,
+      "domain": "communications-and-design",
+      "reachability": "local",
+      "summary": "Use this when a design, statement or video is in review, or a changed asset has already travelled. Return a feedback ledger, revised exact-version manifest and access/receipt evidence. Done when the next person can act on the authorized version and identify the remaining holds. 1. Issue one review file or link with pur"
+    },
+    {
+      "id": "CH-01",
+      "kind": "procedure",
+      "title": "Choose channel purpose and programming",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 20,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take an audience task, service goal, current content inventory, and capacity. Return a channel brief that says whom it helps, what to programme, what to stop, and what success to verify. The commissioning owner can choose from feasible options. 1. Describe one audience and its situation in observable te"
+    },
+    {
+      "id": "CH-02",
+      "kind": "procedure",
+      "title": "Programme, deliver and renew a series",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 37,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take a recurring audience need, credible evidence, a format idea and capacity estimate. Return a pilot charter, episode brief and renewal threshold. A producer can plan an episode and a director can decide when to continue, revise, pause or stop. 1. Define the repeatable question the series answers, why"
+    },
+    {
+      "id": "CH-03",
+      "kind": "procedure",
+      "title": "Prepare a YouTube upload and verify release",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 54,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take the authorized channel, locked media and captions, exact approved usage and audience classification, metadata and destination. Return an operator brief with all Studio fields and a versioned receipt. The authorized operator can match the approved file to the selected visibility and the intended vie"
+    },
+    {
+      "id": "CH-04",
+      "kind": "procedure",
+      "title": "Separate link handoff, first external use and amplification",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 71,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take a versioned asset, send/schedule plans, visibility, and the exact people or systems receiving it. Return a three-milestone ledger. The campaign coordinator can tell when readiness is actually required and whether each intended audience can open the asset. 1. Record separately when an operator or ne"
+    },
+    {
+      "id": "CH-05",
+      "kind": "procedure",
+      "title": "Run the channel and handle corrections",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 89,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take the authorized channel inventory, queue and changed facts or reported incident. Return prioritized updates with owners, version history, live checks and follow-up dates. The receiver can determine what stays, what needs a correction, and who can make the change. 1. Inventory published and queued co"
+    },
+    {
+      "id": "CH-06",
+      "kind": "procedure",
+      "title": "Deliver native versions across social, web and email",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 102,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take one controlling facts record and a campaign plan. Return distinct draft copy, media specifications and QA per destination. The reviewer can verify that every variant makes the same factual promise and invites an achievable next action. 1. Extract the agreed message, source-backed facts, exact eligi"
+    },
+    {
+      "id": "CH-07",
+      "kind": "procedure",
+      "title": "Prepare accessible CMS and staff-only editions",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 117,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take copy, media and destination scope. Return a versioned preview pack, access matrix and checks. A named authorized reader can open the exact intended edition and complete the task. 1. Confirm purpose, date, audience, destination and rights for the edition. Identify data and media needing restricted a"
+    },
+    {
+      "id": "CH-08",
+      "kind": "procedure",
+      "title": "Measure and choose the next experiment",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 130,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "10-second view. Take the campaign objective, exact items, comparable periods, authorized data and operational observations. Return a decision memo showing what to keep, change, or check next. The decision owner can trace the evidence, confounders and stop conditions. 1. Set one intended audience result before extractin"
+    },
+    {
+      "id": "CH-09",
+      "kind": "procedure",
+      "title": "Prepare a segmented newsletter and preview",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 144,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "Take the message, planned segment, sender, scoped permission and source-backed destinations. Return a dated subject, preheader, body/CTA, audience scope and QA/test preview checklist. Accept when the newsletter owner can recognize the intended audience and complete the same action from the exact preview before any audi"
+    },
+    {
+      "id": "CH-10",
+      "kind": "procedure",
+      "title": "Pilot a complete public information or educator resource",
+      "path": "Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md",
+      "line": 155,
+      "domain": "channel-and-content-operations",
+      "reachability": "local",
+      "summary": "Take an audience task, one representative item, confirmed content owner, dependent download or programme path and its audience. Return one checked page-to-resource reference edition with a decision on replication. Accept when the intended user can find the correct page, identify what it offers and use the complete asse"
+    },
+    {
+      "id": "CNT-D",
+      "kind": "role",
+      "title": "CNT-D — Content Management Director",
+      "path": "Knowledge/Media Agency/CNT-D.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for decisions spanning a body of content, a service journey, or an editorial standard. Works at portfolio level across website, series, publications, and asset collections. An agent can research and recommend. The designated human owns commitments, policy exceptions, and configuration or publica"
+    },
+    {
+      "id": "CNT-M",
+      "kind": "role",
+      "title": "CNT-M — Content Management Manager",
+      "path": "Knowledge/Media Agency/CNT-M.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for converting editorial direction into a publishable, maintainable set of pages, posts, releases, and assets. Owns queue, sequencing, package consistency, and review routing within assigned scope. An agent can plan, inspect, and prepare the package. Obtain exact human authorization for sends, l"
+    },
+    {
+      "id": "CNT-S",
+      "kind": "role",
+      "title": "CNT-S — Content Management Specialist",
+      "path": "Knowledge/Media Agency/CNT-S.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for editorial and publishing preparation, content and asset stewardship, and checking a specific audience journey. The specialist prepares or verifies exact copies and returns a release-ready draft plus evidence. Human authority controls live publishing, visibility, replacement, and retirement. "
+    },
+    {
+      "id": "COM-D",
+      "kind": "role",
+      "title": "COM-D — Communications Director",
+      "path": "Knowledge/Media Agency/COM-D.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use this role for institutional messaging direction, executive advice and decisions that span audiences, reputational exposure or several teams. A director's actual remit depends on the organization and the named delegation. An agent filling COM-D can frame choices and document a recommendation for "
+    },
+    {
+      "id": "COM-M",
+      "kind": "role",
+      "title": "COM-M — Communications Manager",
+      "path": "Knowledge/Media Agency/COM-M.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use this role to turn a confirmed message direction or inbound issue into coordinated work. Set priority, owners, versions, review windows, launch order and escalation paths. Agents can triage, draft workbacks and reconcile read-only evidence for the accountable manager. Carry out the assignment. Op"
+    },
+    {
+      "id": "COM-S",
+      "kind": "role",
+      "title": "COM-S — Communications Strategist or Specialist",
+      "path": "Knowledge/Media Agency/COM-S.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use this role to investigate a brief, substantiate claims, compose an audience-ready message, prepare scoped variants and report what people understood or asked. An agent may research and draft in the assignment's authorized scope. A named human retains approval and external distribution authority. "
+    },
+    {
+      "id": "CPL-PILOT-MAPS",
+      "kind": "doc",
+      "title": "Crucible x CPL Pilot & Calendar Maps (Planning Reference)",
+      "path": "Project/Inner Gravity/overnight_mvp/cpl_pilot_maps.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Historical planning reference for CPL pilot and content calendar maps inside Inner Gravity."
+    },
+    {
+      "id": "CRUCIBLE-ATLAS",
+      "kind": "doc",
+      "title": "Crucible Domain System Atlas & Neon Handoff",
+      "path": "Graphs/00_System_Atlas_and_Neon_Handoff.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "O(1) file-to-purpose lookup table, capability atlas, and cross-domain entry point."
+    },
+    {
+      "id": "CRUCIBLE-AUDIT",
+      "kind": "doc",
+      "title": "Crucible Coupling & Reachability Audit",
+      "path": "Graphs/02_Coupling_and_Reachability_Audit.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Over-coupled, under-coupled, and misplaced component ledger across Crucible Domain."
+    },
+    {
+      "id": "IG-OBS",
+      "kind": "doc",
+      "title": "Inner Gravity Whole-System Observatory & Causal Trace",
+      "path": "Project/Inner Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Live observatory topology, session 4188f88a causal trace, and honest weakness ledger."
+    },
+    {
+      "id": "IG-README",
+      "kind": "doc",
+      "title": "Inner Gravity Harness Self-Model",
+      "path": "Project/Inner Gravity/README.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Seven-graph map, install_pack specs, and verification evidence for Antigravity inside Crucible Domain."
+    },
+    {
+      "id": "K-ARCH-01",
+      "kind": "knowledge",
+      "title": "A saved checkpoint can record failure. An isolated cognitive-os probe resumed past a failed prerequisite and reported completion. The pinned",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 24,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "A saved checkpoint can record failure. An isolated cognitive-os probe resumed past a failed prerequisite and reported completion. The pinned unit suite also passed. · A run can resume after a failed, held, or interrupted step. · Confirm the last verified completion separately from the latest saved state. Include a fail"
+    },
+    {
+      "id": "K-ARCH-02",
+      "kind": "knowledge",
+      "title": "Keep neutral retrieval results. SAMSARA's limited paired case found no clear incremental chapter advantage. The sidecar comparison recovered",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 25,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Keep neutral retrieval results. SAMSARA's limited paired case found no clear incremental chapter advantage. The sidecar comparison recovered more specific precedent while producing identical import outputs. · A new retrieval layer or briefing method is proposed for recurring work. · Record retrieval and outcome changes"
+    },
+    {
+      "id": "K-ARCH-03",
+      "kind": "knowledge",
+      "title": "Keep operation scope and evidence together. The inspected Kageyoni release language, qualification record, and later Actions result did not ",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 26,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Keep operation scope and evidence together. The inspected Kageyoni release language, qualification record, and later Actions result did not support the same claim. · Evidence from a prior revision or a passing stage is being used to qualify a new release or live workflow. · Bind the claim to the exact revision, run, en"
+    },
+    {
+      "id": "K-GRAPH-01",
+      "kind": "knowledge",
+      "title": "Label advisory evidence and blocking dependencies differently. The installed graph skill's two fresh-worker exercises distinguished an optio",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 18,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Label advisory evidence and blocking dependencies differently. The installed graph skill's two fresh-worker exercises distinguished an optional missing reference from a required confirmation and kept approval bound to its recorded version. · A collaborator needs to know what can start after a blocker, or what remains a"
+    },
+    {
+      "id": "K-SIDECAR-01",
+      "kind": "knowledge",
+      "title": "Keep source identity stable across views and corrections. The sidecar README describes one canonical seed, exact source locators, and linked",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 17,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Keep source identity stable across views and corrections. The sidecar README describes one canonical seed, exact source locators, and linked successor records. This is a documented design precedent. · One project or lesson appears in a graph, a register, and a working artifact. · Use shared IDs and source links. Write "
+    },
+    {
+      "id": "K-STORY-01",
+      "kind": "knowledge",
+      "title": "Resume from verified state with a bounded proof claim. Story-Lane's README reports 18 outputs verified from saved transcripts after an inter",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 16,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Resume from verified state with a bounded proof claim. Story-Lane's README reports 18 outputs verified from saved transcripts after an interrupted extraction resumed in an isolated copy. Separate native CI used synthetic speech. · A run stops at an uncertain point or evidence from one operation is being used to support"
+    },
+    {
+      "id": "K-WOS-01",
+      "kind": "knowledge",
+      "title": "Put the current decision at the entry point. In a reported Slack navigation retest, a new worker found the current decision and handoff dire",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 13,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Put the current decision at the entry point. In a reported Slack navigation retest, a new worker found the current decision and handoff directly after links were added to the project opening. Earlier workers had to search past older replies. · A fresh worker must recover the current decision from a conversation with re"
+    },
+    {
+      "id": "K-WOS-02",
+      "kind": "knowledge",
+      "title": "Reconcile the recipient's version separately from its approval. The reported Bookmarked comparison reached three passes and two partials wit",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 14,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Reconcile the recipient's version separately from its approval. The reported Bookmarked comparison reached three passes and two partials with four handoff rules. It still missed reconciling affected recipient copies and holding final-required use until authorized final delivery and receipt. · A revision affects someone"
+    },
+    {
+      "id": "K-WOS-03",
+      "kind": "knowledge",
+      "title": "A packet exercise proves the handoff only within the tested environment. A fresh worker classified a supplied historical excerpt correctly a",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 15,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "A packet exercise proves the handoff only within the tested environment. A fresh worker classified a supplied historical excerpt correctly and identified missing current evidence. The cross-environment source and return path was outside that exercise. · An agent's result is being used to infer that a different runtime "
+    },
+    {
+      "id": "MA-ROUTING",
+      "kind": "doc",
+      "title": "Media Work Routing",
+      "path": "Knowledge/Media Agency/Media_Work_Routing.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Choose responsible Media Agency discipline, level, and method by incoming work object."
+    },
+    {
+      "id": "MA-SKILLS",
+      "kind": "doc",
+      "title": "Media Agency Skills and Workflows Catalogue",
+      "path": "Knowledge/Media Agency/Skills and Workflows/README.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Lookup index of all 55 Media Agency procedures across writing, production, campaigns, comms, channel, and portfolio."
+    },
+    {
+      "id": "MK-01",
+      "kind": "procedure",
+      "title": "Find a content opportunity",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 16,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Skill. Input · a request, affected audience, current service page and one decision date. Return · one-page opportunity note with a preferred intervention and lighter option. Check · the manager can see what audience obstacle each option addresses, who can remove it, and which fact could change the recommendation. 1. Tr"
+    },
+    {
+      "id": "MK-02",
+      "kind": "procedure",
+      "title": "Research claims, Board records and strategic fit",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 29,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Skill. Input · exact proposed claim, brief or decision and intended audience. Return · dated source and confirmation table plus one sentence connecting an audience outcome to the applicable plan. Check · the audience and approver can distinguish public fact, approved decision, current operating condition and proposal. "
+    },
+    {
+      "id": "MK-03",
+      "kind": "procedure",
+      "title": "Scan peers and trends for a testable creative choice",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 42,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Skill. Input · an audience question and creative or channel decision. Return · bounded peer/trend scan with one proposed adaptation, one counterexample and reproducible scope. Check · a peer can repeat the search and tell which creative choice the evidence supports. 1. Define the match first: audience intent, service c"
+    },
+    {
+      "id": "MK-04",
+      "kind": "procedure",
+      "title": "Research audience needs and test engagement",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 55,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Skill. Input · target audience, intended action, draft variants and actual destination. Return · one audience hypothesis and one bounded experiment with an outcome, measurement plan and decision rule. Check · the test distinguishes weak discovery, unclear content, and a dead end. 1. Describe the audience by situation a"
+    },
+    {
+      "id": "MK-05",
+      "kind": "procedure",
+      "title": "Discover and shortlist partners",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 69,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Workflow. Input · purpose, audience overlap needed, geography, desired contribution, timing and any restrictions. Return · a source-backed shortlist and decision to progress, clarify or pause. Check · the manager can tell who adds distinct public value, which promises are unverified and who can authorize contact. 1. De"
+    },
+    {
+      "id": "MK-06",
+      "kind": "procedure",
+      "title": "Commission and sustain a multi-channel campaign",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 83,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Workflow. Input · scoped service or campaign goal, audience, availability/capacity, calendar, core facts, resources and channel owners. Return · versioned campaign brief and placement workback. Check · another worker can build a scoped asset, find its verified destination and tell which work can ship first. 1. Identify"
+    },
+    {
+      "id": "MK-07",
+      "kind": "procedure",
+      "title": "Run a kickoff or buy-in decision",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 104,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Workflow. Input · request, applicable MK-01/02 evidence, deadline, audiences and competing constraints. Return · pre-read, decision agenda and decision log linked to the workback. Check · attendees can explain the decision, rationale, what stays open and the next owner. 1. Decide whether the session is exploratory, dec"
+    },
+    {
+      "id": "MK-08",
+      "kind": "procedure",
+      "title": "Preflight, release and reconcile variants",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 115,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Workflow. Input · exact campaign package, approvals by scope, placement calendar, destination and receiving requirement. Return · approved-scope release handoff and receipt log. Check · the receiver can open the exact asset, verify the link and tell what they may do at each milestone. 1. Split three dates: handoff to a"
+    },
+    {
+      "id": "MK-09",
+      "kind": "procedure",
+      "title": "Measure, explain and renew",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 126,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Workflow. Input · prepared tracking plan, comparison, authorized channel and service snapshots, release/version log. Return · one-page evaluation and specific renew/revise/pause decision. Check · another analyst can reconstruct each figure and understand limits on interpreting it. 1. Build an evidence chain: content de"
+    },
+    {
+      "id": "MK-10",
+      "kind": "procedure",
+      "title": "Propose a paid placement pilot",
+      "path": "Knowledge/Media Agency/Skills and Workflows/audience-and-campaigns.md",
+      "line": 137,
+      "domain": "audience-and-campaigns",
+      "reachability": "local",
+      "summary": "Skill. Input · verified service need, audience, owned baseline, proposed capacity and named budget/platform owners. Return · uncommitted pilot design with forecast range and preflight. Check · the authorized owners can judge whether spend tests a specific assumption and can stop at defined limits. 1. Verify that the hy"
+    },
+    {
+      "id": "MKT-D",
+      "kind": "role",
+      "title": "MKT-D — Marketing Director",
+      "path": "Knowledge/Media Agency/MKT-D.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for portfolio priorities, brand and audience strategy, campaign standards, or a decision that reallocates resources between service or channel commitments. The agent returns decision support. The institutional sponsor or delegated budget, strategy or brand owner records the decision and its scop"
+    },
+    {
+      "id": "MKT-M",
+      "kind": "role",
+      "title": "MKT-M — Marketing Manager",
+      "path": "Knowledge/Media Agency/MKT-M.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for campaign scoping, intake and prioritization, channel coordination, partner deliverables, and release readiness. The agent prepares the plan and identifies approvers. Staff assignments, partner commitments and release follow actual delegation. Carry out the assignment. Open the relevant proce"
+    },
+    {
+      "id": "MKT-S",
+      "kind": "role",
+      "title": "MKT-S — Digital Marketing Specialist",
+      "path": "Knowledge/Media Agency/MKT-S.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Use for audience and placement research, adaptation of a campaign message, quality assurance on assets and destinations, and performance review. The agent drafts, inspects, and reports within actual access. Channel owners authorize schedule changes, publication, spending and external communication. "
+    },
+    {
+      "id": "MP-01",
+      "kind": "procedure",
+      "title": "Choose a treatment and plan the workback",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 18,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take the audience promise, intended action or experience, delivery versus first-use dates, approved direction, existing material, crew and review capacity. Return one production decision or versioned workback. Accept when a decision owner can distinguish a feasible commitment, unresolved decision and the next task. 1. "
+    },
+    {
+      "id": "MP-02",
+      "kind": "procedure",
+      "title": "Write the shot list a crew can use",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 31,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take current A/V beats, location, known actions, permitted participants, format and time. Return a setup-sorted shot list and protected coverage order. Accept when each essential beat has a visible or audible success check and an owner for gaps. 1. Convert each script beat to an observable action or sound. Plan the sma"
+    },
+    {
+      "id": "MP-03",
+      "kind": "procedure",
+      "title": "Choose and prove the camera, sound and light setup",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 43,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take planned shots, actual space, verified available kit, distribution and ingest constraints. Return a setup card and a request for sample evidence. Accept when the actual recorded path yields a representative sample the receiver can open and inspect. | Story constraint | Start here and test | If it fails | | --- | --"
+    },
+    {
+      "id": "MP-04",
+      "kind": "procedure",
+      "title": "Write and check the call sheet",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 55,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take accepted workback, shoot timezone and location, real roles, windows, access and scope, shot list and contingency. Return one current call sheet with role-specific views. Accept when each person can state when and where they are needed, their first job, who decides a change and how the wrap handoff works. Top line:"
+    },
+    {
+      "id": "MP-05",
+      "kind": "procedure",
+      "title": "Direct interviews and route rights respectfully",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 63,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take contributor brief, agreed topic and use scope, quotation/fact owners, and coverage. Return a short director card and post-interview notes. Accept when a supported soundbite can be recovered in context and every restricted use has a human owner. 1. Before directing, confirm pronunciation, agreed topics, practical a"
+    },
+    {
+      "id": "MP-06",
+      "kind": "procedure",
+      "title": "Plan a shared shoot and discrete photo or audio outputs",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 73,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take anchor assignment, candidate uses, allowed scopes and protected contributor windows. Return one capture matrix and per-destination output checklist. Accept when each actual file can be traced to its intended allowed use and essentials survive a shorter session. 1. Start from the anchor beat and shoot its complete "
+    },
+    {
+      "id": "MP-07",
+      "kind": "procedure",
+      "title": "Write the live run of show and qualify the route",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 83,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take audience and event goal, programme timing, actual platform mode, role assignment, attendee path, rehearsal slot and decision owner. Return a live packet, rehearsal log and scoped go/no-go recommendation. Accept when host controls and attendee playback pass from the intended sides, and a named owner can explain the"
+    },
+    {
+      "id": "MP-08",
+      "kind": "procedure",
+      "title": "Wrap, copy, sync and verify ingest",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 96,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take actual camera/audio originals, capture log, permission scopes, storage destinations and editor. Return versioned source/permission and transfer manifest. Accept when editor receipt and useful media are verified separately from wrap and copy. 1. Match shot IDs to actual sources, card/recorder and paths. Preserve or"
+    },
+    {
+      "id": "MP-09",
+      "kind": "procedure",
+      "title": "Pull documentary selects and make a paper edit",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 106,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take synced accessible sources, confirmed treatment, source permissions, transcript if available and intended receiver. Return source-linked selects, paper edit or stringout plus gaps. Accept when editor can locate each consequential quote or visual, identify the context and see why it supports the beat. 1. Seek likely"
+    },
+    {
+      "id": "MP-10",
+      "kind": "procedure",
+      "title": "Edit, caption and QC the exact cut",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 116,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take authorised media and scope, exact timeline, audience promise, destination specs and reviewer. Return a versioned cut, captions/access plan and timed QC/review record. Accept when the actual rendition holds evidence and intelligibility, and named reviewer can act on exact version and decision scope. 1. Rough: prote"
+    },
+    {
+      "id": "MP-11",
+      "kind": "procedure",
+      "title": "Package, pass to publication and learn",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 127,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take reviewed exact versions, specifications, rights, caption and credit info, destinations and first external use. Return manifest and a receiving check for each asset and outlet. Accept when the correct recipient can open the exact version and correctly identify what they may do next. 1. Package each master and deriv"
+    },
+    {
+      "id": "MP-12",
+      "kind": "procedure",
+      "title": "Check equipment readiness and qualify a substitute",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-production.md",
+      "line": 139,
+      "domain": "media-production",
+      "reachability": "local",
+      "summary": "Take the approved coverage plan, kit list, actual room or field conditions and the custodian role. Return one availability and substitution record. Accept when the next operator can identify what they may take, which signal path passed its check, and who owns the remaining failure. 1. Map each essential signal to the a"
+    },
+    {
+      "id": "MW-01",
+      "kind": "procedure",
+      "title": "Write a project or media production brief",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 17,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Request, known audience need, current programme or source material, real destination and launch constraints, decision roles. Return: One completed brief with a one- or two-sentence top decision summary, seven parts, scoped unknowns and disposition. Pass: In ten seconds a reader can identify the audience, desired "
+    },
+    {
+      "id": "MW-02",
+      "kind": "procedure",
+      "title": "Write a concept or treatment",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 44,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Audience change, controlling brief or notes, candidate story material, actual creative and production constraints. Return: One short concept with SUMMARY, STORY, VISUAL LOOK and ELEMENTS. Pass: A decision maker can picture the piece, explain how it helps the viewer, and choose a direction. A producer can name wha"
+    },
+    {
+      "id": "MW-03",
+      "kind": "procedure",
+      "title": "Pitch a decision, design a series and write an episode",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 57,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Evidence of audience need, comparable work, route and rights facts, delivery capacity and scoped stakeholder authority. Return: One pitch with an explicit decision request or a series design with pilot, repeatable engine, sample slate and continuation decision. Pass: The reader can approve, revise, defer or decli"
+    },
+    {
+      "id": "MW-04",
+      "kind": "procedure",
+      "title": "Author the audiovisual script",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 72,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Controlling brief and concept, audience and deliverable, target runtime, supplied assets, required evidence, source transcript where applicable. Return: A full editable section draft or a production table with Section, Audio, Video, source/asset notes and review disposition. Pass: A reader can perform the intende"
+    },
+    {
+      "id": "MW-05",
+      "kind": "procedure",
+      "title": "Adapt for audience, purpose and placement",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 97,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Approved or proposed core message, audience contexts, channel purpose, grounded facts and usable destination. Return: Versioned copy or script variants with distinct starts, evidence and decision/use scope. Pass: A reader gets their relevant fact and action without guesswork. Each placement’s opening pays off the"
+    },
+    {
+      "id": "MW-06",
+      "kind": "procedure",
+      "title": "Write executive, host and live spoken scripts",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 109,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Named speaker, tone/use, reviewed facts, exact time and run-of-show dependencies, audience needs and approval scope. Return: Performable speaking copy, optional timing and cue sheet, current review authority and exact holder of any proviso. Pass: The speaker can rehearse it aloud, the operator knows what each cue"
+    },
+    {
+      "id": "MW-07",
+      "kind": "procedure",
+      "title": "Revise and issue writing for review",
+      "path": "Knowledge/Media Agency/Skills and Workflows/media-writing.md",
+      "line": 119,
+      "domain": "media-writing",
+      "reachability": "local",
+      "summary": "Take: Exact original draft, current feedback, scope and approval record, recipients and linked artefacts. Return: Exact revised draft plus concise change and impact note. Pass: A reviewer finds their changes, the relevant authority owns any conflicts, and recipients can tell which version they may use."
+    },
+    {
+      "id": "OP-01",
+      "kind": "procedure",
+      "title": "Diagnose and frame a media request",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 16,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take the request, requester role, target outcome, current service and destination if known. Return a decision intake that a named owner can act on. Pass when they can choose between actionable options and see what one unknown prevents. 1. Quote or accurately paraphrase the requested deliverable. Separately write the ch"
+    },
+    {
+      "id": "OP-02",
+      "kind": "procedure",
+      "title": "Reconstruct the controlling state from Asana",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 42,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take one actual request and an authorized read-only parent task or project pointer. Return a dated source map tied to exact objects. Pass when a fresh coordinator can tell the current next decision, what superseded earlier instructions, which links are inaccessible and which tasks are the same record across boards. 1. "
+    },
+    {
+      "id": "OP-03",
+      "kind": "procedure",
+      "title": "Build and rebalance a workback",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 57,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take current milestone objects, receiver windows, critical dependencies, team availability and estimates. Return the workback and one prioritized choice. Pass when the team can see feasibility and what has to move if timing changes. 1. Anchor earliest external use, human approvals and fixed event times. Work backward t"
+    },
+    {
+      "id": "OP-04",
+      "kind": "procedure",
+      "title": "Assign independent agent work and integrate it",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 70,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take a brief, unresolved decisions, known tool constraints, authorized sources, and intended receiver. Return one bounded assignment per worker and a join plan. Pass when each worker can find the real inputs and the integrator can combine the returns without redoing them. 1. Choose one coordinator for the next commitme"
+    },
+    {
+      "id": "OP-05",
+      "kind": "procedure",
+      "title": "Review, reconcile and update exact versions",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 84,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take the current artifact, controlling intent, prior feedback, downstream uses and designated reviewers. Return a review-ready package and impact list. Pass when the reviewer can open one current version and verify their specific concern. 1. Point the project opening at the exact current version. Record superseded link"
+    },
+    {
+      "id": "OP-06",
+      "kind": "procedure",
+      "title": "Tie work to a service, teaching or strategic objective",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 99,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take a current public/institutional direction and a programme owner who can confirm its operational intent. Return a one-line objective, a realistic audience progression and a measurement design. Pass when each metric supports a claim of the same kind and someone can gather it. 1. Record the actual plan or learning obj"
+    },
+    {
+      "id": "OP-07",
+      "kind": "procedure",
+      "title": "Transfer a version to the correct audience",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 112,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take the exact artifact and the named recipient/use. Return a scope and receiving record. Pass when the actual recipient can open the correct version and act within the documented scope. 1. Identify the audience track: staff-only, individual host, partner, educator first access, public launch or amplification. Put each"
+    },
+    {
+      "id": "OP-08",
+      "kind": "procedure",
+      "title": "Turn observations into better practice",
+      "path": "Knowledge/Media Agency/Skills and Workflows/project-and-portfolio-operations.md",
+      "line": 124,
+      "domain": "project-and-portfolio-operations",
+      "reachability": "local",
+      "summary": "Take a complete or interrupted project and one documented success, failure or repeat cost. Return a scoped practice change with a new test. Pass when a later worker can tell when to apply it and show improvement with relevant evidence. 1. Identify the cue and exact context. “Use no B-roll” is a blanket rule. “In a dire"
+    },
+    {
+      "id": "P-CONSTELLATION",
+      "kind": "project",
+      "title": "Constellation",
+      "path": "Project/Project_Register.md",
+      "line": 21,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Constellation · Portable technique library. README identifies v0.1.0 as assembled and cognitive benefit as unmeasured. Current work commitment unknown. · Recover which techniques have been exercised, under what conditions, and what evidence would change their use."
+    },
+    {
+      "id": "P-CRUCIBLE",
+      "kind": "project",
+      "title": "Crucible Domain",
+      "path": "Project/Project_Register.md",
+      "line": 12,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Crucible Domain · Active work to connect project history, evidence, knowledge, and graphs across the portfolio. First 10 exhibits (A01–A10), local RAM routing/forge/sieve (cruciblegate.py), atomic primitive registry (PRIM-01..PRIM-13), and 43-repo GitHub inventory are live. · Complete GROUNDTRUTH.md domain intake befor"
+    },
+    {
+      "id": "P-KNOWLEDGE-SIDECAR",
+      "kind": "project",
+      "title": "Constellation Knowledge Sidecar",
+      "path": "Project/Project_Register.md",
+      "line": 22,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Constellation Knowledge Sidecar · Component associated with Constellation. README describes a v0.2 file-first CLI, one canonical seed, and source-linked records. Nov 23 GitHub pushedat reflects a transient refs/heads/mercury branch spun out into guarani-ux/mercury; main (3c1f52b, covered by A06) and domain/ branches re"
+    },
+    {
+      "id": "P-KOMOREBI-WORKSPACE",
+      "kind": "project",
+      "title": "Komorebi Slack workspace",
+      "path": "Project/Project_Register.md",
+      "line": 23,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Komorebi Slack workspace · Work coordination workspace referenced in the Work Operating System recap. Historical manual Slack trial and navigation retest recorded there. The separate GitHub repository README did not establish a connection to the current workspace. · Verify current Slack entry, operator access, and rela"
+    },
+    {
+      "id": "P-STORY-LANE",
+      "kind": "project",
+      "title": "Story-Lane",
+      "path": "Project/Project_Register.md",
+      "line": 20,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Story-Lane · Agent-assisted selection and traceable clip extraction. README reports 18 clips and notes from retained transcripts. The archaeology exhibit adds a direct CI record for one clean human-voice reference on the two tested native platforms. Current work commitment unknown. · Check the latest execution receipt "
+    },
+    {
+      "id": "P-WOS",
+      "kind": "project",
+      "title": "Work Operating System",
+      "path": "Project/Project_Register.md",
+      "line": 11,
+      "domain": "project",
+      "reachability": "local",
+      "summary": "Work Operating System · Active design and validation. The current handoff calls for a first end-to-end workflow plan. The Drive project has a README and graph catalog. Application code is frozen. · Confirm what Mugen can open and run in their environment and which workflow will be exercised."
+    },
+    {
+      "id": "PRIM-01",
+      "kind": "primitive",
+      "title": "Ground-Truth Intake Gate",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems writing media general",
+      "reachability": "local",
+      "summary": "[intake-grounding | WIRED_HERE] Block deliverable generation until GROUND_TRUTH.md captures workflow, audience, purpose, and missing-information boundaries."
+    },
+    {
+      "id": "PRIM-02",
+      "kind": "primitive",
+      "title": "Scoped Commission & DAG Dependency Contract",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems writing media",
+      "reachability": "local",
+      "summary": "[intake-grounding | EXTERNAL_PROVEN] Freeze immutable objective/scope separately from revisable drafts; validate section/task dependencies as an acyclic DAG (TopologicalSorter + JSON Schema)."
+    },
+    {
+      "id": "PRIM-03",
+      "kind": "primitive",
+      "title": "Canon vs. Inference Epistemic Stratification",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "worldbuilding writing systems",
+      "reachability": "local",
+      "summary": "[state-provenance | EXTERNAL_PROVEN] Separate confirmed canon facts, inferred claims, unresolved unknowns, and proposed changes; block silent canon downgrades or unauthorized unknown-filling."
+    },
+    {
+      "id": "PRIM-04",
+      "kind": "primitive",
+      "title": "Append-Once Operation Identity & Prerequisite Resume",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems worldbuilding",
+      "reachability": "local",
+      "summary": "[state-provenance | EXTERNAL_PROVEN] Assign unique operation/event IDs to prevent duplicate appends on retry, and preserve FAILED prerequisite status so resume halts rather than skipping forward."
+    },
+    {
+      "id": "PRIM-05",
+      "kind": "primitive",
+      "title": "Dual-Hash Media & Artifact Custody Receipt",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "media systems",
+      "reachability": "local",
+      "summary": "[state-provenance | EXTERNAL_PROVEN] Compute single-pass MD5 + SHA-256 verification receipts bound to exact version/path without granting destructive source-erase authority."
+    },
+    {
+      "id": "PRIM-06",
+      "kind": "primitive",
+      "title": "In-RAM Capability Routing & Selective Abstention",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems media writing",
+      "reachability": "local",
+      "summary": "[routing-retrieval | WIRED_HERE] Index local registers, procedures, exhibits, skills, and primitives in RAM (<50ms); abstain on out-of-domain noise instead of forcing irrelevant matches."
+    },
+    {
+      "id": "PRIM-07",
+      "kind": "primitive",
+      "title": "Deterministic Repo Sieve (No-Clone Ore Triage)",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems",
+      "reachability": "local",
+      "summary": "[routing-retrieval | WIRED_HERE] Subtract already-melted exhibits, detect stale pushes, skip stubs, and inspect max 5 repo trees/call via read-only API without cloning binaries."
+    },
+    {
+      "id": "PRIM-08",
+      "kind": "primitive",
+      "title": "AST Code Property Graph & Reachability Audit",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems",
+      "reachability": "local",
+      "summary": "[verification-gating | EXTERNAL_PROVEN] Build stdlib AST call/import graphs, trace taint/dataflow, and compute transitive BFS reachability from real entrypoints vs. test-only islands."
+    },
+    {
+      "id": "PRIM-09",
+      "kind": "primitive",
+      "title": "Mechanical Test Quality & Deceptive-Fix Gate",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems",
+      "reachability": "local",
+      "summary": "[verification-gating | WIRED_HERE] Enforce AST rules TQ-01..TQ-05 (real assertions, no unconditional skips, portable paths, live exec + negative path), block swallowed exceptions, and scan deceptive-fix patterns."
+    },
+    {
+      "id": "PRIM-10",
+      "kind": "primitive",
+      "title": "Schema-Bound A/V Script & Structural Deconstructor",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "media writing",
+      "reachability": "local",
+      "summary": "[media-editorial-craft | EXTERNAL_PROVEN] Separate authoring judgment from deterministic validation/export (JSON <-> 3-column DOCX, non-destructive DOCX diff/inspect, 12-role narrative beat tagging)."
+    },
+    {
+      "id": "PRIM-11",
+      "kind": "primitive",
+      "title": "Multi-Perspective Synthesis & Claim-Bound Objection",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "writing systems media worldbuilding",
+      "reachability": "local",
+      "summary": "[handoff-receiving | EXTERNAL_PROVEN] Feed one brief to independent perspectives, reconcile conflicts without flattening counterevidence, and let source-bound objections block completion until affected checks refresh."
+    },
+    {
+      "id": "PRIM-12",
+      "kind": "primitive",
+      "title": "Exact-Version Receiving Check & 7-Graph View",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "systems media writing",
+      "reachability": "local",
+      "summary": "[handoff-receiving | WIRED_HERE] Bind delivery receipt to exact git/file revision, distinguish draft vs. readback vs. approval (K-WOS-02/03), and render cross-project dependencies with solid (blocking) vs. dashed (advisory) edges."
+    },
+    {
+      "id": "PRIM-13",
+      "kind": "primitive",
+      "title": "Brand-Locked Institutional Artifact & Stakeholder Risk Audit",
+      "path": "Knowledge/Crucible_Primitives.json",
+      "line": 1,
+      "domain": "writing media communications",
+      "reachability": "local",
+      "summary": "[handoff-receiving | PROTOTYPE] Compile executive .docx deliverables against fixed corporate template geometry and color invariants while auditing prose for political friction, past-strategy critique, AI buzzwords, and employer-data isolation."
+    },
+    {
+      "id": "PROD-D",
+      "kind": "role",
+      "title": "PROD-D — Media Production Director",
+      "path": "Knowledge/Media Agency/PROD-D.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Choose the creative treatment and quality standard, weigh production effort against audience value, and review work across projects. Use this role when an assignment needs a creative or portfolio tradeoff, a defined craft standard, or a creative decision the producer cannot make within the current b"
+    },
+    {
+      "id": "PROD-M",
+      "kind": "role",
+      "title": "PROD-M — Media Production Manager or Producer",
+      "path": "Knowledge/Media Agency/PROD-M.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Turn an accepted brief into feasible work. Own the proposed queue, resourcing, schedule, workback, exact inputs, crew and review handoffs. Use this role when the work must be planned across capture, post, graphics, live production or competing assignments. Authority. The assigned agent researches fe"
+    },
+    {
+      "id": "PROD-S",
+      "kind": "role",
+      "title": "PROD-S — Media Production Specialist, Editor or Operator",
+      "path": "Knowledge/Media Agency/PROD-S.md",
+      "line": 1,
+      "domain": "media-agency-role",
+      "reachability": "local",
+      "summary": "Turn a specific assignment into a verified deliverable. Select the required craft for this job, such as scripting, directing, camera or sound, photography, editing, motion, or live technical support. Use this role when the output needs specialist execution or expert diagnosis. Authority. An assigned"
+    },
+    {
+      "id": "WOS-GRAPH",
+      "kind": "doc",
+      "title": "Work Operating System Graph Catalog (7 Graph Types)",
+      "path": "Project/Work Operating System/Work_Operating_System_Graph_Catalog.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Choose a graph type (capability, process, decision, dependency, trace, outcome, target architecture) with Mermaid examples."
+    },
+    {
+      "id": "WOS-README",
+      "kind": "doc",
+      "title": "Work Operating System Entry Point",
+      "path": "Project/Work Operating System/README.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Plan, delegate, execute, and review digital work across roles and forks."
+    },
+    {
+      "id": "av-craft",
+      "kind": "skill",
+      "title": "av-craft",
+      "path": "C:/Users/flowe/.gemini/config/skills/av-craft/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Shared vocabulary, storytelling principles, cinematography rules, and anti-inclination checkpoints for Audio-Video (A/V) scriptwriting. Use whenever planning, writing, editing, or reviewing an A/V script, documentary treatment, YouTube script, interview guide, or paper edit."
+    },
+    {
+      "id": "av-flow",
+      "kind": "skill",
+      "title": "av-flow",
+      "path": "C:/Users/flowe/.gemini/config/skills/av-flow/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "slash_only",
+      "summary": "Ask which A/V scriptwriting skill or flow fits your situation. Router over the skills in av-story-skills."
+    },
+    {
+      "id": "av-review",
+      "kind": "skill",
+      "title": "av-review",
+      "path": "C:/Users/flowe/.gemini/config/skills/av-review/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Review an A/V script or Paper Edit along two independent axes using parallel sub-agents: Craft Smells (does it pass spoken-ear, counterpoint, grounding, and camera standards?) and Brief & Custody (does it fulfill the quarry/spine requirements and preserve source/interview integrity?). Use when reviewing script.md or pa"
+    },
+    {
+      "id": "av-scriptwriting",
+      "kind": "skill",
+      "title": "av-scriptwriting",
+      "path": "C:/Users/flowe/.gemini/config/skills/av-scriptwriting/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Audio-Video (A/V) scriptwriting, documentary pre-shoot scripting, YouTube script development, and paper-edit system. Actively counterbalances LLM print-prose biases through Visual-First Subtraction, the Print-to-Speech Mouth-Shape Pass, Dual-Channel Grounding (Requires -> Grounds), Physical Bridge Transitions, and clea"
+    },
+    {
+      "id": "cl-craft",
+      "kind": "skill",
+      "title": "cl-craft",
+      "path": "C:/Users/flowe/.gemini/config/skills/cl-craft/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Shared vocabulary, 20-second hiring manager triage mechanics, Selection Regime calibration (Mandate vs. Institutional Rubric), 4-Sentence Transduction rules, and the 12 LLM Cover Letter Anti-Smells. Use whenever decoding a JD, pitching angles, drafting, or reviewing a cover letter."
+    },
+    {
+      "id": "cl-flow",
+      "kind": "skill",
+      "title": "cl-flow",
+      "path": "C:/Users/flowe/.gemini/config/skills/cl-flow/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "slash_only",
+      "summary": "Router over the cover-letter-builder skill cartridge (cl-vault, cl-decode, cl-angles, cl-draft, cl-craft, cl-review, cl-retro) and its handoffs to Cognitive OS core."
+    },
+    {
+      "id": "cl-review",
+      "kind": "skill",
+      "title": "cl-review",
+      "path": "C:/Users/flowe/.gemini/config/skills/cl-review/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Cover letter 2-axis parallel review: spawn 2 sub-agents to audit cover-letter.md along Hiring Manager 20-Second Scan & Slop (Axis 1) and JD Mandate & Proof Custody (Axis 2), then run export_cover_letter.py."
+    },
+    {
+      "id": "cos-craft",
+      "kind": "skill",
+      "title": "cos-craft",
+      "path": "C:/Users/flowe/.gemini/config/skills/cos-craft/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Shared constitutional principles, Collaborator-Model authority tiers, provenance syntax, domain isolation rules, and anti-bloat checkpoints for the Cognitive OS. Use whenever capturing, briefing, deciding, approving, reconciling, or curating inside cognitive-os."
+    },
+    {
+      "id": "council-reversibility-agent",
+      "kind": "skill",
+      "title": "council-reversibility-agent",
+      "path": "C:/Users/flowe/.gemini/config/skills/council-reversibility-agent/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Sovereign Domain Expansion & Council Governance Agent. Enforces the 3-Tier Reversibility Matrix, eliminates Authorization Fatigue, allows autonomous local test/code iteration, and strictly gates irreversible thermodynamic/external mutations."
+    },
+    {
+      "id": "diagnosing-bugs",
+      "kind": "skill",
+      "title": "diagnosing-bugs",
+      "path": "C:/Users/flowe/.gemini/config/skills/diagnosing-bugs/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+    },
+    {
+      "id": "domain-expansion",
+      "kind": "skill",
+      "title": "domain-expansion",
+      "path": "C:/Users/flowe/.gemini/config/skills/domain-expansion/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Cognitive meta-layer for domain expansion, capability discovery, and representation calibration. Preserves the direct path when adequate, treats the six levers as optional sensitivities rather than compulsory steps, and decouples generative thought from consequential execution."
+    },
+    {
+      "id": "generative_ui",
+      "kind": "skill",
+      "title": "generative_ui",
+      "path": "C:/Users/flowe/.gemini/config/skills/generative_ui/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Comprehensive design system and interactive component library for rendering rich, responsive Generative UI widgets and standalone artifacts. Features 4 distinct style archetypes, adaptive auto-tile grid topologies, executable API cards, live telemetry terminals, and anti-slop craft standards."
+    },
+    {
+      "id": "grilling",
+      "kind": "skill",
+      "title": "grilling",
+      "path": "C:/Users/flowe/.gemini/config/skills/grilling/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+    },
+    {
+      "id": "idea-crucible",
+      "kind": "skill",
+      "title": "idea-crucible",
+      "path": "C:/Users/flowe/.gemini/config/skills/idea-crucible/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Compresses and hardens Elijah's rapid ideas before any code or new directory is created. Use whenever a new system, tool, folder, or feature spark is proposed so ideation becomes a structured card in IDEAS.md, passes 3 hardening checks, and converts into one bounded vertical slice."
+    },
+    {
+      "id": "ig-discover-method",
+      "kind": "skill",
+      "title": "ig-discover-method",
+      "path": ".agents/plugins/inner-gravity/skills/ig-discover-method/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "local",
+      "summary": "Find and apply a method that changes a consequential design or decision. Use on unfamiliar problems, recurring failures, major trade-offs, or representations that hide distinct facts."
+    },
+    {
+      "id": "ig-improve",
+      "kind": "skill",
+      "title": "ig-improve",
+      "path": ".agents/plugins/inner-gravity/skills/ig-improve/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "local",
+      "summary": "Turn an observed miss, correction, counterexample, or gain into a reviewed and testable change to the agent's method or configuration."
+    },
+    {
+      "id": "ig-reconcile",
+      "kind": "skill",
+      "title": "ig-reconcile",
+      "path": ".agents/plugins/inner-gravity/skills/ig-reconcile/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "local",
+      "summary": "Recover the controlling version and next permitted action when resuming work, changing hosts, or encountering conflicting synced records or uncertain effects."
+    },
+    {
+      "id": "impeccable",
+      "kind": "skill",
+      "title": "impeccable",
+      "path": "C:/Users/flowe/.gemini/config/skills/impeccable/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Use when the user wants to design, redesign, shape, critique, audit, polish, simplify, harden, animate, or otherwise improve a frontend interface: websites, landing pages, dashboards, product UI, components, forms, settings, onboarding, empty states, and native iOS or Android screens. Handles UX review, hierarchy, layo"
+    },
+    {
+      "id": "mode-forensic",
+      "kind": "skill",
+      "title": "mode-forensic",
+      "path": "C:/Users/flowe/.gemini/config/skills/mode-forensic/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Mode 3 — Cold-Start Forensic Audit. Activate when inspecting, auditing, or assessing an unfamiliar or partially built repo/folder. Strictly non-mutating; runs C:/Users/flowe/.gemini/config/scripts/code_graph.py --forensic to separate Wired Code from Hollow Stubs and Unverified Claims."
+    },
+    {
+      "id": "mode-quarry",
+      "kind": "skill",
+      "title": "mode-quarry",
+      "path": "C:/Users/flowe/.gemini/config/skills/mode-quarry/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Mode 2 — Quarry & Mechanism Research. Activate when reverse-engineering external repos, videos, games/RPGs, papers, or narrative/technical domains. Spawns 1 parallel research subagent per source and extracts structured Mechanism Cards (including Narrative & Consequence Mechanics)."
+    },
+    {
+      "id": "mode-reframe",
+      "kind": "skill",
+      "title": "mode-reframe",
+      "path": "C:/Users/flowe/.gemini/config/skills/mode-reframe/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Mode 1 — Reframe, Paradigm & Mobilization Modulator. Activate when the user is exploring a problem, instinct, process, or architecture before committing to execution. Zero file creation; dynamically identifies the governing discipline(s), flags missing information, compares 3 genuinely distinct paradigms with pitfalls,"
+    },
+    {
+      "id": "mode-worktree-build",
+      "kind": "skill",
+      "title": "mode-worktree-build",
+      "path": "C:/Users/flowe/.gemini/config/skills/mode-worktree-build/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Mode 4 — Graph & Worktree Build. Activate when writing, fixing, or refactoring code, UI, or creative/canon artifacts. Enforces the 5-Line Pre-Flight Contract, Red-Capable command gates on bugs, the 'Push Right' law, Workspace=\"share\" worktree subagents, the 4-Point Visual Screenshot Gate, Commit-Cited Memory, and 2 Par"
+    },
+    {
+      "id": "negative-space",
+      "kind": "skill",
+      "title": "negative-space",
+      "path": "C:/Users/flowe/.gemini/config/skills/negative-space/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Interrogation and discovery protocol for architectural audits, new feature proposals, and discovering omitted constraints. Inverts positive-space feature bias into subtractive rigor, mechanical boundary enforcement, cross-platform portability, and sovereign operator custody."
+    },
+    {
+      "id": "recursive-meta-calibration",
+      "kind": "skill",
+      "title": "recursive-meta-calibration",
+      "path": "C:/Users/flowe/.gemini/config/skills/recursive-meta-calibration/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Cognitive calibration and self-correction meta-skill for synthesis, strategy, architecture, and non-trivial planning. Enforces the 3-Layer Depth Test, intercepts encyclopedia slop and Hercule mode, strips empty adjectives and pseudo-math, and forces first-principles state machines."
+    },
+    {
+      "id": "visual-asset-craft",
+      "kind": "skill",
+      "title": "visual-asset-craft",
+      "path": "C:/Users/flowe/.gemini/config/skills/visual-asset-craft/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Use when the user needs to create, design, extract, or render graphics, visual overlays, title cards, diagrams, or scene assets for a video, screen recording, presentation, or campaign from a photo, video clip, screen capture, or brief. Manages deterministic programmatic rendering (transparent PNG/SVG overlays), genera"
+    },
+    {
+      "id": "visual-reflex",
+      "kind": "skill",
+      "title": "visual-reflex",
+      "path": "C:/Users/flowe/.gemini/config/skills/visual-reflex/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Physical reflex engine for agents creating, editing, auditing, or reviewing visual designs, frontend UI, web layouts, HTML, Tailwind CSS, graphics, slides, or motion. Enforces the 4 physical invariants (Light dynamic range, Spatial tension, Typographic mass, Kinetic inertia) via closed-loop state-machine transforms to "
+    },
+    {
+      "id": "wait-what",
+      "kind": "skill",
+      "title": "wait-what",
+      "path": "C:/Users/flowe/.gemini/config/skills/wait-what/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "slash_only",
+      "summary": "Stop. That last message did not land: re-pitch it."
+    },
+    {
+      "id": "zero-trust-architect",
+      "kind": "skill",
+      "title": "zero-trust-architect",
+      "path": "C:/Users/flowe/.gemini/config/skills/zero-trust-architect/SKILL.md",
+      "line": 1,
+      "domain": "agent-skill",
+      "reachability": "host_global",
+      "summary": "Architectural patterns and procedural guidance for high-assurance software engineering tasks. Covers candidate isolation, deterministic evidence-bound verification, bounded repair iteration, and procedural separation of duties."
+    }
+  ]
+}

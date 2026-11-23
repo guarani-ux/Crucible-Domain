@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-11-23",
+  "purpose": "Irreducible atomic building blocks distilled from A01..A10 exhibits, live Crucible harness, 9 high-signal GitHub repositories, and selective skill extractions.",
+  "families": [
+    "intake-grounding",
+    "state-provenance",
+    "routing-retrieval",
+    "verification-gating",
+    "media-editorial-craft",
+    "handoff-receiving"
+  ],
+  "primitives": [
+    {
+      "id": "PRIM-01",
+      "name": "Ground-Truth Intake Gate",
+      "family": "intake-grounding",
+      "domains": ["systems", "writing", "media", "general"],
+      "inputs": "Empty or unfamiliar domain folder + user intent",
+      "mechanism": "Block deliverable generation until GROUND_TRUTH.md captures workflow, audience, purpose, and missing-information boundaries.",
+      "outputs": "Bounded scope + explicit blocking vs. non-blocking unknowns",
+      "breakpoints": "Agents hallucinate deliverables in empty folders (SHIFTING_SAND) or optimize downstream details before settling audience and purpose.",
+      "status": "WIRED_HERE",
+      "sources": [
+        ".agents/scripts/crucible_gate.py",
+        "C:/Users/flowe/.gemini/config/skills/mode-reframe/SKILL.md",
+        "the-writers-room@cebc5e7:writersroom/intake.py",
+        "Story-House@e13b942:modules/work-planning/SKILL.md"
+      ],
+      "receiving_check": "Writing a deliverable into an empty domain folder is denied by PreToolUse until GROUND_TRUTH.md exists."
+    },
+    {
+      "id": "PRIM-02",
+      "name": "Scoped Commission & DAG Dependency Contract",
+      "family": "intake-grounding",
+      "domains": ["systems", "writing", "media"],
+      "inputs": "Producer brief + authorized sources + acceptance checks",
+      "mechanism": "Freeze immutable objective/scope separately from revisable drafts; validate section/task dependencies as an acyclic DAG (TopologicalSorter + JSON Schema).",
+      "outputs": "Schema-validated commission packet + ordered execution graph",
+      "breakpoints": "Circular dependencies, silent scope drift mid-run, or accepting prose completion without frozen criteria.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "the-writers-room@cebc5e7:writersroom/contracts.py",
+        "A02:Kageyoni",
+        "A10:Nelson",
+        "IDEAS.md"
+      ],
+      "receiving_check": "Cyclic dependency raises CycleError; mid-session contract mutation fails verify/stop gate."
+    },
+    {
+      "id": "PRIM-03",
+      "name": "Canon vs. Inference Epistemic Stratification",
+      "family": "state-provenance",
+      "domains": ["worldbuilding", "writing", "systems"],
+      "inputs": "Participant proposals, drafts, or multi-agent observations",
+      "mechanism": "Separate confirmed canon facts, inferred claims, unresolved unknowns, and proposed changes; block silent canon downgrades or unauthorized unknown-filling.",
+      "outputs": "Tagged state update + explicit open-questions queue for decision owner",
+      "breakpoints": "Participants silently fill restricted unknowns or treat speculative inference as confirmed canon.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "A01:entonkageyoni",
+        "K-ARCH-01",
+        "Hidden-Booder-Village@c216ad9:assimilated_components/ReMe.py"
+      ],
+      "receiving_check": "A contradictory or ungrounded proposal is retained with its basis without overwriting confirmed canon."
+    },
+    {
+      "id": "PRIM-04",
+      "name": "Append-Once Operation Identity & Prerequisite Resume",
+      "family": "state-provenance",
+      "domains": ["systems", "worldbuilding"],
+      "inputs": "Step execution attempt + prior checkpoint/journal state",
+      "mechanism": "Assign unique operation/event IDs to prevent duplicate appends on retry, and preserve FAILED prerequisite status so resume halts rather than skipping forward.",
+      "outputs": "Idempotent event log + honest resume state",
+      "breakpoints": "Double-append on save/evolution (A01) or resuming past a failed prerequisite and reporting COMPLETED (A09 / K-ARCH-01).",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "A01:entonkageyoni",
+        "A09:cognitive-os",
+        "K-ARCH-01"
+      ],
+      "receiving_check": "Resume fixture with a FAILED prerequisite halts downstream steps; retry preserves one logical event record."
+    },
+    {
+      "id": "PRIM-05",
+      "name": "Dual-Hash Media & Artifact Custody Receipt",
+      "family": "state-provenance",
+      "domains": ["media", "systems"],
+      "inputs": "Source media/card or artifact file + copy target",
+      "mechanism": "Compute single-pass MD5 + SHA-256 verification receipts bound to exact version/path without granting destructive source-erase authority.",
+      "outputs": "Non-authorizing custody receipt + mismatch warning",
+      "breakpoints": "Silent bit-rot, copy-vs-source confusion, or premature deletion before independent checksum verification.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "Video-House@2b9b8e5:core/card_custody.py",
+        "Video-House@2b9b8e5:core/checksum_verifier.py",
+        "A07:Story-Lane",
+        "K-STORY-01"
+      ],
+      "receiving_check": "Altered byte triggers checksum mismatch warning; source-erase remains gated."
+    },
+    {
+      "id": "PRIM-06",
+      "name": "In-RAM Capability Routing & Selective Abstention",
+      "family": "routing-retrieval",
+      "domains": ["systems", "media", "writing"],
+      "inputs": "Natural-language task, canonical ID, or problem statement",
+      "mechanism": "Index local registers, procedures, exhibits, skills, and primitives in RAM (<50ms); abstain on out-of-domain noise instead of forcing irrelevant matches.",
+      "outputs": "Ranked exact/lexical matches + prior-art Forge brief, or explicit ABSTAINED",
+      "breakpoints": "Slow external vector bloat without counterfactual gain (K-ARCH-02) or noisy keyword matches across unrelated domains.",
+      "status": "WIRED_HERE",
+      "sources": [
+        ".agents/scripts/crucible_index.py",
+        "A05:Constellation",
+        "A06:sidecar",
+        "sidecar@3c1f52b:sidecar.py",
+        "sidecar@3c1f52b:MORGAN_BUILD_GUIDE.md",
+        "K-ARCH-02",
+        "K-SIDECAR-01"
+      ],
+      "receiving_check": "Exact IDs resolve O(1); out-of-domain noise abstains cleanly while keeping TQ floor."
+    },
+    {
+      "id": "PRIM-07",
+      "name": "Deterministic Repo Sieve (No-Clone Ore Triage)",
+      "family": "routing-retrieval",
+      "domains": ["systems"],
+      "inputs": "GitHub owner inventory + local exhibit directory",
+      "mechanism": "Subtract already-melted exhibits, detect stale pushes, skip stubs, and inspect max 5 repo trees/call via read-only API without cloning binaries.",
+      "outputs": "Bounded triage verdicts (MELT_READY / EMPTY_REPO / SKIP_ASSET_OR_STUB)",
+      "breakpoints": "Cloning multi-GB asset repos, crashing on 409 empty repos, or burning tokens dumping raw source.",
+      "status": "WIRED_HERE",
+      "sources": [
+        ".agents/scripts/crucible_index.py",
+        ".agents/scripts/crucible_gate.py"
+      ],
+      "receiving_check": "Batch >5 exits 2; 409 empty repo isolates cleanly; binary assets are filtered."
+    },
+    {
+      "id": "PRIM-08",
+      "name": "AST Code Property Graph & Reachability Audit",
+      "family": "verification-gating",
+      "domains": ["systems"],
+      "inputs": "Python/code repository tree",
+      "mechanism": "Build stdlib AST call/import graphs, trace taint/dataflow, and compute transitive BFS reachability from real entrypoints vs. test-only islands.",
+      "outputs": "Wired vs. dead/test-only module map",
+      "breakpoints": "Reporting a module as wired when only unit tests import it and no real CLI/hook entrypoint reaches it.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "espada@6fade68:espada/cpg.py",
+        "espada@6fade68:check_reachable.py",
+        "10-shadows@ee4a16a:crates/ten_shadows_kernel/Cargo.toml"
+      ],
+      "receiving_check": "Module imported solely by tests is flagged unreachable from production entrypoints."
+    },
+    {
+      "id": "PRIM-09",
+      "name": "Mechanical Test Quality & Deceptive-Fix Gate",
+      "family": "verification-gating",
+      "domains": ["systems"],
+      "inputs": "Candidate test file or code diff",
+      "mechanism": "Enforce AST rules TQ-01..TQ-05 (real assertions, no unconditional skips, portable paths, live exec + negative path), block swallowed exceptions, and scan deceptive-fix patterns.",
+      "outputs": "PASS or deterministic PreToolUse DENY with exact rule ID + line",
+      "breakpoints": "Tests passing via assert True, hardcoded user paths, mocked-out core logic, or silent except: pass.",
+      "status": "WIRED_HERE",
+      "sources": [
+        ".agents/scripts/test_quality_gate.py",
+        "C:/Users/flowe/.gemini/config/scripts/hook_v4.py",
+        "espada@6fade68:espada/deceptive.py",
+        "espada@6fade68:espada/differential.py"
+      ],
+      "receiving_check": "Writing a tautological or skipped test is denied mechanically before disk mutation."
+    },
+    {
+      "id": "PRIM-10",
+      "name": "Schema-Bound A/V Script & Structural Deconstructor",
+      "family": "media-editorial-craft",
+      "domains": ["media", "writing"],
+      "inputs": "Verified source material, transcript, or structured script JSON",
+      "mechanism": "Separate authoring judgment from deterministic validation/export (JSON <-> 3-column DOCX, non-destructive DOCX diff/inspect, 12-role narrative beat tagging).",
+      "outputs": "Editable Section | Audio | Video script + traceable source-clip manifest",
+      "breakpoints": "LLM inventing ungrounded visual claims, mutating original DOCX files, or mixing timecodes/slop into spoken copy.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "Story-House@e13b942:modules/av-scripting/scripts/av_script.py",
+        "Video-House@2b9b8e5:core/av_script_builder.py",
+        "Video-House@2b9b8e5:core/deconstructor.py",
+        "Outer-Sanctum@6d9db3d:.agents/skills/media-engine-compiler/SKILL.md",
+        "A07:Story-Lane"
+      ],
+      "receiving_check": "av_script check/export/diff validates schema without modifying source DOCX."
+    },
+    {
+      "id": "PRIM-11",
+      "name": "Multi-Perspective Synthesis & Claim-Bound Objection",
+      "family": "handoff-receiving",
+      "domains": ["writing", "systems", "media", "worldbuilding"],
+      "inputs": "Shared bounded brief + independent worker outputs or reviewer objections",
+      "mechanism": "Feed one brief to independent perspectives, reconcile conflicts without flattening counterevidence, and let source-bound objections block completion until affected checks refresh.",
+      "outputs": "Reconciled decision brief + open objection ledger + human approval target",
+      "breakpoints": "Mistaking worker agreement for approval or letting stale passing checks survive a material revision.",
+      "status": "EXTERNAL_PROVEN",
+      "sources": [
+        "A01:entonkageyoni",
+        "A08:Hagoromo",
+        "A10:Nelson",
+        "Outer-Sanctum@6d9db3d:Komorebi/.agents/skills/evidence-gate/SKILL.md",
+        "ten-shadows-control@ce2915f:scripts/orchestrator.py"
+      ],
+      "receiving_check": "Material candidate edit reopens affected checks; prior objections remain retrievable."
+    },
+    {
+      "id": "PRIM-12",
+      "name": "Exact-Version Receiving Check & 7-Graph View",
+      "family": "handoff-receiving",
+      "domains": ["systems", "media", "writing"],
+      "inputs": "Finished deliverable + target recipient environment",
+      "mechanism": "Bind delivery receipt to exact git/file revision, distinguish draft vs. readback vs. approval (K-WOS-02/03), and render cross-project dependencies with solid (blocking) vs. dashed (advisory) edges.",
+      "outputs": "Verified recipient-ready delivery + revision-pinned receipt",
+      "breakpoints": "Assuming a local test proves the recipient's environment (K-WOS-03) or conflating delivery with approval.",
+      "status": "WIRED_HERE",
+      "sources": [
+        "K-WOS-01",
+        "K-WOS-02",
+        "K-WOS-03",
+        "K-GRAPH-01",
+        "K-ARCH-03",
+        "the-writers-room@cebc5e7:writersroom/delivery.py",
+        "mercury@bad3af6:desk.py"
+      ],
+      "receiving_check": "Recipient opens exact version in target environment without clarification; receipt rejects cross-operation replay."
+    },
+    {
+      "id": "PRIM-13",
+      "name": "Brand-Locked Institutional Artifact & Stakeholder Risk Audit",
+      "family": "handoff-receiving",
+      "domains": ["writing", "media", "communications"],
+      "inputs": "Draft Markdown/JSON payload or transcript + institutional style contract + stakeholder/employer boundary rules",
+      "mechanism": "Compile executive .docx deliverables against fixed corporate template geometry and color invariants while auditing prose for political friction, past-strategy critique, AI buzzwords, and employer-data isolation.",
+      "outputs": "Template-compliant .docx deliverable + friction-audited executive framing",
+      "breakpoints": "Hardcoded local OS template paths (e.g. macOS user paths in mugen executive compiler), unstyled markdown dumps, or employer-restricted source leakage.",
+      "status": "PROTOTYPE",
+      "sources": [
+        "mugen@7d57ee0:.agents/skills/cpl_call_sheet_generator/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_call_sheet_generator/scripts/cpl_call_sheet.py",
+        "mugen@7d57ee0:.agents/skills/cpl_document_builder/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_executive_artifact_compiler/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_stakeholder_diplomat/SKILL.md",
+        ".agents/scripts/crucible_gate.py"
+      ],
+      "receiving_check": "Generated .docx preserves template geometry, gridlines, and color tokens cleanly on target OS and passes stakeholder-risk plus read-only employer boundary checks."
+    }
+  ]
+}

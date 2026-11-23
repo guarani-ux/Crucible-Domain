@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import py_compile
 import re
 import subprocess
 import sys
@@ -152,14 +153,17 @@ def _build_system_map(root: Path = ROOT) -> str:
     active_wip = _extract_active_wip(root / "IDEAS.md")
     install_status = _check_local_install_and_plugins(root)
 
-    cap_line = 'Route capabilities: python ".agents/scripts/crucible_gate.py" route "<task or ID>" | Health: doctor'
+    cap_line = 'Route/Forge: python ".agents/scripts/crucible_gate.py" route|forge "<task or problem>" | Health: doctor'
     try:
-        idx = _resolve_index_module().build_index(root)
+        ci = _resolve_index_module()
+        global_dir = ci.DEFAULT_GLOBAL_CONFIG_DIR if ci.DEFAULT_GLOBAL_CONFIG_DIR.is_dir() else None
+        idx = ci.build_index(root, global_config_dir=global_dir)
         counts = idx.counts_by_kind
         cap_line = (
             f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
             f"roles={counts.get('role', 0)}, knowledge={counts.get('knowledge', 0)}, "
-            f"skills={counts.get('skill', 0)} | route \"<task/ID>\" | doctor"
+            f"skills={counts.get('skill', 0)}, primitives={counts.get('primitive', 0)} | "
+            f'route "<task/ID>" | forge "<problem>" | doctor | melt-diff | melt-scan'
         )
     except Exception:
         pass
@@ -547,11 +551,45 @@ def cmd_check(root: Path = ROOT) -> int:
             if ASANA_URL_RE.search(content):
                 reasons.append(f"working-tree CPL file contains app.asana.com URL: {norm}")
 
+    for py_dir in (root / ".agents" / "scripts", root / ".agents" / "scripts" / "crucible"):
+        if not py_dir.is_dir():
+            continue
+        for py_file in sorted(py_dir.glob("*.py")):
+            try:
+                py_compile.compile(str(py_file), doraise=True)
+            except (py_compile.PyCompileError, OSError) as exc:
+                rel_py = str(py_file.relative_to(root)).replace("\\", "/")
+                reasons.append(f"python syntax error in {rel_py}: {exc}")
+
+    if (root / "Knowledge" / "Crucible_Primitives.json").is_file():
+        ci = _resolve_index_module()
+        prim_findings: list[object] = []
+        try:
+            ci.validate_primitives_registry(root, prim_findings)
+        except AttributeError as exc:
+            reasons.append(f"Knowledge/Crucible_Primitives.json: invalid JSON root structure ({exc})")
+        for finding in prim_findings:
+            if getattr(finding, "severity", "") == "FAIL":
+                reasons.append(f"{finding.subject}: {finding.detail}")
+
+    try:
+        scripts_dir = str(Path(__file__).resolve().parent)
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import test_quality_gate
+
+        tests_dir = root / ".agents" / "scripts" / "tests"
+        if tests_dir.is_dir():
+            for tqf in test_quality_gate.audit_paths([tests_dir]):
+                reasons.append(f"{tqf.rule_id} in {Path(tqf.file).name}:{tqf.line}: {tqf.message}")
+    except ImportError:
+        pass
+
     if reasons:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
 
-    print("PASS: IDEAS.md present; no staged .tmp.drive* or CPL Asana URL violations.")
+    print("PASS: IDEAS.md present; Python syntax, primitives schema, staged files, and test-quality checks clean.")
     return 0
 
 
@@ -594,6 +632,15 @@ def _resolve_index_module():
     return crucible_index
 
 
+def _resolve_exporter_module():
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from crucible import exporter
+
+    return exporter
+
+
 def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bool = False, no_global: bool = False) -> int:
     if not query_parts:
         print("usage: crucible_gate.py route <task query or canonical ID>", file=sys.stderr)
@@ -606,12 +653,103 @@ def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bo
     return 0
 
 
+def cmd_forge(
+    root: Path,
+    problem_parts: list[str],
+    *,
+    top_k: int = 4,
+    as_json: bool = False,
+    no_global: bool = False,
+    domain: str | None = None,
+) -> int:
+    if not problem_parts:
+        print("usage: crucible_gate.py forge <problem description>", file=sys.stderr)
+        return 2
+    ci = _resolve_index_module()
+    global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
+    idx = ci.build_index(root, global_config_dir=global_dir)
+    brief = ci.forge_brief(idx, " ".join(problem_parts), top_k=top_k, domain=domain)
+    print(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_forge_text(brief))
+    return 0
+
+
 def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, skip_exec: bool = False) -> int:
     ci = _resolve_index_module()
     global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
     report = ci.run_doctor(root, global_config_dir=global_dir, execute_hooks=not skip_exec)
     print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_doctor_text(report))
     return 0 if report.ok else 1
+
+
+def cmd_melt_diff(
+    root: Path,
+    *,
+    owner: str = "guarani-ux",
+    from_json: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    try:
+        if from_json is not None:
+            repos_data = json.loads(from_json.read_text(encoding="utf-8"))
+        else:
+            repos_data = ci.fetch_github_repos(owner=owner)
+        report = ci.compute_melt_diff(root, repos_data)
+    except Exception as exc:
+        print(f"BLOCKED: melt-diff failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(report, indent=2, ensure_ascii=False) if as_json else ci._format_melt_diff_text(report))
+    return 0
+
+
+def cmd_melt_scan(
+    repos: list[str],
+    *,
+    owner: str = "guarani-ux",
+    from_json: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    fixtures: dict[str, Any] | None = None
+    if from_json is not None:
+        try:
+            fixtures = json.loads(from_json.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"BLOCKED: could not load --from-json fixture: {exc}", file=sys.stderr)
+            return 1
+    try:
+        report = ci.run_melt_scan(repos, owner=owner, fixtures=fixtures)
+    except ValueError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"BLOCKED: melt-scan failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(report, indent=2, ensure_ascii=False) if as_json else ci._format_melt_scan_text(report))
+    return 0
+
+
+def cmd_export_map(
+    root: Path,
+    output: Path | None = None,
+    *,
+    no_global: bool = False,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    exporter = _resolve_exporter_module()
+    global_dir = None if no_global else (ci.DEFAULT_GLOBAL_CONFIG_DIR if ci.DEFAULT_GLOBAL_CONFIG_DIR.is_dir() else None)
+    try:
+        out_path, payload = exporter.write_capability_map(
+            root,
+            output_path=output,
+            global_config_dir=global_dir,
+        )
+    except Exception as exc:
+        print(f"BLOCKED: export-map failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"Exported {payload['total']} capabilities to {out_path}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -624,14 +762,49 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop", "route", "doctor"),
+        choices=(
+            "session-start",
+            "pre-tool",
+            "check",
+            "pre-commit",
+            "verify",
+            "stop",
+            "route",
+            "forge",
+            "doctor",
+            "melt-diff",
+            "melt-scan",
+            "export-map",
+        ),
         help="Gate action to execute.",
     )
-    parser.add_argument("query", nargs="*", help="Query tokens or ID for 'route'.")
-    parser.add_argument("--top", type=int, default=5, help="Max matches for 'route'.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route' or 'doctor'.")
-    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
+    parser.add_argument(
+        "query",
+        nargs="*",
+        help="Query tokens/ID for 'route', problem description for 'forge', or 1..5 repo names for 'melt-scan'.",
+    )
+    parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route' or 'forge'.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', 'melt-scan', or 'export-map'.",
+    )
+    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor/export-map.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
+    parser.add_argument("--owner", default="guarani-ux", help="GitHub owner for 'melt-diff' or 'melt-scan'.")
+    parser.add_argument("--from-json", type=Path, default=None, help="Offline JSON fixture path for 'melt-diff' or 'melt-scan'.")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional output path for 'export-map' (defaults to Graphs/capability_map.json).",
+    )
+    parser.add_argument(
+        "--domain",
+        choices=("systems", "media", "writing", "worldbuilding", "general"),
+        default=None,
+        help="Optional domain scope override for 'forge'.",
+    )
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -645,8 +818,23 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_stop(root)
     if args.subcommand == "route":
         return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
+    if args.subcommand == "forge":
+        return cmd_forge(
+            root,
+            args.query,
+            top_k=4 if args.top == 5 else args.top,
+            as_json=args.json,
+            no_global=args.no_global,
+            domain=args.domain,
+        )
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
+    if args.subcommand == "melt-diff":
+        return cmd_melt_diff(root, owner=args.owner, from_json=args.from_json, as_json=args.json)
+    if args.subcommand == "melt-scan":
+        return cmd_melt_scan(args.query, owner=args.owner, from_json=args.from_json, as_json=args.json)
+    if args.subcommand == "export-map":
+        return cmd_export_map(root, output=args.output, no_global=args.no_global, as_json=args.json)
     return cmd_check(root)
 
 

@@ -6,19 +6,25 @@
 (empty)
 
 ## Stage 3: Hardened
-- [P-INNER-GRAVITY] (paused — superseded in part by contract gate) Stage and verify the 7-graph WOS harness map and installation pack (`install_pack/`) for `Crucible Domain` before promoting `AGENTS.md`, `IDEAS.md`, and `.agents/acceptance.lock.json` to the workspace root.
 - [P-WOS] Exercise the first end-to-end Work Operating System workflow plan with explicit receiving checks (`K-WOS-01..03`) and verified environment access.
 
 ## Stage 2: Challenged
-- [P-INNER-GRAVITY] Bridge `operator_router.py` `PreInvocation` signals (`mode-forensic`, `idea-crucible`) into deterministic `hook_v4.py` write locks (`PreToolUse`).
+- [P-INNER-GRAVITY] Bridge `operator_router.py` `PreInvocation` signals (`mode-forensic`, `idea-crucible`) into deterministic `hook_v4.py` write locks (`PreToolUse`). *(deferred — advisory SessionStart/PreInvocation modulator active per Levi)*
 - [P-KNOWLEDGE-SIDECAR] Review recorded qualification before wiring `sidecar` as an automated retrieval layer for `Crucible Domain` (`K-ARCH-02`).
 - [P-DELIVERABLE] First real deliverable: CPL or Personal Work, starting from a GROUND_TRUTH.md intake (requires Levi's input on workflow, audience, and purpose first).
-- [P-STORAGE] Decouple live Git working tree (`C:\crucible-domain`) from OneDrive/Drive via `Project/Inner Gravity/install_pack/migrate_to_local_git.ps1` between sessions.
 
 ## Stage 1: Raw Sparks
-- [P-INNER-GRAVITY] Reconcile `skills.json` unloaded entries in `C:/Kageyoni/.agents/skills` against live session loaders.
+*(empty)*
 
 ## Shipped
+- [P-CRUCIBLE-MODULAR] Decoupled `.agents/scripts/crucible_index.py` (2,552L) into modular `.agents/scripts/crucible/` package (`__init__.py`, `models.py`, `indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`, `exporter.py`) with 102L shim, added `Graphs/` atlas + `capability_map.json` (`crucible_gate.py export-map`), hardened `cmd_check` + portable `doctor`, marked legacy `install_pack/` staging superseded at root, and staged `acceptance.lock.json.v2` + `apply_v2_lock.ps1` (2026-11-23).
+- [P-STORAGE] Decoupled live Git working tree (`C:\crucible-domain`) from OneDrive/Drive sync locks, eliminating Drive concurrency conflicts (`Dirty: 0 | Sync locks: none`) (2026-11-23).
+- [P-INNER-GRAVITY] Reconciled `skills.json` unloaded entries in `C:/Kageyoni/.agents/skills` against live session loaders (`skills=28` verified by `doctor`) (2026-11-23).
+- [P-OBSERVATORY-ZERO-GAP] Added honest Inner Gravity observatory, session causal trace, mechanical Test Quality Gate (`TQ-01..TQ-05`), and live `PreToolUse` hook probes (`0 WARN | 0 FAIL`) (2026-11-23).
+- [P-FORGE-COMPOSE] Built domain-scoped RAM prior-art forging engine (`crucible_gate.py forge "<problem>"`), deep exhibit parsing, and observatory depth checks (2026-11-23).
+- [P-MELT-SIEVE] Built deterministic no-clone GitHub ore sieve (`crucible_gate.py melt-diff` and `melt-scan`) with batch/byte caps and reconciled all 43 repositories in `Project/Project_Register.md` (2026-11-23).
+- [P-PRIMITIVES] Distilled `A01`–`A10`, live harness, 9 high-signal repos, and `mugen` CPL skills into `Knowledge/Crucible_Primitives.json` and `Knowledge/Crucible_Primitives.md` (`PRIM-01..PRIM-13`) with schema validation and RAM routing (2026-11-23).
+- [P-MODE-REFRAME-MODULATOR] Enabled always-in open-domain `MODE-REFRAME MODULATOR` at `SessionStart` / `PreInvocation` for non-trivial design and process forks (2026-11-23).
 - [P-CRUCIBLE-CIRCULATION] Built pure-Python RAM capability index, selective router, and closed-loop doctor (`crucible_index.py`, `crucible_gate.py route|doctor`), resolved all 10 legacy ChatGPT skill IDs locally, updated canonical entry docs to local-first links, activated `.agents/hooks.json` (`SessionStart`, `PreToolUse`, `Stop`) + `AGENTS.md`, removed duplicate `Project/Media Agency/`, staged `acceptance.lock.json.ready`, and versioned `~/.gemini/config` in local git with cleaned MCP/skills/router rules (2026-11-22).
 - [P-RULE-CONSOLIDATION] Consolidated rule-layer ownership (tiers, honesty, 3-strike in `GEMINI.md`; pre-flight contract in `mode-worktree-build`), made Beneath/Challenging conditional, removed `recursive-meta-calibration` Module 4 and "inject counter-intuitive truth", split Push Right, fixed stale paths in `idea-crucible` and `zero-trust-architect`, and scoped `visual-reflex`, `negative-space`, and `recursive-meta-calibration` (2026-11-22).
 - [P-HOOK-CLEANUP] Cleaned up `hook_v4.py` and narrowed `PreToolUse` matcher in `hooks.json` (removed RW-10, downgraded RW-03 regexes, keyed read-thrash on file hash, made FM-AUTO-01 count edits, closed subagent overwrite/broad-delete loophole, fixed FM-H06 `Select-String` advice) (2026-11-22).

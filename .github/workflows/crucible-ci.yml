@@ -1,0 +1,45 @@
+name: Crucible CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run test suite
+        run: python -m pytest .agents/scripts/tests -v
+
+      - name: Run test quality gate (TQ-01..TQ-05)
+        run: python .agents/scripts/test_quality_gate.py .agents/scripts/tests
+
+      - name: Run workspace gate check
+        run: python .agents/scripts/crucible_gate.py check
+
+      - name: Run portable doctor
+        run: python .agents/scripts/crucible_gate.py doctor --no-global
+
+      - name: Run mutation kill gate
+        run: python .agents/scripts/mutation_gate.py
