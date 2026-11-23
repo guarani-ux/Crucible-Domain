@@ -19,13 +19,6 @@
           }
         ]
       }
-    ],
-    "Stop": [
-      {
-        "type": "command",
-        "command": "python scripts/crucible_gate.py stop",
-        "timeout": 15
-      }
     ]
   }
 }

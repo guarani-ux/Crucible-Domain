@@ -31,20 +31,20 @@ To prevent agents from misreading shared system directories as "distraction" or 
 
 ## 3. Working Defaults `[PROPOSED DEFAULT]`
 
-1. **One Live Working Copy:** All active work runs in `C:\crucible-domain` (retiring the legacy OneDrive folder to prevent Git/sync split-brain).
-2. **Evidence-Bound Progress (`K-TEST-01`):** Any upgrade to `PW-01` (`Crucible Domain`) must close a real architectural gap and pass 3 qualification cases (`bad` miss caught, `good` normal work unbroken, `changed` scoped cleanly) — no speculative bolt-ons.
-3. **Deliverable Parity:** Non-code outputs (briefs, scripts, plans) get the same custody rigor as Python code (explicit dependencies, stale detection, plain-English receiver separation where appropriate).
+1. **One Live Working Copy:** All active work runs in `C:\crucible-domain` (OneDrive copy retired and deleted to eliminate Git/sync split-brain).
+2. **Harness Freeze Rule (Active — 2026-11-23):** **No new hooks, gates, scripts, or meta-tooling** until **3 real deliverables** have been handed to actual human recipients and returned real feedback.
+3. **Evidence-Bound Progress (`K-TEST-01`):** Any future post-freeze upgrade to `PW-01` (`Crucible Domain`) must close a real architectural gap and pass 3 qualification cases (`bad` miss caught, `good` normal work unbroken, `changed` scoped cleanly) — no speculative bolt-ons.
+4. **Deliverable Parity:** Non-code outputs (briefs, scripts, plans) get the same custody rigor as Python code (explicit dependencies, stale detection, plain-English receiver separation where appropriate).
 
 ---
 
-## 4. Current Personal Architecture Backlog (`PW-01 · Crucible Domain`)
+## 4. Current Personal Architecture Backlog (`PW-01 · Crucible Domain`) — FROZEN
 
-Tracked directly from the `2026-11-23` architectural audit so future sessions attack real structural flaws rather than tinkering:
+> **Status:** Frozen under the **Harness Freeze Rule** above until 3 real human-reviewed deliverables return real feedback. Do not start these items ahead of shipping real deliverables.
 
 1. **Close Open Feedback Loops:** Wire automated write-back into `Knowledge/outcome_ledger.json` (or demote idle priors), wire `check_artifact.py` manifest verification + `depends_on` staleness checks into `crucible_gate.py check`, and use `IDEAS.md` Stage 4 (`WIP <= 1`) on real slices.
-2. **Split Hot-Path Safety Gate From Offline Tools:** Separate fast runtime hooks (`session-start`, `pre-tool`, `stop`, `check`, `verify`) from offline research/mining commands (`forge`, `melt-diff`, `melt-scan`, `learn`, `risk`, `export-map`) currently bundled inside `.agents/scripts/crucible_gate.py`.
-3. **Consolidate Lock Staging:** Retire duplicate lock-update staging so only one canonical protected-file update path exists.
-4. **Define Capability Precedence:** Establish a clear precedence rule across the `148` indexed capabilities (`procedures`, `skills`, `primitives`, `knowledge`) so overlapping instructions never conflict or leak internal IDs into plain-English outputs.
+2. **Split Hot-Path Safety Gate From Offline Tools:** Separate fast runtime hooks (`session-start`, `pre-tool`, `check`) from offline research/mining commands (`forge`, `melt-diff`, `melt-scan`, `learn`, `risk`, `export-map`) currently bundled inside `.agents/scripts/crucible_gate.py`.
+3. **Define Capability Precedence:** Establish a clear precedence rule across indexed capabilities (`procedures`, `skills`, `primitives`, `knowledge`) so overlapping instructions never conflict or leak internal IDs into plain-English outputs.
 
 ---
 

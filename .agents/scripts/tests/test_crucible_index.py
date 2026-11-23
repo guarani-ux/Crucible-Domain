@@ -21,7 +21,7 @@ import crucible_gate  # noqa: E402
 import crucible_index  # noqa: E402
 
 GATE_SCRIPT = SCRIPTS_DIR / "crucible_gate.py"
-STAGED_HOOKS = REPO_ROOT / "Project" / "Inner Gravity" / "install_pack" / "crucible_hooks.json.fixed"
+LIVE_HOOKS = REPO_ROOT / ".agents" / "hooks.json"
 
 
 class TestCrucibleIndexAndDoctor(unittest.TestCase):
@@ -106,12 +106,12 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             hook_fails = [f for f in bad_report.findings if f.category == "hooks" and f.severity == "FAIL"]
             self.assertTrue(hook_fails)
 
-            # 2. Fixed staged hooks.json ('scripts/crucible_gate.py ...' for SessionStart, PreToolUse, Stop)
-            shutil.copy2(STAGED_HOOKS, repo / ".agents" / "hooks.json")
+            # 2. Live hooks.json ('scripts/crucible_gate.py ...' for SessionStart and PreToolUse)
+            shutil.copy2(LIVE_HOOKS, repo / ".agents" / "hooks.json")
             good_report = crucible_index.run_doctor(repo, global_config_dir=None, execute_hooks=True)
             self.assertEqual(good_report.fail_count, 0, [f.to_dict() for f in good_report.findings])
             hook_passes = [f for f in good_report.findings if f.category == "hooks" and f.severity == "PASS"]
-            self.assertEqual(len(hook_passes), 3)
+            self.assertEqual(len(hook_passes), 2)
 
     def test_doctor_detects_diverged_media_agency_copy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

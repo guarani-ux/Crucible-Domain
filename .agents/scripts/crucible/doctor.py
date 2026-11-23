@@ -153,7 +153,7 @@ def _audit_hooks(
                                         severity="FAIL",
                                         subject=f"{rel_hf}::{hook_name}.{ev}",
                                         detail=f"command '{cmd}' from cwd='{hook_cwd}' resolves to missing '{resolved}'",
-                                        remediation="Apply Project/Inner Gravity/install_pack/crucible_hooks.json.fixed (use 'scripts/crucible_gate.py ...').",
+                                        remediation="Use relative 'scripts/crucible_gate.py ...' inside .agents/hooks.json.",
                                     )
                                 )
                                 continue
@@ -179,7 +179,7 @@ def _audit_hooks(
                             )
                         )
 
-    missing_events = {"SessionStart", "PreToolUse", "Stop"} - crucible_wired_events
+    missing_events = {"SessionStart", "PreToolUse"} - crucible_wired_events
     if missing_events:
         findings.append(
             DiagnosticFinding(
@@ -187,7 +187,7 @@ def _audit_hooks(
                 severity="WARN",
                 subject=".agents/hooks.json",
                 detail=f"crucible_gate.py events not wired: {', '.join(sorted(missing_events))}",
-                remediation="Run Project/Inner Gravity/install_pack/apply_protected_fixes.ps1 to wire SessionStart, PreToolUse, and Stop.",
+                remediation="Wire SessionStart and PreToolUse in .agents/hooks.json.",
             )
         )
     return counts
@@ -356,9 +356,9 @@ def _audit_duplicates_and_storage(
     metrics["missing_root_governance"] = missing_root
     if missing_root:
         if "AGENTS.md" in missing_root:
-            rem = "Run Project/Inner Gravity/install_pack/apply_protected_fixes.ps1 to install AGENTS.md."
+            rem = "Restore AGENTS.md at the repository root."
         else:
-            rem = "Stage Operator Spec 2 from Project/Inner Gravity/README.md into .agents/acceptance.lock.json when ready to enforce required_files."
+            rem = "Restore .agents/acceptance.lock.json to enforce required_files and python_syntax."
         findings.append(
             DiagnosticFinding(
                 category="governance",

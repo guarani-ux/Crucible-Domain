@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Red-capable end-to-end tests for the Crucible Domain Contract Stop Gate."""
+"""Red-capable end-to-end tests for Crucible Domain deterministic local gates."""
 
 from __future__ import annotations
 
@@ -42,187 +42,71 @@ def _run_gate(repo: Path, *args: str, stdin_payload: dict[str, object] | None = 
     )
 
 
-def _render_ideas(contract_obj: dict[str, object] | None) -> str:
-    lines = [
-        "# Test Ledger (`IDEAS.md`)",
-        "",
-        "## Stage 4: Active (WIP <= 1)",
-        "- [P-TEST] Active test slice.",
-    ]
-    if contract_obj is not None:
-        lines.extend(
-            [
-                "",
-                "```contract",
-                json.dumps(contract_obj, indent=2),
-                "```",
-            ]
-        )
-    lines.extend(["", "## Stage 3: Hardened", "- [P-OLD] Parked."])
-    return "\n".join(lines) + "\n"
-
-
-def _init_repo(tmp_dir: Path, contract_obj: dict[str, object] | None) -> Path:
+def _init_repo(tmp_dir: Path, _unused: object = None) -> Path:
     repo = tmp_dir / "repo"
     repo.mkdir()
     _git(repo, "init")
     _git(repo, "config", "user.name", "Test User")
     _git(repo, "config", "user.email", "test@example.com")
-    (repo / "IDEAS.md").write_text(_render_ideas(contract_obj), encoding="utf-8")
+    (repo / "IDEAS.md").write_text(
+        "# Test Ledger (`IDEAS.md`)\n\n## Stage 4: Active (WIP <= 1)\n(empty)\n\n## Stage 3: Hardened\n- [P-OLD] Parked.\n",
+        encoding="utf-8",
+    )
     _git(repo, "add", "IDEAS.md")
     _git(repo, "commit", "-m", "Initial baseline")
     return repo
 
 
-class TestCrucibleGateContractStop(unittest.TestCase):
-    """End-to-end CLI verification of verify, stop, and session-start base tracking."""
+class TestCrucibleGate(unittest.TestCase):
+    """End-to-end CLI verification of session-start, pre-tool, check, and export-map."""
 
-    def test_passing_contract(self) -> None:
-        contract = {
-            "intent": "Create app module inside src scope.",
-            "allowed_paths": ["src/*.py"],
-            "checks": ["python -c \"print('ok')\""],
-        }
+    def test_session_start_emits_valid_system_map_and_pre_tool_blocks_asana_url(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), contract)
+            repo = _init_repo(Path(tmp))
             ss = _run_gate(repo, "session-start")
             self.assertEqual(ss.returncode, 0, ss.stderr)
+            ss_data = json.loads(ss.stdout)
+            msg = ss_data["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("SHIFTING_SAND:", msg)
+            self.assertIn("Active WIP: none", msg)
 
-            (repo / "src").mkdir()
-            (repo / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+            cpl_dir = repo / "Calgary Public Library"
+            cpl_dir.mkdir()
+            (cpl_dir / "GROUND_TRUTH.md").write_text("# CPL Ground Truth\n", encoding="utf-8")
 
-            ver = _run_gate(repo, "verify")
-            self.assertEqual(ver.returncode, 0, ver.stdout + ver.stderr)
-            self.assertIn("PASS:", ver.stdout)
-
-            stp = _run_gate(
+            deny_asana = _run_gate(
                 repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 0},
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "write_file",
+                        "args": {
+                            "Path": str(cpl_dir / "brief.md"),
+                            "Content": "Ref: https://app.asana.com/0/12345/list\n",
+                        },
+                    }
+                },
             )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            self.assertEqual(json.loads(stp.stdout), {"decision": "allow"})
+            self.assertEqual(deny_asana.returncode, 0, deny_asana.stderr)
+            deny_data = json.loads(deny_asana.stdout)
+            self.assertEqual(deny_data.get("decision"), "deny")
+            self.assertIn("ASANA_BOUNDARY", deny_data.get("reason", ""))
 
-    def test_failing_check_command(self) -> None:
-        contract = {
-            "intent": "Verify failing check blocks with output tail.",
-            "allowed_paths": ["src/*.py"],
-            "checks": ["python -c \"print('boom_marker_line'); raise SystemExit(2)\""],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), contract)
-            self.assertEqual(_run_gate(repo, "session-start").returncode, 0)
-
-            ver = _run_gate(repo, "verify")
-            self.assertEqual(ver.returncode, 1, ver.stdout + ver.stderr)
-            self.assertIn("BLOCKED:", ver.stdout)
-            self.assertIn("boom_marker_line", ver.stdout)
-
-            stp = _run_gate(
+            allow_clean = _run_gate(
                 repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 0},
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "write_file",
+                        "args": {
+                            "Path": str(cpl_dir / "brief.md"),
+                            "Content": "Clean public summary.\n",
+                        },
+                    }
+                },
             )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            data = json.loads(stp.stdout)
-            self.assertEqual(data.get("decision"), "continue")
-            self.assertIn("boom_marker_line", data.get("reason", ""))
-
-    def test_file_outside_scope(self) -> None:
-        contract = {
-            "intent": "Only allow files under src/.",
-            "allowed_paths": ["src/*.py"],
-            "checks": ["python -c \"print('ok')\""],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), contract)
-            self.assertEqual(_run_gate(repo, "session-start").returncode, 0)
-
-            (repo / "outside.txt").write_text("stray file\n", encoding="utf-8")
-
-            ver = _run_gate(repo, "verify")
-            self.assertEqual(ver.returncode, 1, ver.stdout + ver.stderr)
-            self.assertIn("BLOCKED:", ver.stdout)
-            self.assertIn("outside.txt", ver.stdout)
-
-            stp = _run_gate(
-                repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 0},
-            )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            data = json.loads(stp.stdout)
-            self.assertEqual(data.get("decision"), "continue")
-            self.assertIn("outside.txt", data.get("reason", ""))
-
-    def test_contract_edited_mid_session(self) -> None:
-        initial_contract = {
-            "intent": "Frozen contract baseline.",
-            "allowed_paths": ["src/*.py"],
-            "checks": ["python -c \"print('ok')\""],
-        }
-        tampered_contract = {
-            "intent": "Tampered contract mid-session.",
-            "allowed_paths": ["IDEAS.md", "src/*.py"],
-            "checks": [
-                "python -c \"from pathlib import Path; Path('sentinel.txt').write_text('ran', encoding='utf-8')\""
-            ],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), initial_contract)
-            self.assertEqual(_run_gate(repo, "session-start").returncode, 0)
-
-            (repo / "IDEAS.md").write_text(_render_ideas(tampered_contract), encoding="utf-8")
-
-            ver = _run_gate(repo, "verify")
-            self.assertEqual(ver.returncode, 1, ver.stdout + ver.stderr)
-            self.assertIn("contract changed mid-session; Levi must approve and commit it.", ver.stdout)
-            self.assertFalse((repo / "sentinel.txt").exists())
-
-            stp = _run_gate(
-                repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 0},
-            )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            data = json.loads(stp.stdout)
-            self.assertEqual(data.get("decision"), "continue")
-            self.assertIn("contract changed mid-session; Levi must approve and commit it.", data.get("reason", ""))
-
-    def test_no_contract_blocks_verify_and_allows_stop(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), None)
-            self.assertEqual(_run_gate(repo, "session-start").returncode, 0)
-
-            ver = _run_gate(repo, "verify")
-            self.assertEqual(ver.returncode, 1, ver.stdout + ver.stderr)
-            self.assertIn("BLOCKED:", ver.stdout)
-
-            stp = _run_gate(
-                repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 0},
-            )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            self.assertEqual(json.loads(stp.stdout), {"decision": "allow"})
-
-    def test_stop_execution_num_cap_allows(self) -> None:
-        contract = {
-            "intent": "Failing check capped after 3 continuations.",
-            "allowed_paths": ["src/*.py"],
-            "checks": ["python -c \"print('fail'); raise SystemExit(2)\""],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = _init_repo(Path(tmp), contract)
-            self.assertEqual(_run_gate(repo, "session-start").returncode, 0)
-
-            stp = _run_gate(
-                repo,
-                "stop",
-                stdin_payload={"terminationReason": "NO_TOOL_CALL", "executionNum": 3},
-            )
-            self.assertEqual(stp.returncode, 0, stp.stderr)
-            self.assertEqual(json.loads(stp.stdout), {"decision": "allow"})
+            self.assertEqual(allow_clean.returncode, 0, allow_clean.stderr)
+            self.assertEqual(json.loads(allow_clean.stdout), {"decision": "allow"})
 
     def test_export_map_writes_valid_json(self) -> None:
         valid_primitives = {

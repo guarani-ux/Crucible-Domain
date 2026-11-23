@@ -1,6 +1,7 @@
 # Crucible Domain — Idea & Slice Ledger (`IDEAS.md`)
 
 > Parsed automatically at `SessionStart` by `C:/Users/flowe/.gemini/config/scripts/operator_router.py` (`parse_ledger_summary`). Keep `Stage 4` at `WIP <= 1`.
+> **Harness Freeze (Active — 2026-11-23):** No new hooks, gates, scripts, or meta-tooling until **3 real deliverables** have been handed to actual human recipients and returned real feedback.
 
 ## Stage 4: Active (WIP <= 1)
 (empty)
@@ -9,14 +10,15 @@
 - [P-WOS] Exercise the first end-to-end Work Operating System workflow plan with explicit receiving checks (`K-WOS-01..03`) and verified environment access.
 
 ## Stage 2: Challenged
-- [P-INNER-GRAVITY] Bridge `operator_router.py` `PreInvocation` signals (`mode-forensic`, `idea-crucible`) into deterministic `hook_v4.py` write locks (`PreToolUse`). *(deferred — advisory SessionStart/PreInvocation modulator active per Levi)*
-- [P-KNOWLEDGE-SIDECAR] Review recorded qualification before wiring `sidecar` as an automated retrieval layer for `Crucible Domain` (`K-ARCH-02`).
-- [P-CRUCIBLE-CLOSURE] Architectural closure pass for `PW-01` (`Personal Work/GROUND_TRUTH.md`): close open feedback loops (`check_artifact` / `depends_on` staleness / `ledger`), split hot-path hooks from offline CLI tools, and consolidate duplicate lock-staging paths.
+- [P-INNER-GRAVITY] Bridge `operator_router.py` `PreInvocation` signals (`mode-forensic`, `idea-crucible`) into deterministic `hook_v4.py` write locks (`PreToolUse`). *(frozen under Harness Freeze — advisory SessionStart/PreInvocation modulator active per Levi)*
+- [P-KNOWLEDGE-SIDECAR] Review recorded qualification before wiring `sidecar` as an automated retrieval layer for `Crucible Domain` (`K-ARCH-02`). *(frozen under Harness Freeze)*
+- [P-CRUCIBLE-CLOSURE] Architectural closure pass for `PW-01` (`Personal Work/GROUND_TRUTH.md`): close open feedback loops (`check_artifact` / `depends_on` staleness / `ledger`) and split hot-path hooks from offline CLI tools. *(frozen under Harness Freeze until 3 human-reviewed deliverables return real feedback)*
 
 ## Stage 1: Raw Sparks
 *(empty)*
 
 ## Shipped
+- [P-HARNESS-FREEZE] Retired OneDrive working copy (`C:\Users\flowe\OneDrive\Desktop\Crucible Domain`) permanently in favor of `C:\crucible-domain`, removed retired OneDrive scripts + `install_pack/` staging fossils (after syncing `.agents/acceptance.lock.json`), removed `judgment_gate.py` (`1d9b831`) and unused Contract Stop Gate (`cmd_verify`/`cmd_stop` + `Stop` hook), and enacted the Harness Freeze rule until 3 real human-reviewed deliverables return feedback (2026-11-23).
 - [P-DELIVERABLE] Completed canonical `GROUND_TRUTH.md` intakes for both `Calgary Public Library/` (22 audited files: 5-series pitch, Pilot A Ep 1 `CHG-01` custody proof, and plain-English colleague briefs) and `Personal Work/GROUND_TRUTH.md` (registering `Crucible Domain` as active flagship personal workstream `PW-01`) (2026-11-23).
 - [P-CRUCIBLE-MODULAR] Decoupled `.agents/scripts/crucible_index.py` (2,552L) into modular `.agents/scripts/crucible/` package (`__init__.py`, `models.py`, `indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`, `exporter.py`) with 102L shim, added `Graphs/` atlas + `capability_map.json` (`crucible_gate.py export-map`), hardened `cmd_check` + portable `doctor`, marked legacy `install_pack/` staging superseded at root, and staged `acceptance.lock.json.v2` + `apply_v2_lock.ps1` (2026-11-23).
 - [P-STORAGE] Decoupled live Git working tree (`C:\crucible-domain`) from OneDrive/Drive sync locks, eliminating Drive concurrency conflicts (`Dirty: 0 | Sync locks: none`) (2026-11-23).
