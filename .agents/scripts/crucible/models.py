@@ -170,6 +170,7 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Knowledge_Register.md",
     "Knowledge/Testing_Philosophy.md",
     "Calgary Public Library/GROUND_TRUTH.md",
+    "Personal Work/GROUND_TRUTH.md",
     "Project/Project_Register.md",
     "Archive/README.md",
     "Graphs/GROUND_TRUTH.md",

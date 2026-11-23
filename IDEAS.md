@@ -11,12 +11,13 @@
 ## Stage 2: Challenged
 - [P-INNER-GRAVITY] Bridge `operator_router.py` `PreInvocation` signals (`mode-forensic`, `idea-crucible`) into deterministic `hook_v4.py` write locks (`PreToolUse`). *(deferred — advisory SessionStart/PreInvocation modulator active per Levi)*
 - [P-KNOWLEDGE-SIDECAR] Review recorded qualification before wiring `sidecar` as an automated retrieval layer for `Crucible Domain` (`K-ARCH-02`).
-- [P-DELIVERABLE] First real deliverable: CPL or Personal Work, starting from a GROUND_TRUTH.md intake (requires Levi's input on workflow, audience, and purpose first).
+- [P-CRUCIBLE-CLOSURE] Architectural closure pass for `PW-01` (`Personal Work/GROUND_TRUTH.md`): close open feedback loops (`check_artifact` / `depends_on` staleness / `ledger`), split hot-path hooks from offline CLI tools, and consolidate duplicate lock-staging paths.
 
 ## Stage 1: Raw Sparks
 *(empty)*
 
 ## Shipped
+- [P-DELIVERABLE] Completed canonical `GROUND_TRUTH.md` intakes for both `Calgary Public Library/` (22 audited files: 5-series pitch, Pilot A Ep 1 `CHG-01` custody proof, and plain-English colleague briefs) and `Personal Work/GROUND_TRUTH.md` (registering `Crucible Domain` as active flagship personal workstream `PW-01`) (2026-11-23).
 - [P-CRUCIBLE-MODULAR] Decoupled `.agents/scripts/crucible_index.py` (2,552L) into modular `.agents/scripts/crucible/` package (`__init__.py`, `models.py`, `indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`, `exporter.py`) with 102L shim, added `Graphs/` atlas + `capability_map.json` (`crucible_gate.py export-map`), hardened `cmd_check` + portable `doctor`, marked legacy `install_pack/` staging superseded at root, and staged `acceptance.lock.json.v2` + `apply_v2_lock.ps1` (2026-11-23).
 - [P-STORAGE] Decoupled live Git working tree (`C:\crucible-domain`) from OneDrive/Drive sync locks, eliminating Drive concurrency conflicts (`Dirty: 0 | Sync locks: none`) (2026-11-23).
 - [P-INNER-GRAVITY] Reconciled `skills.json` unloaded entries in `C:/Kageyoni/.agents/skills` against live session loaders (`skills=28` verified by `doctor`) (2026-11-23).
