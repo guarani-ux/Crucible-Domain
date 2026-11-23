@@ -718,12 +718,13 @@ def _index_primitives(
         summary = f"[{family} | {status}] {item.get('mechanism', '')}".strip()
         use_when = f"inputs={item.get('inputs', '')} -> outputs={item.get('outputs', '')}".strip()
         sources = item.get("sources") if isinstance(item.get("sources"), list) else []
-        related = [
-            m.group(1)
-            for s in sources
-            for m in [re.search(r"\b(A\d{2}|K-[A-Z0-9-]+)\b", str(s))]
-            if m
-        ]
+        related = tuple(
+            dict.fromkeys(
+                match
+                for s in sources
+                for match in re.findall(r"\b(A\d{2}|K-[A-Z0-9-]+|WOS-GRAPH)\b", str(s))
+            )
+        )
         entries[pid] = CapabilityEntry(
             id=pid,
             kind="primitive",
@@ -863,6 +864,177 @@ def _extract_chatgpt_skill_id(query: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
+FORGE_DOMAINS = ("systems", "media", "writing", "worldbuilding", "general")
+
+FORGE_MEDIA_CUES = frozenset(
+    {
+        "video",
+        "audio",
+        "clip",
+        "footage",
+        "shoot",
+        "camera",
+        "youtube",
+        "motion",
+        "graphics",
+        "documentary",
+        "offload",
+        "checksum",
+        "dit",
+        "av",
+        "script",
+        "thumbnail",
+        "campaign",
+        "channel",
+    }
+)
+FORGE_WRITING_CUES = frozenset(
+    {
+        "cover",
+        "letter",
+        "resume",
+        "brief",
+        "executive",
+        "commission",
+        "editorial",
+        "draft",
+        "document",
+        "author",
+        "prose",
+    }
+)
+FORGE_WORLDBUILDING_CUES = frozenset(
+    {
+        "world",
+        "canon",
+        "character",
+        "faction",
+        "scene",
+        "lore",
+        "narrative",
+        "story",
+        "rpg",
+    }
+)
+FORGE_SYSTEMS_CUES = frozenset(
+    {
+        "wos",
+        "workflow",
+        "receiving",
+        "checkpoint",
+        "resume",
+        "sqlite",
+        "sidecar",
+        "retrieval",
+        "ast",
+        "hook",
+        "gate",
+        "test",
+        "ci",
+        "repo",
+        "kernel",
+        "graph",
+        "cli",
+        "schema",
+        "contract",
+        "python",
+        "rust",
+        "audit",
+        "reachability",
+        "melt",
+    }
+)
+FORGE_MEDIA_OVERRIDE_CUES = frozenset({"av", "documentary", "footage", "clip", "video", "audio", "custody"})
+MEDIA_AGENCY_ID_PREFIXES = ("mk-", "cd-", "ch-", "mw-", "mp-", "op-", "com-", "mkt-", "cnt-", "prod-")
+
+
+def _forge_cue_tokens(problem: str) -> set[str]:
+    normalized = re.sub(r"\ba/v\b", "av", problem.lower())
+    return set(_tokenize(normalized))
+
+
+def _infer_forge_domain(problem: str, explicit_domain: str | None = None) -> str:
+    """Infer target Crucible domain scope from explicit override or strong problem cues."""
+    if explicit_domain is not None:
+        cleaned = explicit_domain.strip().lower()
+        if cleaned in FORGE_DOMAINS:
+            return cleaned
+
+    tokens = _forge_cue_tokens(problem)
+    if not tokens:
+        return "general"
+
+    has_media = bool(tokens & FORGE_MEDIA_CUES)
+    has_world = bool(tokens & FORGE_WORLDBUILDING_CUES)
+    systems_hits = tokens & FORGE_SYSTEMS_CUES
+    writing_hits = tokens & FORGE_WRITING_CUES
+
+    if "resume" in tokens:
+        if (systems_hits - {"resume"}) and not (writing_hits - {"resume"}):
+            writing_hits = writing_hits - {"resume"}
+        elif (writing_hits - {"resume"}) and not (systems_hits - {"resume"}):
+            systems_hits = systems_hits - {"resume"}
+
+    has_systems = bool(systems_hits)
+    has_writing = bool(writing_hits)
+
+    if has_systems and not (has_media or has_writing or has_world):
+        return "systems"
+    if has_media and not (has_systems or has_world):
+        if not has_writing or bool(tokens & FORGE_MEDIA_OVERRIDE_CUES):
+            return "media"
+    if has_writing and not (has_media or has_systems or has_world):
+        return "writing"
+    if has_world and not (has_media or has_systems or has_writing):
+        return "worldbuilding"
+    return "general"
+
+
+def _load_primitives_meta(root: Path) -> dict[str, dict[str, Any]]:
+    """Load raw primitive metadata keyed by primitive ID from Knowledge/Crucible_Primitives.json."""
+    prim_file = root / "Knowledge" / "Crucible_Primitives.json"
+    try:
+        raw_text = prim_file.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        return {}
+    except OSError as exc:
+        print(f"warning: could not read {prim_file}: {exc}", file=sys.stderr)
+        return {}
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        print(f"warning: invalid JSON in {prim_file}: {exc}", file=sys.stderr)
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+    primitives = payload.get("primitives")
+    if not isinstance(primitives, list):
+        return {}
+
+    meta: dict[str, dict[str, Any]] = {}
+    for item in primitives:
+        if not isinstance(item, dict):
+            continue
+        pid = str(item.get("id") or "").strip()
+        if not pid:
+            continue
+        raw_domains = item.get("domains")
+        raw_sources = item.get("sources")
+        meta[pid] = {
+            "id": pid,
+            "name": str(item.get("name") or "").strip(),
+            "family": str(item.get("family") or "").strip(),
+            "domains": [str(d) for d in raw_domains] if isinstance(raw_domains, list) else [],
+            "status": str(item.get("status") or "").strip(),
+            "sources": [str(s) for s in raw_sources] if isinstance(raw_sources, list) else [],
+            "breakpoints": str(item.get("breakpoints") or "").strip(),
+            "receiving_check": str(item.get("receiving_check") or "").strip(),
+        }
+    return meta
+
+
 @dataclass(frozen=True)
 class ForgeBrief:
     """In-RAM prior-art, lesson, project-home, and falsifiable verification synthesis for building new systems."""
@@ -876,6 +1048,8 @@ class ForgeBrief:
     governing_lessons: list[dict[str, Any]]
     procedures_and_roles: list[dict[str, Any]]
     verification_requirements: list[str]
+    domain_scope: str = "general"
+    primitive_stack: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1059,8 +1233,10 @@ def forge_brief(
     *,
     top_k: int = 4,
     min_score: float = 1.5,
+    domain: str | None = None,
 ) -> ForgeBrief:
-    """Synthesize prior systems, failure breakpoints, governing lessons, existing homes, and test floors in RAM."""
+    """Synthesize atomic primitives, prior systems, breakpoints, lessons, existing homes, and test floors in RAM."""
+    domain_scope = _infer_forge_domain(problem, domain)
     q_tokens = _tokenize(problem)
     if not problem.strip() or not q_tokens:
         return ForgeBrief(
@@ -1068,6 +1244,8 @@ def forge_brief(
             abstained=True,
             reason="Empty or non-domain problem statement; apply TQ-01..TQ-05 baseline checks.",
             build_ms=round(index.build_ms, 2),
+            domain_scope=domain_scope,
+            primitive_stack=[],
             existing_projects=[],
             prior_systems=[],
             governing_lessons=[],
@@ -1075,7 +1253,14 @@ def forge_brief(
             verification_requirements=_build_verification_requirements(set()),
         )
 
+    prim_meta = _load_primitives_meta(index.root)
+    cue_tokens = _forge_cue_tokens(problem)
+    has_ma_override = any(tok.startswith(MEDIA_AGENCY_ID_PREFIXES) for tok in q_tokens) or bool(
+        cue_tokens & FORGE_MEDIA_CUES
+    )
+
     scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=True)
+    primitive_candidates: list[dict[str, Any]] = []
     existing_projects: list[dict[str, Any]] = []
     prior_systems: list[dict[str, Any]] = []
     governing_lessons: list[dict[str, Any]] = []
@@ -1084,7 +1269,24 @@ def forge_brief(
     for m in scored:
         e = m.entry
         sc = round(m.score, 3)
-        if e.kind == "project" and len(existing_projects) < top_k:
+        if e.kind == "primitive":
+            meta = prim_meta.get(e.id, {})
+            prim_domains = meta.get("domains") if "domains" in meta else [d for d in e.domain.split() if d]
+            primitive_candidates.append(
+                {
+                    "id": e.id,
+                    "title": meta.get("name") or e.title,
+                    "family": meta.get("family", ""),
+                    "status": meta.get("status", ""),
+                    "domains": list(prim_domains),
+                    "sources": list(meta.get("sources") or ()),
+                    "breakpoints": meta.get("breakpoints") or e.breakpoints,
+                    "receiving_check": meta.get("receiving_check") or e.limit_or_action,
+                    "score": sc,
+                    "matched_via": m.matched_via,
+                }
+            )
+        elif e.kind == "project" and len(existing_projects) < top_k:
             existing_projects.append(
                 {
                     "id": e.id,
@@ -1125,6 +1327,13 @@ def forge_brief(
                 }
             )
         elif e.kind in ("procedure", "role", "skill", "doc") and len(procedures_and_roles) < top_k:
+            if (
+                domain_scope == "systems"
+                and e.kind in ("procedure", "role")
+                and e.path.startswith("Knowledge/Media Agency/")
+                and not has_ma_override
+            ):
+                continue
             procedures_and_roles.append(
                 {
                     "id": e.id,
@@ -1137,6 +1346,16 @@ def forge_brief(
                     "summary": e.summary,
                 }
             )
+
+    if domain_scope != "general" and primitive_candidates:
+        primitive_candidates.sort(
+            key=lambda p: (
+                not (not p["domains"] or domain_scope in p["domains"] or "general" in p["domains"]),
+                -p["score"],
+                p["id"],
+            )
+        )
+    primitive_stack = primitive_candidates[:top_k]
 
     seen_lessons = {item["id"] for item in governing_lessons}
     for ex_item in prior_systems:
@@ -1164,23 +1383,37 @@ def forge_brief(
                 }
             )
 
-    abstained = not (existing_projects or prior_systems or governing_lessons or procedures_and_roles)
+    abstained = not (
+        existing_projects or prior_systems or governing_lessons or procedures_and_roles or primitive_stack
+    )
     matched_ids = (
-        {p["id"] for p in existing_projects}
+        {p["id"] for p in primitive_stack}
+        | {p["id"] for p in existing_projects}
         | {p["id"] for p in prior_systems}
         | {k["id"] for k in governing_lessons}
         | {r["id"] for r in procedures_and_roles}
     )
+    for prim in primitive_stack:
+        prim_entry = index.entries.get(prim["id"])
+        if prim_entry is not None:
+            matched_ids.update(prim_entry.related_ids)
+
     reason = (
-        f"No Crucible project, exhibit, lesson, or procedure reached threshold ({min_score}); abstaining cleanly while keeping universal verification floor."
+        f"No Crucible primitive, project, exhibit, lesson, or procedure reached threshold ({min_score}); abstaining cleanly while keeping universal verification floor."
         if abstained
-        else f"Synthesized {len(existing_projects)} project(s), {len(prior_systems)} exhibit(s), {len(governing_lessons)} lesson(s), and {len(procedures_and_roles)} procedure/role(s) in {index.build_ms:.1f}ms."
+        else (
+            f"Synthesized {len(primitive_stack)} primitive(s), {len(existing_projects)} project(s), "
+            f"{len(prior_systems)} exhibit(s), {len(governing_lessons)} lesson(s), and "
+            f"{len(procedures_and_roles)} procedure/role(s) [domain={domain_scope}] in {index.build_ms:.1f}ms."
+        )
     )
     return ForgeBrief(
         problem=problem,
         abstained=abstained,
         reason=reason,
         build_ms=round(index.build_ms, 2),
+        domain_scope=domain_scope,
+        primitive_stack=primitive_stack,
         existing_projects=existing_projects,
         prior_systems=prior_systems,
         governing_lessons=governing_lessons,
@@ -1598,6 +1831,32 @@ def _format_forge_text(brief: ForgeBrief) -> str:
         f"Problem: {brief.problem}",
         f"Status: {brief.reason}",
     ]
+    if brief.primitive_stack:
+        lines.append(f"\n0. Composed Atomic Primitives (domain={brief.domain_scope}):")
+        for p in brief.primitive_stack:
+            status = p.get("status") or "UNKNOWN"
+            sources = p.get("sources") or []
+            if status == "WIRED_HERE":
+                status_tag = "[WIRED_HERE]"
+            elif status == "EXTERNAL_PROVEN":
+                first_ext = next(
+                    (s for s in sources if "@" in s),
+                    next(
+                        (s for s in sources if not s.startswith((".agents/", "K-", "IDEAS.md"))),
+                        sources[0] if sources else "external repo",
+                    ),
+                )
+                status_tag = f"[EXTERNAL_PROVEN -> pull from {first_ext}]"
+            elif status == "PROTOTYPE":
+                first_src = sources[0] if sources else "prototype source"
+                status_tag = f"[PROTOTYPE -> {first_src}]"
+            else:
+                status_tag = f"[{status}]"
+            lines.append(
+                f"  - {p['id']} {status_tag}: {p['title']} (family={p.get('family', '')}, score={p['score']})"
+            )
+            if p.get("receiving_check"):
+                lines.append(f"    Receiving check: {p['receiving_check']}")
     if brief.existing_projects:
         lines.append("\n1. Existing Project Homes (anti-duplication check):")
         for p in brief.existing_projects:
@@ -2105,6 +2364,9 @@ def analyze_repo_tree_payload(
     elif code_files == 0 and test_files == 0 and not has_skill_md:
         verdict = "SKIP_ASSET_OR_STUB"
         reason = f"0 code/test files across {total_blobs} blobs (docs={doc_files}, assets/ignored={ignored_or_asset_files})."
+    elif code_files > 0 and test_files == 0 and doc_files == 0 and not has_skill_md and len(manifests) <= 1:
+        verdict = "SKIP_SCAFFOLD"
+        reason = f"Untested/undocumented scaffold ({code_files} code file(s), 0 tests, 0 docs); verify manually before melting."
     else:
         verdict = "MELT_READY"
         reason = (
@@ -2259,6 +2521,7 @@ def main(argv: list[str] | None = None) -> int:
     p_forge.add_argument("--top", type=int, default=4)
     p_forge.add_argument("--json", action="store_true")
     p_forge.add_argument("--no-global", action="store_true")
+    p_forge.add_argument("--domain", choices=FORGE_DOMAINS, default=None)
 
     p_doc = sub.add_parser("doctor", help="Audit hooks, bindings, links, duplicates, and storage.")
     p_doc.add_argument("--json", action="store_true")
@@ -2276,7 +2539,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "forge":
         idx = build_index(args.root, global_config_dir=global_dir)
-        brief = forge_brief(idx, " ".join(args.problem), top_k=args.top)
+        brief = forge_brief(idx, " ".join(args.problem), top_k=args.top, domain=args.domain)
         print(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False) if args.json else _format_forge_text(brief))
         return 0
 

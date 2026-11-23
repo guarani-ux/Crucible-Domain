@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "updated_at": "2026-11-23",
-  "purpose": "Irreducible atomic building blocks distilled from A01..A10 exhibits, live Crucible harness, and 8 high-signal GitHub repositories.",
+  "purpose": "Irreducible atomic building blocks distilled from A01..A10 exhibits, live Crucible harness, 9 high-signal GitHub repositories, and selective skill extractions.",
   "families": [
     "intake-grounding",
     "state-provenance",
@@ -113,6 +113,8 @@
         ".agents/scripts/crucible_index.py",
         "A05:Constellation",
         "A06:sidecar",
+        "sidecar@3c1f52b:sidecar.py",
+        "sidecar@3c1f52b:MORGAN_BUILD_GUIDE.md",
         "K-ARCH-02",
         "K-SIDECAR-01"
       ],
@@ -202,7 +204,8 @@
         "A01:entonkageyoni",
         "A08:Hagoromo",
         "A10:Nelson",
-        "Outer-Sanctum@6d9db3d:Komorebi/.agents/skills/evidence-gate/SKILL.md"
+        "Outer-Sanctum@6d9db3d:Komorebi/.agents/skills/evidence-gate/SKILL.md",
+        "ten-shadows-control@ce2915f:scripts/orchestrator.py"
       ],
       "receiving_check": "Material candidate edit reopens affected checks; prior objections remain retrievable."
     },
@@ -226,6 +229,26 @@
         "mercury@bad3af6:desk.py"
       ],
       "receiving_check": "Recipient opens exact version in target environment without clarification; receipt rejects cross-operation replay."
+    },
+    {
+      "id": "PRIM-13",
+      "name": "Brand-Locked Institutional Artifact & Stakeholder Risk Audit",
+      "family": "handoff-receiving",
+      "domains": ["writing", "media", "communications"],
+      "inputs": "Draft Markdown/JSON payload or transcript + institutional style contract + stakeholder/employer boundary rules",
+      "mechanism": "Compile executive .docx deliverables against fixed corporate template geometry and color invariants while auditing prose for political friction, past-strategy critique, AI buzzwords, and employer-data isolation.",
+      "outputs": "Template-compliant .docx deliverable + friction-audited executive framing",
+      "breakpoints": "Hardcoded local OS template paths (e.g. macOS user paths in mugen executive compiler), unstyled markdown dumps, or employer-restricted source leakage.",
+      "status": "PROTOTYPE",
+      "sources": [
+        "mugen@7d57ee0:.agents/skills/cpl_call_sheet_generator/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_call_sheet_generator/scripts/cpl_call_sheet.py",
+        "mugen@7d57ee0:.agents/skills/cpl_document_builder/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_executive_artifact_compiler/SKILL.md",
+        "mugen@7d57ee0:.agents/skills/cpl_stakeholder_diplomat/SKILL.md",
+        ".agents/scripts/crucible_gate.py"
+      ],
+      "receiving_check": "Generated .docx preserves template geometry, gridlines, and color tokens cleanly on target OS and passes stakeholder-risk plus read-only employer boundary checks."
     }
   ]
 }

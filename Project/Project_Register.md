@@ -9,7 +9,7 @@ Use this register to locate a project, understand its current evidence, and deci
 | ID | Project or component | Purpose and observed or reported state | Next point to verify | Source |
 | --- | --- | --- | --- | --- |
 | P-WOS | Work Operating System | Active design and validation. The current handoff calls for a first end-to-end workflow plan. The Drive project has a README and graph catalog. Application code is frozen. | Confirm what Mugen can open and run in their environment and which workflow will be exercised. | [GitHub handoff](https://github.com/guarani-ux/Work-Operating-System/blob/main/HANDOFF.md) · [Drive project](https://drive.google.com/drive/folders/1Wa4YCSoXhpfuv01dfgVysKEg-g_bP6ZT) |
-| P-CRUCIBLE | Crucible Domain | Active work to connect project history, evidence, knowledge, and graphs across the portfolio. | Review the first repository archaeology exhibit and admit evidence-backed lessons into the Knowledge Register. | [Crucible Domain](https://drive.google.com/drive/folders/1jpG-7DjOa2xtiYPbBhL07qmCRSVrK1fU) |
+| P-CRUCIBLE | Crucible Domain | Active work to connect project history, evidence, knowledge, and graphs across the portfolio. First 10 exhibits (`A01`–`A10`), local RAM routing/forge/sieve (`crucible_gate.py`), atomic primitive registry (`PRIM-01..PRIM-13`), and 43-repo GitHub inventory are live. | Complete `GROUND_TRUTH.md` domain intake before authoring first CPL or Personal Work deliverable. | [Crucible Domain](https://drive.google.com/drive/folders/1jpG-7DjOa2xtiYPbBhL07qmCRSVrK1fU) · [GitHub repo](https://github.com/guarani-ux/Crucible-Domain) |
 
 ## Reviewed supporting systems and capabilities
 
@@ -19,7 +19,7 @@ These entries describe systems or components. Their existence here establishes a
 | --- | --- | --- | --- | --- |
 | P-STORY-LANE | Story-Lane | Agent-assisted selection and traceable clip extraction. README reports 18 clips and notes from retained transcripts. The archaeology exhibit adds a [direct CI record](https://github.com/guarani-ux/Story-Lane/actions/runs/42031205858) for one clean human-voice reference on the two tested native platforms. Current work commitment unknown. | Check the latest execution receipt and intended runtime before planning a fresh transcription or reuse. | [GitHub README](https://github.com/guarani-ux/Story-Lane/blob/main/README.md) · [Library execution receipt, located](https://chatgpt.com/library?file_id=libfile_ad5d0875728081919639879e55d40699&account_id=personal) |
 | P-CONSTELLATION | Constellation | Portable technique library. README identifies v0.1.0 as assembled and cognitive benefit as unmeasured. Current work commitment unknown. | Recover which techniques have been exercised, under what conditions, and what evidence would change their use. | [GitHub README](https://github.com/guarani-ux/Constellation/blob/main/README.md) |
-| P-KNOWLEDGE-SIDECAR | Constellation Knowledge Sidecar | Component associated with Constellation. README describes a v0.2 file-first CLI, one canonical seed, and source-linked records. Runtime was not exercised in this intake. | Review the recorded qualification before using it as an automated retrieval layer for Crucible Domain. | [GitHub README](https://github.com/guarani-ux/sidecar/blob/main/README.md) |
+| P-KNOWLEDGE-SIDECAR | Constellation Knowledge Sidecar | Component associated with Constellation. README describes a v0.2 file-first CLI, one canonical seed, and source-linked records. Nov 23 GitHub `pushed_at` reflects a transient `refs/heads/mercury` branch spun out into `guarani-ux/mercury`; `main` (`3c1f52b`, covered by `A06`) and `domain/*` branches remain unchanged since `2026-11-11` (`domain/software-systems-architecture@5399b6c` adds only a 2026-11-11 verification handoff). | Review the recorded qualification before using it as an automated retrieval layer for Crucible Domain. | [GitHub README](https://github.com/guarani-ux/sidecar/blob/main/README.md) |
 | P-KOMOREBI-WORKSPACE | Komorebi Slack workspace | Work coordination workspace referenced in the Work Operating System recap. Historical manual Slack trial and navigation retest recorded there. The separate GitHub repository README did not establish a connection to the current workspace. | Verify current Slack entry, operator access, and relationship to the repository if it matters. | [Workspace entry, reported in the supplied recap](https://app.slack.com/archives/C0CHLMD2U94/p1794613145600319) · [GitHub README](https://github.com/guarani-ux/Komorebi/blob/master/README.md) |
 
 ## Leads recovered from conversation history
@@ -37,49 +37,53 @@ The [ten-system exhibit](https://drive.google.com/file/d/1864tO3qjxuC0Adv0I9s2JH
 
 ## GitHub discovery
 
-The connected search returned 39 repositories under guarani-ux, with an empty second page. This is the connector-visible inventory for this scan. Read rows as repository observations. Private links retain their original access requirements.
+Live owner inventory on `2026-11-23` via `crucible_gate.py melt-diff` and `gh api` returned **43 repositories** under `guarani-ux` (up from 39 at initial intake, adding `the-writers-room`, `mercury`, `Crucible-Domain`, and `antigravity-config`). Read rows as repository observations. Private links retain their original access requirements.
 
-| Repository | Visibility | Default branch | Coverage |
-| --- | --- | --- | --- |
-| [entonkageyoni](https://github.com/guarani-ux/entonkageyoni) | private | main | Metadata only |
-| [Storylines](https://github.com/guarani-ux/Storylines) | private | main | Metadata only |
-| [SAMSARA](https://github.com/guarani-ux/SAMSARA) | private | main | Metadata only |
-| [media-production-studio](https://github.com/guarani-ux/media-production-studio) | public | main | Metadata only |
-| [The-Canvas](https://github.com/guarani-ux/The-Canvas) | private | main | Metadata only |
-| [mobile-command-v9](https://github.com/guarani-ux/mobile-command-v9) | private | main | Metadata only |
-| [Story-House](https://github.com/guarani-ux/Story-House) | private | main | Metadata only |
-| [job-hunter](https://github.com/guarani-ux/job-hunter) | private | main | Metadata only |
-| [Hagoromo](https://github.com/guarani-ux/Hagoromo) | private | main | Metadata only |
-| [cpl-mobile-studio](https://github.com/guarani-ux/cpl-mobile-studio) | private | main | Metadata only |
-| [komorebisans](https://github.com/guarani-ux/komorebisans) | private | main | Metadata only |
-| [Hidden-Booder-Village](https://github.com/guarani-ux/Hidden-Booder-Village) | private | main | Metadata only |
-| [Constellation](https://github.com/guarani-ux/Constellation) | private | main | Source read |
-| [genesis](https://github.com/guarani-ux/genesis) | private | main | Metadata only |
-| [Shinobi](https://github.com/guarani-ux/Shinobi) | private | main | Metadata only |
-| [video-house-intel](https://github.com/guarani-ux/video-house-intel) | private | main | Metadata only |
-| [ichimonji](https://github.com/guarani-ux/ichimonji) | private | main | Metadata only |
-| [Komorebi](https://github.com/guarani-ux/Komorebi) | private | master | Source read |
-| [nelson-media](https://github.com/guarani-ux/nelson-media) | public | main | Metadata only |
-| [espada](https://github.com/guarani-ux/espada) | private | main | Metadata only |
-| [sidecar](https://github.com/guarani-ux/sidecar) | private | main | Source read |
-| [cpl-mobile-studio0](https://github.com/guarani-ux/cpl-mobile-studio0) | private | main | Metadata only |
-| [media-production-studio2](https://github.com/guarani-ux/media-production-studio2) | private | main | Metadata only |
-| [Kageyoni](https://github.com/guarani-ux/Kageyoni) | private | main | Metadata only |
-| [Cpl-factory](https://github.com/guarani-ux/Cpl-factory) | private | main | Metadata only |
-| [marketing-production-os](https://github.com/guarani-ux/marketing-production-os) | private | main | Metadata only |
-| [Nelson](https://github.com/guarani-ux/Nelson) | private | main | Metadata only |
-| [mugen](https://github.com/guarani-ux/mugen) | private | main | Metadata only |
-| [Video-House](https://github.com/guarani-ux/Video-House) | private | main | Metadata only |
-| [script-builder](https://github.com/guarani-ux/script-builder) | private | main | Metadata only |
-| [cpl-command-center](https://github.com/guarani-ux/cpl-command-center) | private | main | Metadata only |
-| [ten-shadows-control](https://github.com/guarani-ux/ten-shadows-control) | public | master | Metadata only |
-| [Work-Operating-System](https://github.com/guarani-ux/Work-Operating-System) | private | main | Source read |
-| [PPW-Prime](https://github.com/guarani-ux/PPW-Prime) | private | main | Metadata only |
-| [Dangai](https://github.com/guarani-ux/Dangai) | private | main | Metadata only |
-| [10-shadows](https://github.com/guarani-ux/10-shadows) | private | master | Metadata only |
-| [Story-Lane](https://github.com/guarani-ux/Story-Lane) | private | main | Source read |
-| [cognitive-os](https://github.com/guarani-ux/cognitive-os) | private | main | Metadata only |
-| [Outer-Sanctum](https://github.com/guarani-ux/Outer-Sanctum) | private | main | Metadata only |
+| Repository | Visibility | Default branch | Pushed | Disk | Coverage |
+| --- | --- | --- | --- | --- | --- |
+| [antigravity-config](https://github.com/guarani-ux/antigravity-config) | private | master | 2026-11-23 | 437KB | Active Hub / Config |
+| [Crucible-Domain](https://github.com/guarani-ux/Crucible-Domain) | private | master | 2026-11-23 | 369KB | Active Hub / Config |
+| [the-writers-room](https://github.com/guarani-ux/the-writers-room) | private | main | 2026-11-23 | 316KB | Primitive-Extracted (`PRIM-01`, `PRIM-02`, `PRIM-12`) |
+| [sidecar](https://github.com/guarani-ux/sidecar) | private | main | 2026-11-23 | 122KB | Melted (A06; stale 2026-11-23 update checked) |
+| [mercury](https://github.com/guarani-ux/mercury) | private | main | 2026-11-23 | 112KB | Primitive-Extracted (`PRIM-12`) |
+| [Work-Operating-System](https://github.com/guarani-ux/Work-Operating-System) | private | main | 2026-11-15 | 123KB | Active Hub / Config |
+| [Story-House](https://github.com/guarani-ux/Story-House) | private | main | 2026-11-09 | 1612KB | Primitive-Extracted (`PRIM-01`, `PRIM-10`) |
+| [Story-Lane](https://github.com/guarani-ux/Story-Lane) | private | main | 2026-11-09 | 1029KB | Melted (A07) |
+| [Hagoromo](https://github.com/guarani-ux/Hagoromo) | private | main | 2026-11-07 | 4724KB | Melted (A08) |
+| [mugen](https://github.com/guarani-ux/mugen) | private | main | 2026-11-05 | 5154KB | Selective Skill Check (`PRIM-13` CPL skills) |
+| [Storylines](https://github.com/guarani-ux/Storylines) | private | main | 2026-11-04 | 10943KB | Untested Scaffold / Prototype |
+| [Kageyoni](https://github.com/guarani-ux/Kageyoni) | private | main | 2026-10-28 | 17326KB | Melted (A02) |
+| [genesis](https://github.com/guarani-ux/genesis) | private | main | 2026-10-24 | 36468KB | Skip Stub (<=5KB / 0 code) |
+| [nelson-media](https://github.com/guarani-ux/nelson-media) | public | main | 2026-10-24 | 97KB | Untested Scaffold / Prototype (1 code file, 0 tests) |
+| [SAMSARA](https://github.com/guarani-ux/SAMSARA) | private | main | 2026-10-24 | 2369614KB | Melted (A04) |
+| [cognitive-os](https://github.com/guarani-ux/cognitive-os) | private | main | 2026-10-23 | 196KB | Melted (A09) |
+| [script-builder](https://github.com/guarani-ux/script-builder) | private | main | 2026-10-22 | 51KB | Untested Scaffold / Prototype |
+| [Video-House](https://github.com/guarani-ux/Video-House) | private | main | 2026-10-22 | 1323KB | Primitive-Extracted (`PRIM-05`, `PRIM-10`) |
+| [video-house-intel](https://github.com/guarani-ux/video-house-intel) | private | main | 2026-10-21 | 32KB | Selective Skill Check |
+| [The-Canvas](https://github.com/guarani-ux/The-Canvas) | private | main | 2026-10-08 | 1167KB | Untested Scaffold / Prototype (Rust CLI; 27 code, 22 tests) |
+| [Shinobi](https://github.com/guarani-ux/Shinobi) | private | main | 2026-10-06 | 143522KB | Melted (A03) |
+| [Constellation](https://github.com/guarani-ux/Constellation) | private | main | 2026-10-03 | 46KB | Melted (A05) |
+| [Nelson](https://github.com/guarani-ux/Nelson) | private | main | 2026-09-18 | 1676KB | Melted (A10) |
+| [Hidden-Booder-Village](https://github.com/guarani-ux/Hidden-Booder-Village) | private | main | 2026-09-17 | 151293KB | Primitive-Extracted (`PRIM-03`) |
+| [10-shadows](https://github.com/guarani-ux/10-shadows) | private | master | 2026-09-17 | 1059KB | Primitive-Extracted (`PRIM-08`) |
+| [komorebisans](https://github.com/guarani-ux/komorebisans) | private | main | 2026-09-07 | 581KB | Duplicate of Outer-Sanctum |
+| [Outer-Sanctum](https://github.com/guarani-ux/Outer-Sanctum) | private | main | 2026-09-07 | 580KB | Primitive-Extracted (`PRIM-10`, `PRIM-11`) |
+| [job-hunter](https://github.com/guarani-ux/job-hunter) | private | main | 2026-08-28 | 93KB | Untested Scaffold / Prototype |
+| [ten-shadows-control](https://github.com/guarani-ux/ten-shadows-control) | public | master | 2026-08-28 | 105KB | Primitive-Extracted (`PRIM-11`; `10-shadows` pair) |
+| [ichimonji](https://github.com/guarani-ux/ichimonji) | private | main | 2026-08-25 | 954KB | Untested Scaffold / Prototype |
+| [espada](https://github.com/guarani-ux/espada) | private | main | 2026-08-01 | 364KB | Primitive-Extracted (`PRIM-08`, `PRIM-09`) |
+| [PPW-Prime](https://github.com/guarani-ux/PPW-Prime) | private | main | 2026-04-19 | 64KB | Skip Stub (<=5KB / 0 code) |
+| [Komorebi](https://github.com/guarani-ux/Komorebi) | private | master | 2026-04-16 | 6784KB | Selective Skill Check |
+| [Dangai](https://github.com/guarani-ux/Dangai) | private | main | 2026-04-14 | 0KB | Skip Stub (<=5KB / 0 code) |
+| [entonkageyoni](https://github.com/guarani-ux/entonkageyoni) | private | main | 2026-04-12 | 11521KB | Melted (A01) |
+| [marketing-production-os](https://github.com/guarani-ux/marketing-production-os) | private | main | 2026-01-09 | 4KB | Skip Stub (<=5KB / 0 code) |
+| [mobile-command-v9](https://github.com/guarani-ux/mobile-command-v9) | private | main | 2026-01-08 | 111KB | Untested Scaffold / Prototype |
+| [cpl-command-center](https://github.com/guarani-ux/cpl-command-center) | private | main | 2026-01-08 | 2KB | Skip Stub (<=5KB / 0 code) |
+| [cpl-mobile-studio0](https://github.com/guarani-ux/cpl-mobile-studio0) | private | main | 2026-01-08 | 31KB | Untested Scaffold / Prototype |
+| [cpl-mobile-studio](https://github.com/guarani-ux/cpl-mobile-studio) | private | main | 2026-01-08 | 2KB | Skip Stub (<=5KB / 0 code) |
+| [media-production-studio2](https://github.com/guarani-ux/media-production-studio2) | private | main | 2026-01-08 | 1516KB | Untested Scaffold / Prototype |
+| [media-production-studio](https://github.com/guarani-ux/media-production-studio) | public | main | 2026-01-07 | 0KB | Skip Stub (<=5KB / 0 code) |
+| [Cpl-factory](https://github.com/guarani-ux/Cpl-factory) | private | main | 2026-01-07 | 30KB | Untested Scaffold / Prototype |
 
 ## Add or update a project
 
@@ -89,7 +93,7 @@ Record a stable project ID, title, purpose, domain, canonical link or exact sour
 
 | Source | Checked | Remaining |
 | --- | --- | --- |
-| GitHub | Owner search and selected reads of five repository documents. | Inspect purpose, recent work, implementation evidence and relationships for the remaining metadata-only rows. |
+| GitHub | Full 43-repo triage on `2026-11-23` via `melt-diff`/`melt-scan` and read-only `gh api` (10 melted in `A01`–`A10` with `sidecar` stale check, 3 active hubs, 9 primitive-extracted, 3 selective skill checks, 1 duplicate, 10 untested scaffolds/prototypes, 7 stubs/0-code skips). | Exercise runtime tests before promoting external `EXTERNAL_PROVEN` / `PROTOTYPE` primitives (`PRIM-02..05`, `PRIM-08`, `PRIM-10..11`, `PRIM-13`) or untested prototypes (`The-Canvas`, `Storylines`). |
 | ChatGPT conversations | Targeted search for project and practice history. | Trace earlier names, transitions, paused work, and projects without repositories to their best sources. |
 | Library | Targeted title search found Story-Lane artifacts. | Review relevant contents and continue title discovery. A file's existence establishes availability through that route, not its claims. |
 | Drive and supplied record | Verified current Crucible Domain layout, Work Operating System project files, and read the supplied recap. | Review additional Drive folders and prior artifacts as needed. |

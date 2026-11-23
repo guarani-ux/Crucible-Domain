@@ -158,7 +158,8 @@ def _build_system_map(root: Path = ROOT) -> str:
         cap_line = (
             f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
             f"roles={counts.get('role', 0)}, knowledge={counts.get('knowledge', 0)}, "
-            f"skills={counts.get('skill', 0)} | route \"<task/ID>\" | forge \"<problem>\" | doctor"
+            f"skills={counts.get('skill', 0)}, primitives={counts.get('primitive', 0)} | "
+            f'route "<task/ID>" | forge "<problem>" | doctor | melt-diff | melt-scan'
         )
     except Exception:
         pass
@@ -582,14 +583,22 @@ def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bo
     return 0
 
 
-def cmd_forge(root: Path, problem_parts: list[str], *, top_k: int = 4, as_json: bool = False, no_global: bool = False) -> int:
+def cmd_forge(
+    root: Path,
+    problem_parts: list[str],
+    *,
+    top_k: int = 4,
+    as_json: bool = False,
+    no_global: bool = False,
+    domain: str | None = None,
+) -> int:
     if not problem_parts:
         print("usage: crucible_gate.py forge <problem description>", file=sys.stderr)
         return 2
     ci = _resolve_index_module()
     global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
     idx = ci.build_index(root, global_config_dir=global_dir)
-    brief = ci.forge_brief(idx, " ".join(problem_parts), top_k=top_k)
+    brief = ci.forge_brief(idx, " ".join(problem_parts), top_k=top_k, domain=domain)
     print(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_forge_text(brief))
     return 0
 
@@ -686,6 +695,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--owner", default="guarani-ux", help="GitHub owner for 'melt-diff' or 'melt-scan'.")
     parser.add_argument("--from-json", type=Path, default=None, help="Offline JSON fixture path for 'melt-diff' or 'melt-scan'.")
+    parser.add_argument(
+        "--domain",
+        choices=("systems", "media", "writing", "worldbuilding", "general"),
+        default=None,
+        help="Optional domain scope override for 'forge'.",
+    )
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -706,6 +721,7 @@ def main(argv: list[str] | None = None) -> int:
             top_k=4 if args.top == 5 else args.top,
             as_json=args.json,
             no_global=args.no_global,
+            domain=args.domain,
         )
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)

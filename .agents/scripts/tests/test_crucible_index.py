@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+import crucible_gate  # noqa: E402
 import crucible_index  # noqa: E402
 
 GATE_SCRIPT = SCRIPTS_DIR / "crucible_gate.py"
@@ -380,13 +382,13 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
                 "description": "Hub repo",
             },
             {
-                "name": "mercury",
+                "name": "unregistered-sandbox-repo",
                 "pushedAt": "2026-11-23T07:00:00Z",
                 "diskUsage": 112,
                 "isPrivate": True,
                 "isArchived": False,
                 "primaryLanguage": {"name": "Python"},
-                "description": "Modular Preview/Program Engine",
+                "description": "Unregistered prototype engine",
             },
             {
                 "name": "Story-House",
@@ -416,7 +418,7 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertEqual(diff["counts"]["skip_stub"], 1)
         self.assertEqual(diff["stale_melted"][0]["exhibit_id"], "A06")
         unmelted_by_name = {r["name"]: r for r in diff["unmelted"]}
-        self.assertFalse(unmelted_by_name["mercury"]["in_project_register"])
+        self.assertFalse(unmelted_by_name["unregistered-sandbox-repo"]["in_project_register"])
         self.assertTrue(unmelted_by_name["Story-House"]["in_project_register"])
 
     def test_run_melt_scan_enforces_batch_cap_and_filters_binaries_and_empty_repos(self) -> None:
@@ -571,6 +573,150 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             bad_findings: list[crucible_index.DiagnosticFinding] = []
             crucible_index.validate_primitives_registry(bad_root, bad_findings)
             self.assertTrue(any(f.category == "primitives" and f.severity == "FAIL" for f in bad_findings))
+
+    def test_forge_brief_systems_composes_primitives_and_suppresses_media_noise(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        brief = crucible_index.forge_brief(idx, "workflow plan with receiving checks")
+        self.assertFalse(brief.abstained)
+        self.assertEqual(brief.domain_scope, "systems")
+        self.assertGreaterEqual(len(brief.primitive_stack), 1)
+        statuses = {p["status"] for p in brief.primitive_stack}
+        self.assertTrue(statuses & {"WIRED_HERE", "EXTERNAL_PROVEN"})
+        for p in brief.primitive_stack:
+            self.assertIn("receiving_check", p)
+            self.assertIn("breakpoints", p)
+            self.assertIn("sources", p)
+            self.assertIn("domains", p)
+            self.assertIn("score", p)
+
+        proc_ids = {r["id"] for r in brief.procedures_and_roles}
+        self.assertNotIn("CD-07", proc_ids)
+        self.assertNotIn("MK-08", proc_ids)
+        self.assertFalse(any(r["path"].startswith("Knowledge/Media Agency/") for r in brief.procedures_and_roles))
+
+        rendered = crucible_index._format_forge_text(brief)
+        self.assertIn("0. Composed Atomic Primitives (domain=systems):", rendered)
+        self.assertIn("[WIRED_HERE]", rendered)
+        self.assertIn("[EXTERNAL_PROVEN -> pull from", rendered)
+
+    def test_forge_brief_media_domain_retains_av_primitives_and_media_agency(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        brief = crucible_index.forge_brief(idx, "documentary A/V script with source custody")
+        self.assertFalse(brief.abstained)
+        self.assertEqual(brief.domain_scope, "media")
+        prim_ids = {p["id"] for p in brief.primitive_stack}
+        self.assertIn("PRIM-10", prim_ids)
+        self.assertIn("PRIM-05", prim_ids)
+        self.assertTrue(any(r["path"].startswith("Knowledge/Media Agency/") for r in brief.procedures_and_roles))
+
+    def test_forge_brief_abstains_on_out_of_domain_brake_pads_and_missing_meta(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        for noise_query in (
+            "replace brake pads on a 2018 Honda Civic",
+            "quantum espresso banana smoothie recipe",
+        ):
+            brief = crucible_index.forge_brief(idx, noise_query)
+            self.assertTrue(brief.abstained, f"Expected abstention on: {noise_query}")
+            self.assertEqual(brief.primitive_stack, [])
+            self.assertEqual(brief.existing_projects, [])
+            self.assertEqual(brief.prior_systems, [])
+            self.assertEqual(brief.governing_lessons, [])
+            self.assertEqual(brief.procedures_and_roles, [])
+            self.assertTrue(any("[TQ-01..TQ-05]" in r for r in brief.verification_requirements))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_root = Path(tmp)
+            self.assertEqual(crucible_index._load_primitives_meta(empty_root), {})
+            (empty_root / "Knowledge").mkdir()
+            (empty_root / "Knowledge" / "Crucible_Primitives.json").write_text("{bad json", encoding="utf-8")
+            self.assertEqual(crucible_index._load_primitives_meta(empty_root), {})
+
+    def test_analyze_repo_tree_payload_demotes_untested_scaffold_to_skip_scaffold(self) -> None:
+        scaffold_tree = {
+            "truncated": False,
+            "tree": [
+                {"type": "blob", "path": "package.json"},
+                {"type": "blob", "path": "src/App.tsx"},
+                {"type": "blob", "path": "src/main.ts"},
+            ],
+        }
+        scaffold_card = crucible_index.analyze_repo_tree_payload("Storylines", scaffold_tree)
+        self.assertEqual(scaffold_card["triage_verdict"], "SKIP_SCAFFOLD")
+        self.assertIn("Untested/undocumented scaffold", scaffold_card["reason"])
+
+        tested_tree = {
+            "truncated": False,
+            "tree": [
+                {"type": "blob", "path": "package.json"},
+                {"type": "blob", "path": "src/App.tsx"},
+                {"type": "blob", "path": "tests/App.test.ts"},
+            ],
+        }
+        tested_card = crucible_index.analyze_repo_tree_payload("tested-app", tested_tree)
+        self.assertEqual(tested_card["triage_verdict"], "MELT_READY")
+
+        skill_tree = {
+            "truncated": False,
+            "tree": [
+                {"type": "blob", "path": "SKILL.md"},
+                {"type": "blob", "path": "scripts/helper.py"},
+            ],
+        }
+        skill_card = crucible_index.analyze_repo_tree_payload("skill-repo", skill_tree)
+        self.assertEqual(skill_card["triage_verdict"], "MELT_READY")
+
+    def test_cli_forge_domain_flag_and_system_map_primitives_banner(self) -> None:
+        proc_ok = subprocess.run(
+            [
+                sys.executable,
+                str(GATE_SCRIPT),
+                "--root",
+                str(REPO_ROOT),
+                "forge",
+                "--domain",
+                "systems",
+                "--json",
+                "--no-global",
+                "workflow plan",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(proc_ok.returncode, 0, proc_ok.stderr)
+        data = json.loads(proc_ok.stdout)
+        self.assertEqual(data["domain_scope"], "systems")
+        self.assertGreaterEqual(len(data["primitive_stack"]), 1)
+        self.assertFalse(any(r["path"].startswith("Knowledge/Media Agency/") for r in data["procedures_and_roles"]))
+
+        proc_bad_domain = subprocess.run(
+            [
+                sys.executable,
+                str(GATE_SCRIPT),
+                "--root",
+                str(REPO_ROOT),
+                "forge",
+                "--domain",
+                "invalid-domain",
+                "workflow plan",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertNotEqual(proc_bad_domain.returncode, 0)
+
+        sys_map = crucible_gate._build_system_map(REPO_ROOT)
+        self.assertRegex(sys_map, r"primitives=\d+")
+        self.assertIn("| melt-diff | melt-scan", sys_map)
+        m_prim = re.search(r"primitives=(\d+)", sys_map)
+        self.assertIsNotNone(m_prim)
+        assert m_prim is not None
+        self.assertGreaterEqual(int(m_prim.group(1)), 12)
 
 
 if __name__ == "__main__":
