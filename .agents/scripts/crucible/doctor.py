@@ -247,8 +247,24 @@ def _audit_links_and_bindings(root: Path, index: CapabilityIndex, findings: list
             for _, target in MD_LINK_RE.findall(text):
                 if target.startswith(("http://", "https://", "mailto:", "#")):
                     continue
-                target_path = (md_file.parent / unquote(target.split("#", 1)[0])).resolve()
+                clean_target = unquote(target.split("#", 1)[0])
+                target_path = (md_file.parent / clean_target).resolve()
                 if not target_path.exists():
+                    domain_name = clean_target.strip("/")
+                    if (
+                        rel == "README.md"
+                        and domain_name in {"Calgary Public Library", "Personal Work", "Graphs"}
+                        and target_path == (root / domain_name).resolve()
+                    ):
+                        findings.append(
+                            DiagnosticFinding(
+                                category="portability",
+                                severity="INFO",
+                                subject=rel,
+                                detail=f"empty domain directory absent in fresh checkout: {target}",
+                            )
+                        )
+                        continue
                     broken_local.append(target)
             if broken_local:
                 findings.append(

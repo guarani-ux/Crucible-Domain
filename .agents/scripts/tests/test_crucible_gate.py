@@ -386,6 +386,101 @@ class TestCrucibleGateContractStop(unittest.TestCase):
             self.assertIn("BLOCKED:", bad_proc.stdout)
             self.assertIn("sample.py", bad_proc.stdout)
 
+    def test_check_blocks_staged_asana_url_in_cpl(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            cpl_dir = repo / "Calgary Public Library"
+            cpl_dir.mkdir(parents=True)
+            notes = cpl_dir / "notes.md"
+            notes.write_text("# CPL Notes\nClean public summary.\n", encoding="utf-8")
+            _git(repo, "add", "Calgary Public Library/notes.md")
+
+            ok_proc = _run_gate(repo, "check")
+            self.assertEqual(ok_proc.returncode, 0, ok_proc.stdout + ok_proc.stderr)
+            self.assertIn("PASS:", ok_proc.stdout)
+
+            notes.write_text("# CPL Notes\nTask: https://app.asana.com/0/12345/list\n", encoding="utf-8")
+            _git(repo, "add", "Calgary Public Library/notes.md")
+
+            bad_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_proc.returncode, 1, bad_proc.stdout + bad_proc.stderr)
+            self.assertIn("BLOCKED:", bad_proc.stdout)
+            self.assertIn("app.asana.com", bad_proc.stdout)
+
+    def test_check_blocks_staged_drive_temp_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            sync_dir = repo / ".tmp.drivedownload"
+            sync_dir.mkdir()
+            (sync_dir / "sync.tmp").write_text("partial sync", encoding="utf-8")
+            _git(repo, "add", "-f", ".tmp.drivedownload/sync.tmp")
+
+            bad_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_proc.returncode, 1, bad_proc.stdout + bad_proc.stderr)
+            self.assertIn("BLOCKED:", bad_proc.stdout)
+            self.assertIn(".tmp.drive", bad_proc.stdout)
+
+    def test_check_blocks_test_quality_gate_violation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            tests_dir = repo / ".agents" / "scripts" / "tests"
+            tests_dir.mkdir(parents=True)
+            sample_test = tests_dir / "test_bad_sample.py"
+            sample_test.write_text("def test_tautology():\n    assert True\n", encoding="utf-8")
+
+            bad_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_proc.returncode, 1, bad_proc.stdout + bad_proc.stderr)
+            self.assertIn("BLOCKED:", bad_proc.stdout)
+            self.assertIn("TQ-01", bad_proc.stdout)
+
+            sample_test.write_text("def test_good():\n    assert (2 + 2) != 5\n", encoding="utf-8")
+            ok_proc = _run_gate(repo, "check")
+            self.assertEqual(ok_proc.returncode, 0, ok_proc.stdout + ok_proc.stderr)
+            self.assertIn("PASS:", ok_proc.stdout)
+
+    def test_pre_tool_shifting_sand_blocks_edit_file_and_allows_ground_truth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            (repo / "Personal Work").mkdir()
+
+            deny_proc = _run_gate(
+                repo,
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "edit_file",
+                        "args": {"Path": str(repo / "Personal Work" / "draft.md")},
+                    }
+                },
+            )
+            self.assertEqual(deny_proc.returncode, 0, deny_proc.stderr)
+            deny_data = json.loads(deny_proc.stdout)
+            self.assertEqual(deny_data.get("decision"), "deny")
+            self.assertIn("SHIFTING_SAND", deny_data.get("reason", ""))
+
+            allow_proc = _run_gate(
+                repo,
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "edit_file",
+                        "args": {"Path": str(repo / "Personal Work" / "GROUND_TRUTH.md")},
+                    }
+                },
+            )
+            self.assertEqual(allow_proc.returncode, 0, allow_proc.stderr)
+            self.assertEqual(json.loads(allow_proc.stdout), {"decision": "allow"})
+
+    def test_check_blocks_missing_ideas_md(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            (repo / "IDEAS.md").unlink()
+
+            bad_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_proc.returncode, 1, bad_proc.stdout + bad_proc.stderr)
+            self.assertIn("BLOCKED:", bad_proc.stdout)
+            self.assertIn("IDEAS.md missing", bad_proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
