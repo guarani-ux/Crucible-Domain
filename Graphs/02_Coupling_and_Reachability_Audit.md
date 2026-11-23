@@ -2,55 +2,56 @@
 
 **WOS Graph Types:** `Outcome map` & `Target system architecture` (delta) (`P-WOS` / `K-WOS-03` / `K-ARCH-03`)
 
-This audit isolates **what is stifling Crucible Domain's capacity** into three concrete failure modes:
+This audit tracks the three architectural failure modes across Crucible Domain and records **which items are resolved vs. still open** after `de90370` and Wave 2:
 1. **Over-Coupled** (things welded together that should be independent)
 2. **Under-Coupled** (things disconnected that need an explicit bridge)
 3. **Misplaced / Hard-to-Reach** (things in the wrong folder or duplicated across entry points)
 
 ---
 
-## 1. Visual Coupling & Bottleneck Map
+## 1. Visual Coupling & Status Map
 
 ```mermaid
 flowchart LR
-    classDef coupled fill:#6b1d1d,stroke:#e63946,color:#fff
-    classDef decoupled fill:#5c4d00,stroke:#f4a261,color:#fff
-    classDef misplaced fill:#1d3557,stroke:#457b9d,color:#fff
+    classDef resolved fill:#1b4332,stroke:#52b788,color:#fff
+    classDef partial fill:#5c4d00,stroke:#f4a261,color:#fff
+    classDef open fill:#6b1d1d,stroke:#e63946,color:#fff
 
-    subgraph C["OVER-COUPLED (Needs Decoupling)"]
-        C1["C-01: crucible_index.py (2,552L)<br/>5 subsystems in 1 file"]:::coupled
-        C2["C-02: 3 Parallel Hook Chains<br/>global + .agents + inner-gravity"]:::coupled
-        C3["C-03: Host-Hardcoded Paths<br/>~/.gemini/config & C:/Kageyoni"]:::coupled
+    subgraph C["OVER-COUPLED BOUNDARIES"]
+        C1["C-01: RESOLVED (de90370 + exporter.py)<br/>.agents/scripts/crucible/ (8 modules) + 102L shim"]:::resolved
+        C2["C-02: BOUNDED / OPEN<br/>3 Hook Chains + RW-04 Protected Boundary"]:::partial
+        C3["C-03: MITIGATED<br/>Portable doctor [INFO] when ~/.gemini absent;<br/>C:/Kageyoni remains host-bound in skills.json"]:::partial
     end
 
-    subgraph D["UNDER-COUPLED (Needs Bridging)"]
-        D1["D-01: route & forge are CLI-only<br/>No static JSON/Atlas for zero-exec lookup"]:::decoupled
-        D2["D-02: acceptance.lock.json<br/>Misses primitives JSON & test_quality_gate.py"]:::decoupled
-        D3["D-03: PRIM-01..13 & 43 Repos<br/>No executable verification bridge"]:::decoupled
+    subgraph D["UNDER-COUPLED BRIDGES"]
+        D1["D-01: RESOLVED<br/>export-map -> Graphs/capability_map.json + CORE_ENTRY_DOCS"]:::resolved
+        D2["D-02: PARTIAL + STAGED (RW-04)<br/>cmd_check validates .py & primitives;<br/>acceptance.lock.json.v2 staged via apply_v2_lock.ps1"]:::partial
+        D3["D-03: OPEN (SLICE-5)<br/>PRIM-01..13 & The-Canvas executable test receipts"]:::open
     end
 
-    subgraph M["MISPLACED / UNREACHABLE"]
-        M1["M-01: Graphs/ was 0 files<br/>System graphs buried in Project/Inner Gravity/"]:::misplaced
-        M2["M-02: Stale install_pack/<br/>Root files already live; IDEAS.md Stage 3 stale"]:::misplaced
-        M3["M-03: 6+ Overlapping Entry Docs<br/>Agents burn turns orienting"]:::misplaced
+    subgraph M["REACHABILITY & HYGIENE"]
+        M1["M-01: RESOLVED<br/>Graphs/GROUND_TRUTH.md + 00..03 live;<br/>11 overnight_mvp/ + Blueprint v2 files scoped in Inner Gravity"]:::resolved
+        M2["M-02: RESOLVED<br/>install_pack/README_SUPERSEDED.md + IDEAS.md updated"]:::resolved
+        M3["M-03: MITIGATED<br/>00_System_Atlas + capability_map.json O(1) lookup"]:::resolved
     end
 
-    C1 -.->|"Blocks clean unit testing & modular edits"| D3
-    D1 -.->|"Forces agents to shell-exec or grep"| M3
-    M1 -.->|"Hides architecture from Turn-0 discovery"| M3
+    C1 -->|"Unblocked modular unit testing (29+ pytest + TQ-01..05)"| D1
+    D2 -.->|"Operator runs apply_v2_lock.ps1 to cross RW-04 gate"| C2
+    D3 -.->|"Next empirical verification frontier"| M1
 ```
 
 ---
 
-## 2. Detailed Issue Ledger for Neon
+## 2. Reconciled Issue Ledger (`de90370` + Wave 2 State)
 
-| ID | Category | Exact Observed Evidence | Why It Stifles Capacity | Target Fix |
+| ID | Category | Status | Observed Current Evidence & Remaining Gap | Canonical Paths |
 | --- | --- | --- | --- | --- |
-| **C-01** | Over-Coupled | `.agents/scripts/crucible_index.py` is 2,552L mixing parsers, `route`/`forge`, `doctor`, `melt-diff`/`melt-scan`, and CLI formatters. | Editing or testing one capability risks breaking unrelated ones; agents must read huge files to change small rules. | Split into a clean `.agents/scripts/crucible/` package (`indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`) with `crucible_index.py` as a thin backwards-compatible shim. |
-| **C-02** | Over-Coupled | Three separate `hooks.json` files (`~/.gemini/config/hooks.json`, `.agents/hooks.json`, `.agents/plugins/inner-gravity/hooks.json`) fire on `SessionStart` and `Stop`. | Triple-hook latency, overlapping `SessionStart` injections, and risk of silent cwd failures (`4188f88a`). | Document and audit the exact hook contract boundary; keep `crucible_gate.py` as the single workspace authority and avoid duplicate checks. |
-| **C-03** | Over-Coupled | `DEFAULT_GLOBAL_CONFIG_DIR = Path.home() / ".gemini" / "config"` in `crucible_index.py` + `C:/Kageyoni/.agents/skills/` in `skills.json`. | Breaks portability when running on a fresh machine, CI, or remote `Moto` session. | Make global-config auditing optional/graceful when `DEFAULT_GLOBAL_CONFIG_DIR` is absent, and surface a `PORTABILITY` notice instead of assuming one workstation layout. |
-| **D-01** | Under-Coupled | `route` and `forge` only exist behind `python ".agents/scripts/crucible_gate.py" ...`. | Every cold-start agent must either spawn Python or grep 80+ Markdown files to find where a file or primitive lives. | Emit/maintain a lightweight generated `Graphs/capability_map.json` (or `00_System_Atlas_and_Neon_Handoff.md`) synced by `crucible_gate.py`. |
-| **D-02** | Under-Coupled | `.agents/acceptance.lock.json` only checks 12 Markdown files and 2 Python files (`crucible_gate.py`, `crucible_index.py`). | `test_quality_gate.py`, `Project/Inner Gravity/check_sync.py`, and `Crucible_Primitives.json` schema aren't locked by `Stop` gate. | Add `test_quality_gate.py` and `Crucible_Primitives.json` validation to `acceptance.lock.json` / `cmd_verify`. |
-| **D-03** | Under-Coupled | `PRIM-01..13` and `The-Canvas` (27 code / 22 tests) are cataloged in `Project_Register.md` without runnable verification links. | Capabilities remain "paper-proven" rather than executable building blocks. | Add a `verify-primitives` or test-receipt field linking each promoted `PRIM-*` to a runnable check. |
-| **M-01** | Misplaced | `Graphs/` had 0 files until `2026-11-23`; system graphs lived inside `Project/Inner Gravity/01..05`. | Violated `README.md` ("Use Graphs for views spanning projects or domains") and hid architecture from top-level discovery. | Keep `Graphs/` as the canonical cross-domain atlas (`00`–`03`) and link `Inner Gravity` as the harness-specific deep dive. |
-| **M-02** | Misplaced | `Project/Inner Gravity/install_pack/` + `IDEAS.md` Stage 3 still reference staging `AGENTS.md`/`acceptance.lock.json`, which are already live at root. | Confuses new agents into thinking root governance isn't installed yet. | Archive or mark `install_pack/` as `SUPERSEDED (live at root)` and update `IDEAS.md` Stage 3. |
+| **C-01** | Over-Coupled | **RESOLVED** | `crucible_index.py` (2,552L) split at `de90370` into `.agents/scripts/crucible/` (`__init__.py`, `models.py`, `indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`, plus `exporter.py`) behind a 102L shim; covered by 29+ pytest tests and [`test_quality_gate.py`](../.agents/scripts/test_quality_gate.py) (`TQ-01..TQ-05`). | [`crucible_index.py`](../.agents/scripts/crucible_index.py) · [`.agents/scripts/crucible/__init__.py`](../.agents/scripts/crucible/__init__.py) |
+| **C-02** | Over-Coupled | **BOUNDED (OPEN)** | Three `hooks.json` chains (`~/.gemini/config`, `.agents/`, `.agents/plugins/inner-gravity/`) still trigger independently; global `hook_v4.py` enforces the `RW-04` protected-file boundary (`AGENTS.md`, `GEMINI.md`, `.agents/hooks.json`, `.agents/acceptance.lock.json`, `hooks.json`, `hook_v4.py`) while [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) owns workspace `SessionStart` / `PreToolUse` / `Stop`. | [`.agents/hooks.json`](../.agents/hooks.json) · [`01_System_Topology_and_Runtime.md`](./01_System_Topology_and_Runtime.md) |
+| **C-03** | Over-Coupled | **MITIGATED** | `doctor` now emits a non-failing `[INFO]` portability notice when `~/.gemini/config` is absent, and `_build_system_map()` handles missing global config; external `C:/Kageyoni/.agents/skills` coupling inside global `skills.json` remains host-specific. | [`doctor.py`](../.agents/scripts/crucible/doctor.py) · [`05_Session_4188f88a_Causal_Trace_and_Gaps.md`](../Project/Inner%20Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md) |
+| **D-01** | Under-Coupled | **RESOLVED** | `crucible_gate.py export-map` (`crucible/exporter.py`) generates deterministic `Graphs/capability_map.json`, and `CORE_ENTRY_DOCS` indexes `CRUCIBLE-ATLAS`, `CRUCIBLE-AUDIT`, `IG-OBS`, and `CPL-PILOT-MAPS` alongside [`00_System_Atlas_and_Neon_Handoff.md`](./00_System_Atlas_and_Neon_Handoff.md). | [`00_System_Atlas_and_Neon_Handoff.md`](./00_System_Atlas_and_Neon_Handoff.md) · [`cpl_pilot_maps.md`](../Project/Inner%20Gravity/overnight_mvp/cpl_pilot_maps.md) |
+| **D-02** | Under-Coupled | **PARTIAL + STAGED** | `cmd_check` now syntax-checks all `.py` files under `.agents/scripts/` and `.agents/scripts/crucible/` and validates [`Crucible_Primitives.json`](../Knowledge/Crucible_Primitives.json). Because `.agents/acceptance.lock.json` is `RW-04` protected, the expanded v2 manifest is staged in [`acceptance.lock.json.v2`](../Project/Inner%20Gravity/install_pack/acceptance.lock.json.v2) with [`apply_v2_lock.ps1`](../Project/Inner%20Gravity/install_pack/apply_v2_lock.ps1) for operator apply. | [`acceptance.lock.json.v2`](../Project/Inner%20Gravity/install_pack/acceptance.lock.json.v2) · [`apply_v2_lock.ps1`](../Project/Inner%20Gravity/install_pack/apply_v2_lock.ps1) |
+| **D-03** | Under-Coupled | **OPEN (`SLICE-5`)** | `PRIM-02..05`, `PRIM-08`, `PRIM-10..11`, `PRIM-13`, and `The-Canvas` (27 code / 22 tests) still lack executed local test receipts linked into `Knowledge_Register.md` and `Crucible_Primitives.json`. | [`Project_Register.md`](../Project/Project_Register.md) · [`Knowledge_Register.md`](../Knowledge/Knowledge_Register.md) |
+| **M-01** | Misplaced | **RESOLVED** | `Graphs/` now hosts [`GROUND_TRUTH.md`](./GROUND_TRUTH.md) + `00..03` + `capability_map.json`; the 11 historical CPL/production files in `Project/Inner Gravity/overnight_mvp/` plus [`system_blueprint_v2.yaml`](../Project/Inner%20Gravity/system_blueprint_v2.yaml) and [`System_Blueprint_v2_Visual_Guide.md`](../Project/Inner%20Gravity/System_Blueprint_v2_Visual_Guide.md) stay anchored as reference specs inside `Project/Inner Gravity/`. | [`GROUND_TRUTH.md`](./GROUND_TRUTH.md) · [`System_Blueprint_v2_Visual_Guide.md`](../Project/Inner%20Gravity/System_Blueprint_v2_Visual_Guide.md) |
+| **M-02** | Misplaced | **RESOLVED** | [`README_SUPERSEDED.md`](../Project/Inner%20Gravity/install_pack/README_SUPERSEDED.md) marks the Nov 15/22 staging files superseded at root; [`IDEAS.md`](../IDEAS.md) closes the stale Stage 3 `[P-INNER-GRAVITY]` bullet and records `[P-CRUCIBLE-MODULAR]` under `## Shipped`; [`Project/Inner Gravity/README.md`](../Project/Inner%20Gravity/README.md) links to `Graphs/00`. | [`README_SUPERSEDED.md`](../Project/Inner%20Gravity/install_pack/README_SUPERSEDED.md) · [`IDEAS.md`](../IDEAS.md) |
+| **M-03** | Misplaced | **MITIGATED** | [`00_System_Atlas_and_Neon_Handoff.md`](./00_System_Atlas_and_Neon_Handoff.md) + `Graphs/capability_map.json` consolidate cold-start routing into one human atlas and one machine JSON map. | [`00_System_Atlas_and_Neon_Handoff.md`](./00_System_Atlas_and_Neon_Handoff.md) |

@@ -4,6 +4,8 @@
 
 **Inner Gravity** is the self-model, capability inventory, execution trace, and staged installation kit for the Antigravity agent harness inside `Crucible Domain`. It translates the local runtime (`~/.gemini`, `~/.gemini/config`, `~/.gemini/antigravity`, and `C:/Kageyoni/.agents/skills`) into the **seven Work Operating System graph types** so the agent harness scales with `Crucible Domain`.
 
+> **Status (`2026-11-23`):** For whole-system architecture, O(1) entry lookup, and the modular runtime topology across `Crucible Domain`, see [../../Graphs/00_System_Atlas_and_Neon_Handoff.md](../../Graphs/00_System_Atlas_and_Neon_Handoff.md). Legacy Nov 15/22 staging files inside [`./install_pack/`](./install_pack/) (`AGENTS.md.ready`, `IDEAS.md`, `acceptance.lock.json.ready`, `crucible_hooks.json.fixed`, `hooks.json.normalized`) are **superseded — live at repo root** (see [`install_pack/README_SUPERSEDED.md`](./install_pack/README_SUPERSEDED.md)); `acceptance.lock.json.v2` + `apply_v2_lock.ps1` provide the optional v2 lockfile update.
+
 ---
 
 ## Current Decision & Handoff at the Entry Point (`K-WOS-01`)
