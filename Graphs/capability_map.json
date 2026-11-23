@@ -1,8 +1,8 @@
 {
   "schema": "crucible-capability-map/v1",
-  "total": 142,
+  "total": 146,
   "counts_by_kind": {
-    "doc": 5,
+    "doc": 9,
     "exhibit": 10,
     "knowledge": 9,
     "primitive": 13,
@@ -391,6 +391,46 @@
       "domain": "media-agency-role",
       "reachability": "local",
       "summary": "Use this role to investigate a brief, substantiate claims, compose an audience-ready message, prepare scoped variants and report what people understood or asked. An agent may research and draft in the assignment's authorized scope. A named human retains approval and external distribution authority. "
+    },
+    {
+      "id": "CPL-PILOT-MAPS",
+      "kind": "doc",
+      "title": "Crucible x CPL Pilot & Calendar Maps (Planning Reference)",
+      "path": "Project/Inner Gravity/overnight_mvp/cpl_pilot_maps.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Historical planning reference for CPL pilot and content calendar maps inside Inner Gravity."
+    },
+    {
+      "id": "CRUCIBLE-ATLAS",
+      "kind": "doc",
+      "title": "Crucible Domain System Atlas & Neon Handoff",
+      "path": "Graphs/00_System_Atlas_and_Neon_Handoff.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "O(1) file-to-purpose lookup table, capability atlas, and cross-domain entry point."
+    },
+    {
+      "id": "CRUCIBLE-AUDIT",
+      "kind": "doc",
+      "title": "Crucible Coupling & Reachability Audit",
+      "path": "Graphs/02_Coupling_and_Reachability_Audit.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Over-coupled, under-coupled, and misplaced component ledger across Crucible Domain."
+    },
+    {
+      "id": "IG-OBS",
+      "kind": "doc",
+      "title": "Inner Gravity Whole-System Observatory & Causal Trace",
+      "path": "Project/Inner Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Live observatory topology, session 4188f88a causal trace, and honest weakness ledger."
     },
     {
       "id": "IG-README",
