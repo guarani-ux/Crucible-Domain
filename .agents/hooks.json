@@ -4,8 +4,27 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "python .agents/scripts/crucible_gate.py session-start",
+        "command": "python scripts/crucible_gate.py session-start",
         "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "write_file|edit_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python scripts/crucible_gate.py pre-tool",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python scripts/crucible_gate.py stop",
+        "timeout": 15
       }
     ]
   }

@@ -77,18 +77,18 @@ flowchart TB
 
 ## Connect assignment to an available method
 
-Start with the [Media Agency skills and workflows](https://drive.google.com/file/d/1MZLjp12rhXYT5o5XktIm_7Vn0xlemfjl/view?usp=drivesdk) catalogue when an agent needs the full portable instructions, templates and checks. The catalogue can be used directly from the shared folder or a synced copy. The optional workspace-specific links below give an alternate route for workers who have that access.
+Start with the local [Media Agency skills and workflows](Skills%20and%20Workflows/README.md) *([Drive](https://drive.google.com/file/d/1MZLjp12rhXYT5o5XktIm_7Vn0xlemfjl/view?usp=drivesdk))* catalogue for the full portable instructions, templates and checks, or query any ID directly via `python ".agents/scripts/crucible_gate.py" route "<ID or task>"`.
 
-Use the role card to decide which method you need. Enable or open the method only if it is present in the worker’s environment and the assignment supports it. The links identify installed ChatGPT methods in this workspace. Check separately which a remote worker can reach.
+Use the role card to decide which method you need. Every work row below resolves to a local procedure file in this repository; the original ChatGPT host skill links are retained beside them for ChatGPT environments only (`K-WOS-03`).
 
-| Work | Method |
+| Work | Local method (all environments) · ChatGPT host alias |
 | --- | --- |
-| Convert a service request to a grounded video brief | [Shape media brief](https://chatgpt.com/skills?skill_id=6a88759040a88191a896614be5d93a01) |
-| Turn the approved direction into a treatment or script | [Write video concept](https://chatgpt.com/skills?skill_id=6ad142fb15388191a1634e7da79674dc) · [Write A/V script](https://chatgpt.com/skills?skill_id=6a8875c54d3c81919a7f6de589f82d02) |
-| Turn the production decision into resources, timings and handoffs | [Plan media production](https://chatgpt.com/skills?skill_id=6a8875e68af88191940f923dd303141b) · [Prepare media workback](https://chatgpt.com/skills?skill_id=6af01c95eb148191b50f2ee390de4170) returns a reviewable packet for manual entry. |
-| Check finished media and publishing materials | [Audit media release](https://chatgpt.com/skills?skill_id=6a8875fd6f8c81918cd0bd3934e74711) |
-| Investigate a claim or evaluate a public service journey | [Investigate with evidence](https://chatgpt.com/skills?skill_id=6acfae059d5881918e34ff0b0a55f8b6) |
-| Recover a practice and test it on another assignment | [Recover working practice](https://chatgpt.com/skills?skill_id=6add61269f9081919a9eb9e24f7aae64) · [Trial practice in use](https://chatgpt.com/skills?skill_id=6add61c97c0c8191bc6cb4f84a1f3312) |
+| Convert a service request to a grounded video brief | [MW-01](Skills%20and%20Workflows/media-writing.md#mw-01--write-a-project-or-media-production-brief) & [OP-01](Skills%20and%20Workflows/project-and-portfolio-operations.md#op-01--diagnose-and-frame-a-media-request) *(ChatGPT host only: [Shape media brief](https://chatgpt.com/skills?skill_id=6a88759040a88191a896614be5d93a01))* |
+| Turn the approved direction into a treatment or script | [MW-02](Skills%20and%20Workflows/media-writing.md#mw-02--write-a-concept-or-treatment), [MP-01](Skills%20and%20Workflows/media-production.md#mp-01--choose-a-treatment-and-plan-the-workback), & [MW-04](Skills%20and%20Workflows/media-writing.md#mw-04--author-the-audiovisual-script) *(ChatGPT host only: [Write video concept](https://chatgpt.com/skills?skill_id=6ad142fb15388191a1634e7da79674dc) · [Write A/V script](https://chatgpt.com/skills?skill_id=6a8875c54d3c81919a7f6de589f82d02))* |
+| Turn the production decision into resources, timings and handoffs | [MP-01..04](Skills%20and%20Workflows/media-production.md#mp-01--choose-a-treatment-and-plan-the-workback) & [OP-03](Skills%20and%20Workflows/project-and-portfolio-operations.md#op-03--build-and-rebalance-a-workback) *(ChatGPT host only: [Plan media production](https://chatgpt.com/skills?skill_id=6a8875e68af88191940f923dd303141b) · [Prepare media workback](https://chatgpt.com/skills?skill_id=6af01c95eb148191b50f2ee390de4170) returns a reviewable packet for manual entry.)* |
+| Check finished media and publishing materials | [MP-10/11](Skills%20and%20Workflows/media-production.md#mp-10--edit-caption-and-qc-the-exact-cut) & [CH-03/04](Skills%20and%20Workflows/channel-and-content-operations.md#ch-03--prepare-a-youtube-upload-and-verify-release) *(ChatGPT host only: [Audit media release](https://chatgpt.com/skills?skill_id=6a8875fd6f8c81918cd0bd3934e74711))* |
+| Investigate a claim or evaluate a public service journey | [CD-01](Skills%20and%20Workflows/communications-and-design.md#cd-01--discover-stakeholder-needs-and-verify-claims--skill) & [MK-02](Skills%20and%20Workflows/audience-and-campaigns.md#mk-02--research-claims-board-records-and-strategic-fit) *(ChatGPT host only: [Investigate with evidence](https://chatgpt.com/skills?skill_id=6acfae059d5881918e34ff0b0a55f8b6))* |
+| Recover a practice and test it on another assignment | [OP-08](Skills%20and%20Workflows/project-and-portfolio-operations.md#op-08--turn-observations-into-better-practice) & `ig-discover-method` / `ig-improve` *(ChatGPT host only: [Recover working practice](https://chatgpt.com/skills?skill_id=6add61269f9081919a9eb9e24f7aae64) · [Trial practice in use](https://chatgpt.com/skills?skill_id=6add61c97c0c8191bc6cb4f84a1f3312))* |
 
 ## Cases to walk through
 

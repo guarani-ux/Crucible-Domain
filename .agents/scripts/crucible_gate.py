@@ -151,6 +151,18 @@ def _build_system_map(root: Path = ROOT) -> str:
     active_wip = _extract_active_wip(root / "IDEAS.md")
     install_status = _check_local_install_and_plugins(root)
 
+    cap_line = 'Route capabilities: python ".agents/scripts/crucible_gate.py" route "<task or ID>" | Health: doctor'
+    try:
+        idx = _resolve_index_module().build_index(root)
+        counts = idx.counts_by_kind
+        cap_line = (
+            f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
+            f"roles={counts.get('role', 0)}, knowledge={counts.get('knowledge', 0)}, "
+            f"skills={counts.get('skill', 0)} | route \"<task/ID>\" | doctor"
+        )
+    except Exception:
+        pass
+
     return "\n".join(
         [
             (
@@ -165,6 +177,7 @@ def _build_system_map(root: Path = ROOT) -> str:
             f"Git HEAD: {git_head} | Dirty: {dirty_count} | Sync locks: {lock_status}",
             f"Active WIP: {active_wip}",
             install_status,
+            cap_line,
             "SHIFTING_SAND: Establish ground truth (workflow, audience, purpose) before proposing deliverables in any [EMPTY — INTAKE REQUIRED] folder.",
             'Gate check: python ".agents/scripts/crucible_gate.py" check',
             'Sync check: python "Project/Inner Gravity/check_sync.py"',
@@ -535,6 +548,35 @@ def cmd_stop(root: Path = ROOT) -> int:
     return 0
 
 
+def _resolve_index_module():
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import crucible_index
+
+    return crucible_index
+
+
+def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bool = False, no_global: bool = False) -> int:
+    if not query_parts:
+        print("usage: crucible_gate.py route <task query or canonical ID>", file=sys.stderr)
+        return 2
+    ci = _resolve_index_module()
+    global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
+    idx = ci.build_index(root, global_config_dir=global_dir)
+    result = ci.route_query(idx, " ".join(query_parts), top_k=top_k)
+    print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_route_text(result))
+    return 0
+
+
+def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, skip_exec: bool = False) -> int:
+    ci = _resolve_index_module()
+    global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
+    report = ci.run_doctor(root, global_config_dir=global_dir, execute_hooks=not skip_exec)
+    print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_doctor_text(report))
+    return 0 if report.ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -545,9 +587,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop", "route", "doctor"),
         help="Gate action to execute.",
     )
+    parser.add_argument("query", nargs="*", help="Query tokens or ID for 'route'.")
+    parser.add_argument("--top", type=int, default=5, help="Max matches for 'route'.")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route' or 'doctor'.")
+    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
+    parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -559,6 +606,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_verify(root)
     if args.subcommand == "stop":
         return cmd_stop(root)
+    if args.subcommand == "route":
+        return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
+    if args.subcommand == "doctor":
+        return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
     return cmd_check(root)
 
 
