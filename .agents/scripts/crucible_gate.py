@@ -510,11 +510,24 @@ def cmd_check(root: Path = ROOT) -> int:
             if norm.startswith("Calgary Public Library/") and _staged_contains_asana(norm, root):
                 reasons.append(f"staged CPL file contains app.asana.com: {norm}")
 
+    try:
+        scripts_dir = str(Path(__file__).resolve().parent)
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import test_quality_gate
+
+        tests_dir = root / ".agents" / "scripts" / "tests"
+        if tests_dir.is_dir():
+            for tqf in test_quality_gate.audit_paths([tests_dir]):
+                reasons.append(f"{tqf.rule_id} in {Path(tqf.file).name}:{tqf.line}: {tqf.message}")
+    except ImportError:
+        pass
+
     if reasons:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
 
-    print("PASS: IDEAS.md present; no staged .tmp.drive* or CPL app.asana.com violations.")
+    print("PASS: IDEAS.md present; no staged .tmp.drive*, CPL app.asana.com, or test-quality violations.")
     return 0
 
 

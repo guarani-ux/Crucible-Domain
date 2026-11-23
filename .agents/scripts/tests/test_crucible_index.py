@@ -163,17 +163,86 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertIn("summary", doc_json)
         self.assertEqual(doc_json["metrics"]["chatgpt_unbound"], 0)
 
+    def test_shifting_sand_pre_tool_denies_deliverable_in_empty_domain_and_allows_ground_truth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "Personal Work").mkdir(parents=True)
+            (repo / "IDEAS.md").write_text("# Ledger\n", encoding="utf-8")
+
+            deny_payload = {
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": str(repo / "Personal Work" / "deliverable.md"), "Content": "# Draft\n"},
+                }
+            }
+            deny_proc = subprocess.run(
+                [sys.executable, str(GATE_SCRIPT), "--root", str(repo), "pre-tool"],
+                cwd=repo,
+                input=json.dumps(deny_payload),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(deny_proc.returncode, 0)
+            self.assertEqual(json.loads(deny_proc.stdout)["decision"], "deny")
+
+            allow_payload = {
+                "toolCall": {
+                    "name": "write_file",
+                    "args": {"Path": str(repo / "Personal Work" / "GROUND_TRUTH.md"), "Content": "# Ground Truth\n"},
+                }
+            }
+            allow_proc = subprocess.run(
+                [sys.executable, str(GATE_SCRIPT), "--root", str(repo), "pre-tool"],
+                cwd=repo,
+                input=json.dumps(allow_payload),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(allow_proc.returncode, 0)
+            self.assertEqual(json.loads(allow_proc.stdout)["decision"], "allow")
+
     def test_collect_observatory_snapshot_and_weakness_reporting(self) -> None:
         ig_dir = REPO_ROOT / "Project" / "Inner Gravity"
         if str(ig_dir) not in sys.path:
             sys.path.insert(0, str(ig_dir))
         import collect_observatory  # noqa: E402
 
-        snap = collect_observatory.collect_snapshot(REPO_ROOT, session_id="4188f88a-dc0c-4bba-96bb-c69ea9c4c1ee")
-        self.assertEqual(snap["crucible_domain"]["doctor_summary"]["fail"], 0)
-        self.assertTrue(snap["session_telemetry"]["present"])
-        weakness_ids = {w["id"] for w in snap["known_weaknesses"]}
-        self.assertIn("GAP-HV4-NO-TESTS", weakness_ids)
+        with tempfile.TemporaryDirectory() as tmp:
+            gemini_dir = Path(tmp) / ".gemini"
+            cfg_dir = gemini_dir / "config"
+            (cfg_dir / "scripts").mkdir(parents=True)
+            (cfg_dir / "scripts" / "hook_v4.py").write_text("# stub\n", encoding="utf-8")
+            (cfg_dir / "hooks.json").write_text('{"h": {"enabled": false}}', encoding="utf-8")
+            (cfg_dir / "hooks.json.portable").write_text('{"h": {"enabled": true}}', encoding="utf-8")
+
+            brain = gemini_dir / "antigravity" / "brain" / "synthetic-session-001"
+            (brain / "inner-gravity-observations").mkdir(parents=True)
+            (brain / ".system_generated" / "logs").mkdir(parents=True)
+            (brain / "reliability-events.jsonl").write_text(
+                '{"stepIdx": 1, "tool": "read_file", "failed": false}\n', encoding="utf-8"
+            )
+            (brain / "inner-gravity-observations" / "r1.json").write_text(
+                '{"event": "stop", "model": "test-model"}\n', encoding="utf-8"
+            )
+            (brain / ".system_generated" / "logs" / "transcript.jsonl").write_text(
+                '{"type": "USER_INPUT"}\n', encoding="utf-8"
+            )
+
+            snap = collect_observatory.collect_snapshot(
+                REPO_ROOT,
+                gemini_dir=gemini_dir,
+                session_id="synthetic-session-001",
+            )
+            self.assertEqual(snap["crucible_domain"]["doctor_summary"]["fail"], 0)
+            self.assertTrue(snap["session_telemetry"]["present"])
+            self.assertEqual(snap["session_telemetry"]["reliability_events_total"], 1)
+            weakness_ids = {w["id"] for w in snap["known_weaknesses"]}
+            self.assertIn("GAP-HV4-NO-TESTS", weakness_ids)
+            self.assertIn("GAP-HOOKS-PORTABILITY", weakness_ids)
 
 
 if __name__ == "__main__":

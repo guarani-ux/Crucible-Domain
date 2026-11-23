@@ -783,10 +783,17 @@ def _probe_hook_command(cmd: str, cwd: Path, event_name: str) -> tuple[bool, str
     probe_payloads = {
         "SessionStart": json.dumps({"conversationId": "doctor-probe", "workspacePaths": [str(cwd)]}),
         "PreInvocation": json.dumps({"conversationId": "doctor-probe", "lastUserInput": "doctor health check"}),
+        "PreToolUse": json.dumps(
+            {
+                "conversationId": "doctor-probe",
+                "workspacePaths": [str(cwd)],
+                "toolCall": {"name": "read_file", "args": {"Path": str(cwd / "README.md")}},
+            }
+        ),
         "Stop": json.dumps({"terminationReason": "USER_CANCELED", "executionNum": 0}),
     }
     if event_name not in probe_payloads:
-        return True, "path exists (skipped live execution for tool hook)"
+        return True, "path exists (skipped live execution for PostToolUse)"
     proc = subprocess.run(
         cmd,
         cwd=cwd,
