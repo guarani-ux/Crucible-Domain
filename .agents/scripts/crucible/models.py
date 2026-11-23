@@ -153,8 +153,13 @@ CORE_ENTRY_DOCS: dict[str, tuple[str, str, str]] = {
     ),
     "CPL-PILOT-MAPS": (
         "Crucible x CPL Pilot & Calendar Maps (Planning Reference)",
-        "Project/Inner Gravity/overnight_mvp/cpl_pilot_maps.md",
-        "Historical planning reference for CPL pilot and content calendar maps inside Inner Gravity.",
+        "Archive/overnight_mvp/cpl_pilot_maps.md",
+        "Historical planning reference for CPL pilot and content calendar maps archived from Inner Gravity.",
+    ),
+    "TEST-PHIL": (
+        "Testing Philosophy & 4 Evidence Rungs",
+        "Knowledge/Testing_Philosophy.md",
+        "Four Evidence Rungs, 3 Non-Negotiable Test Laws, red-first/mutation kills, and Rung-3 planted-defect evals (K-TEST-01).",
     ),
 }
 
@@ -163,6 +168,10 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Media Agency/Skills and Workflows/README.md",
     "Knowledge/Media Agency/Media_Work_Routing.md",
     "Knowledge/Knowledge_Register.md",
+    "Knowledge/Testing_Philosophy.md",
+    "Calgary Public Library/GROUND_TRUTH.md",
+    "Project/Project_Register.md",
+    "Archive/README.md",
     "Graphs/GROUND_TRUTH.md",
     "Graphs/00_System_Atlas_and_Neon_Handoff.md",
 )

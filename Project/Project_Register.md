@@ -98,3 +98,16 @@ Record a stable project ID, title, purpose, domain, canonical link or exact sour
 | Library | Targeted title search found Story-Lane artifacts. | Review relevant contents and continue title discovery. A file's existence establishes availability through that route, not its claims. |
 | Drive and supplied record | Verified current Crucible Domain layout, Work Operating System project files, and read the supplied recap. | Review additional Drive folders and prior artifacts as needed. |
 | Employer and Slack records | Used the supplied recap and repository handoff as references for this intake. | Verify individual authorized sources read-only when a specific entry needs it. |
+
+---
+
+## Live Workspace Status Update · November 23, 2026
+
+> Preserves the original November 15 intake table above while recording live workspace implementations and superseded items as of November 23, 2026.
+
+| ID | Project or Deliverable | Observed State & Verified Artifacts | Next Decision / Action | Source |
+| :--- | :--- | :--- | :--- | :--- |
+| **P-INNER-GRAVITY** | Inner Gravity Harness & Observatory | Active workspace plugin upgraded to **`0.1.1`** (`check_artifact.py` live in `.agents/plugins/inner-gravity/`, `ig-evidence-review` aligned to `read_file`). Whole-system observatory and session `4188f88a` trace active. | Operator runs `apply_protected_fixes.ps1 -Force -SkipGlobalClean` to promote staged `AGENTS.md.ready` and `acceptance.lock.json.ready`. | [Project/Inner Gravity/README.md](Inner%20Gravity/README.md) · [05_Session_4188f88a_Causal_Trace_and_Gaps.md](Inner%20Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md) |
+| **P-CRUCIBLE-CIRCULATION** | Local RAM Index, Router & Gates | Active in `.agents/scripts/` (`crucible_index.py`, `crucible_gate.py`). `129` capabilities indexed in `<30 ms`; `SHIFTING_SAND` autonomous local-first intake + URL-scoped Asana guard tested. | Run `migrate_to_local_git.ps1 -Apply` between sessions to move `.git` off OneDrive/Drive (`.tmp.drive*`). | [README.md](../README.md) · [.agents/scripts/crucible_gate.py](../.agents/scripts/crucible_gate.py) |
+| **P-CPL-YOUTUBE** | Calgary Public Library Ground Truth & Pilot A | Canonical institutional baseline promoted to `Calgary Public Library/GROUND_TRUTH.md`. Completed audited 5-series YouTube pitch (`youtube-series-pitch/`) and Pilot A Ep 1 downstream execution + `CHG-01` test (`pilot-a-the-next-question-ep01/`). | Present pitch & confirm `[HOLD-01..05]` clearances (`G01`–`G06`) with CPL decision owners. | [Calgary Public Library/GROUND_TRUTH.md](../Calgary%20Public%20Library/GROUND_TRUTH.md) |
+| **Archive (Superseded)** | Retired Staging & Sprint Fossils | Moved `overnight_mvp/`, `System_Blueprint_v2*`, Nov 15 `install_pack/` zips/staging, and `MA-SPRINT-01` into `Archive/`. | Keep read-only; do not revive without explicit need. | [Archive/README.md](../Archive/README.md) |

@@ -5,11 +5,13 @@
 ## 1. Local-First Entry & RAM Capability Routing (`K-WOS-01`, `K-WOS-03`)
 Before proposing new folders, plans, or cross-project work, resolve what exists locally first:
 - Hub Overview: [README.md](README.md)
+- Canonical Calgary Public Library Ground Truth: [Calgary Public Library/GROUND_TRUTH.md](Calgary%20Public%20Library/GROUND_TRUTH.md)
+- Testing Philosophy & 4 Evidence Rungs (`K-TEST-01`): [Knowledge/Testing_Philosophy.md](Knowledge/Testing_Philosophy.md)
 - Active & Reviewed Projects: [Project/Project_Register.md](Project/Project_Register.md)
 - Cross-Project Findings & Limits: [Knowledge/Knowledge_Register.md](Knowledge/Knowledge_Register.md)
 - Historical System Exhibits: [Knowledge/Repository Archaeology/00-Exhibit_Index.md](Knowledge/Repository%20Archaeology/00-Exhibit_Index.md)
 - Media Agency Role Cards & Procedures (55): [Knowledge/Media Agency/Skills and Workflows/README.md](Knowledge/Media%20Agency/Skills%20and%20Workflows/README.md) · [Knowledge/Media Agency/Media_Work_Routing.md](Knowledge/Media%20Agency/Media_Work_Routing.md)
-- Work Operating System & 7-Graph Standard: [Project/Work Operating System/Work_Operating_System_Graph_Catalog.md](Project/Work%20Operating System/Work_Operating_System_Graph_Catalog.md)
+- Work Operating System & 7-Graph Standard: [Project/Work Operating System/Work_Operating_System_Graph_Catalog.md](Project/Work%20Operating%20System/Work_Operating_System_Graph_Catalog.md)
 - Antigravity Harness Self-Model: [Project/Inner Gravity/README.md](Project/Inner%20Gravity/README.md)
 
 Route any task, canonical ID (`MW-04`, `PROD-S`, `K-WOS-02`), or legacy ChatGPT `skill_id` in RAM (<100ms):
@@ -18,7 +20,11 @@ python ".agents/scripts/crucible_gate.py" route "<task or ID>"
 python ".agents/scripts/crucible_gate.py" doctor
 ```
 
-## 2. Work Operating System (`P-WOS`) & Boundary Rules
+## 2. Autonomous Local-First Intake & Pre-Finish Audit (`Push Right`)
+1. **Synthesize Before Asking:** When entering an empty or partial domain folder (`Calgary Public Library/`, `Personal Work/`), gather existing local ground truth first (`GROUND_TRUTH.md`, `Knowledge/`), tag reversible assumptions `[PROPOSED DEFAULT]` and missing facts `[UNKNOWN — OWNER TO CONFIRM]`, and execute end-to-end instead of stopping to quiz the operator.
+2. **Mandatory Pre-Finish Audit:** Run a read-only `ig-evidence-review` subagent pass before handing off consequential deliverables or release packets to verify exact sources, version custody, and authority bounds.
+
+## 3. Work Operating System (`P-WOS`) & Boundary Rules
 1. **Seven Graph Types:** Classify new graph views as capability inventory, reference process model, planning decision flow, plan dependency graph, execution and provenance trace, outcome map, or target system architecture.
 2. **Stable Record IDs (`K-SIDECAR-01`):** Use shared IDs (`P-*`, `K-*`, `A01..A10`, `MW/MP/MK/CD/CH/OP-*`) across registers, prose, and Mermaid nodes.
 3. **Blocking vs. Advisory Edges (`K-GRAPH-01`):** Use solid arrows (`-->`) for verified/blocking dependencies and dashed arrows (`-.->`) for advisory or unverified links.

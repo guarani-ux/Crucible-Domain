@@ -2,7 +2,9 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "inner-gravity",
   "displayName": "Inner Gravity",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Workspace-scoped agent routing, evidence review, recovery and improvement for Crucible Domain.",
-  "suggestedPrompts": ["Pick up Inner Gravity and tell me what can proceed."]
+  "suggestedPrompts": [
+    "Pick up Inner Gravity and tell me what can proceed."
+  ]
 }
