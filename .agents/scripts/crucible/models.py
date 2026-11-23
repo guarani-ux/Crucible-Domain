@@ -136,6 +136,26 @@ CORE_ENTRY_DOCS: dict[str, tuple[str, str, str]] = {
         "Project/Inner Gravity/README.md",
         "Seven-graph map, install_pack specs, and verification evidence for Antigravity inside Crucible Domain.",
     ),
+    "CRUCIBLE-ATLAS": (
+        "Crucible Domain System Atlas & Neon Handoff",
+        "Graphs/00_System_Atlas_and_Neon_Handoff.md",
+        "O(1) file-to-purpose lookup table, capability atlas, and cross-domain entry point.",
+    ),
+    "CRUCIBLE-AUDIT": (
+        "Crucible Coupling & Reachability Audit",
+        "Graphs/02_Coupling_and_Reachability_Audit.md",
+        "Over-coupled, under-coupled, and misplaced component ledger across Crucible Domain.",
+    ),
+    "IG-OBS": (
+        "Inner Gravity Whole-System Observatory & Causal Trace",
+        "Project/Inner Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md",
+        "Live observatory topology, session 4188f88a causal trace, and honest weakness ledger.",
+    ),
+    "CPL-PILOT-MAPS": (
+        "Crucible x CPL Pilot & Calendar Maps (Planning Reference)",
+        "Project/Inner Gravity/overnight_mvp/cpl_pilot_maps.md",
+        "Historical planning reference for CPL pilot and content calendar maps inside Inner Gravity.",
+    ),
 }
 
 CANONICAL_LOCAL_FIRST_FILES = (
@@ -143,6 +163,8 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Media Agency/Skills and Workflows/README.md",
     "Knowledge/Media Agency/Media_Work_Routing.md",
     "Knowledge/Knowledge_Register.md",
+    "Graphs/GROUND_TRUTH.md",
+    "Graphs/00_System_Atlas_and_Neon_Handoff.md",
 )
 
 EXHIBIT_LESSON_LINKS: dict[str, tuple[str, ...]] = {
@@ -486,7 +508,7 @@ class DiagnosticFinding:
     """Single closed-loop verification finding from run_doctor."""
 
     category: str
-    severity: str  # PASS | WARN | FAIL
+    severity: str  # PASS | WARN | FAIL | INFO
     subject: str
     detail: str
     remediation: str = ""

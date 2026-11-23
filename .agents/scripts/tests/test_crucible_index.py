@@ -85,6 +85,11 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             agents_dir.mkdir(parents=True)
             shutil.copy2(SCRIPTS_DIR / "crucible_gate.py", agents_dir / "crucible_gate.py")
             shutil.copy2(SCRIPTS_DIR / "crucible_index.py", agents_dir / "crucible_index.py")
+            shutil.copytree(
+                SCRIPTS_DIR / "crucible",
+                agents_dir / "crucible",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
             (repo / "IDEAS.md").write_text("# Ledger\n\n## Stage 4: Active (WIP <= 1)\n(empty)\n", encoding="utf-8")
 
             # 1. Broken cwd path ('.agents/scripts/...' evaluated inside '.agents/')
@@ -717,6 +722,84 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertIsNotNone(m_prim)
         assert m_prim is not None
         self.assertGreaterEqual(int(m_prim.group(1)), 12)
+
+    def test_graphs_and_pilot_docs_route_by_id_and_lexical(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+
+        atlas_exact = crucible_index.route_query(idx, "CRUCIBLE-ATLAS")
+        self.assertFalse(atlas_exact.abstained)
+        self.assertEqual(atlas_exact.match_mode, "exact")
+        self.assertEqual(atlas_exact.matches[0].entry.id, "CRUCIBLE-ATLAS")
+        self.assertEqual(atlas_exact.matches[0].entry.path, "Graphs/00_System_Atlas_and_Neon_Handoff.md")
+
+        atlas_lex = crucible_index.route_query(idx, "system atlas")
+        self.assertFalse(atlas_lex.abstained)
+        self.assertEqual(atlas_lex.match_mode, "lexical")
+        self.assertEqual(atlas_lex.matches[0].entry.path, "Graphs/00_System_Atlas_and_Neon_Handoff.md")
+
+        audit_exact = crucible_index.route_query(idx, "CRUCIBLE-AUDIT")
+        self.assertFalse(audit_exact.abstained)
+        self.assertEqual(audit_exact.matches[0].entry.path, "Graphs/02_Coupling_and_Reachability_Audit.md")
+
+        obs_exact = crucible_index.route_query(idx, "IG-OBS")
+        self.assertFalse(obs_exact.abstained)
+        self.assertEqual(
+            obs_exact.matches[0].entry.path,
+            "Project/Inner Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md",
+        )
+
+        pilot_exact = crucible_index.route_query(idx, "CPL-PILOT-MAPS")
+        self.assertFalse(pilot_exact.abstained)
+        self.assertEqual(pilot_exact.match_mode, "exact")
+        self.assertTrue(pilot_exact.matches[0].entry.path.endswith("cpl_pilot_maps.md"))
+
+    def test_doctor_portability_info_and_graphs_broken_link_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            (repo / "Graphs").mkdir(parents=True)
+            (repo / "Graphs" / "00_System_Atlas_and_Neon_Handoff.md").write_text("# Atlas\n", encoding="utf-8")
+            (repo / "Graphs" / "GROUND_TRUTH.md").write_text(
+                "# Ground Truth\nSee [Atlas](./00_System_Atlas_and_Neon_Handoff.md).\n",
+                encoding="utf-8",
+            )
+            missing_global = tmp_path / "absent_global_config"
+
+            report = crucible_index.run_doctor(repo, global_config_dir=missing_global, execute_hooks=False)
+            self.assertTrue(report.ok, [f.to_dict() for f in report.findings])
+            self.assertEqual(report.fail_count, 0)
+            info_findings = [
+                f for f in report.findings if f.category == "portability" and f.severity == "INFO"
+            ]
+            self.assertEqual(len(info_findings), 1)
+            self.assertEqual(info_findings[0].subject, str(missing_global))
+            self.assertIn("global config dir absent", info_findings[0].detail)
+            self.assertEqual(
+                report.warn_count,
+                sum(1 for f in report.findings if f.severity == "WARN"),
+            )
+            self.assertEqual(
+                report.pass_count,
+                sum(1 for f in report.findings if f.severity == "PASS"),
+            )
+            rendered = crucible_index._format_doctor_text(report)
+            self.assertIn("[INFO] portability", rendered)
+
+            # Negative path: broken relative Markdown link inside Graphs/GROUND_TRUTH.md must FAIL.
+            (repo / "Graphs" / "GROUND_TRUTH.md").write_text(
+                "# Ground Truth\nBroken [Missing Target](./missing_target.md).\n",
+                encoding="utf-8",
+            )
+            bad_report = crucible_index.run_doctor(repo, global_config_dir=missing_global, execute_hooks=False)
+            self.assertFalse(bad_report.ok)
+            self.assertGreaterEqual(bad_report.fail_count, 1)
+            link_fails = [
+                f
+                for f in bad_report.findings
+                if f.category == "links" and f.severity == "FAIL" and f.subject == "Graphs/GROUND_TRUTH.md"
+            ]
+            self.assertEqual(len(link_fails), 1)
+            self.assertIn("missing_target.md", link_fails[0].detail)
 
 
 if __name__ == "__main__":

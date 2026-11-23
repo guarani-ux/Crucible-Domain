@@ -81,8 +81,18 @@ def _audit_hooks(
     plugins_dir = root / ".agents" / "plugins"
     if plugins_dir.is_dir():
         hook_files.extend(sorted(plugins_dir.glob("*/hooks.json")))
-    if global_config_dir and (global_config_dir / "hooks.json").is_file():
-        hook_files.append(global_config_dir / "hooks.json")
+    if global_config_dir is not None:
+        if not global_config_dir.is_dir():
+            findings.append(
+                DiagnosticFinding(
+                    category="portability",
+                    severity="INFO",
+                    subject=str(global_config_dir),
+                    detail="global config dir absent; workspace-only hook audit ran",
+                )
+            )
+        elif (global_config_dir / "hooks.json").is_file():
+            hook_files.append(global_config_dir / "hooks.json")
 
     counts = {"checked": 0, "failed": 0, "disabled": 0}
     crucible_wired_events: set[str] = set()
