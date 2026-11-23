@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import collections
 import hashlib
 import json
@@ -24,6 +25,20 @@ def _sha256_prefix(path: Path) -> str | None:
     if not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
+def _count_test_functions(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), filename=str(path))
+    except (OSError, SyntaxError):
+        return 0
+    return sum(
+        1
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_")
+    )
 
 
 def _git_head(repo: Path) -> str | None:
@@ -139,12 +154,22 @@ def collect_snapshot(
             pass
 
     weaknesses: list[dict[str, str]] = []
-    if hv4_path.is_file() and not (cfg_dir / "scripts" / "tests" / "test_hook_v4.py").is_file():
+    hv4_tests = cfg_dir / "scripts" / "tests" / "test_hook_v4.py"
+    hv4_test_count = _count_test_functions(hv4_tests)
+    if hv4_path.is_file() and hv4_test_count == 0:
         weaknesses.append(
             {
                 "id": "GAP-HV4-NO-TESTS",
                 "component": "hook_v4.py",
                 "detail": f"{len(hv4_path.read_text(encoding='utf-8', errors='replace').splitlines())} lines with 0 unit tests.",
+            }
+        )
+    elif hv4_path.is_file() and hv4_test_count < 10:
+        weaknesses.append(
+            {
+                "id": "GAP-HV4-THIN-TESTS",
+                "component": "hook_v4.py",
+                "detail": f"test_hook_v4.py has {hv4_test_count} test(s) (<10 depth threshold for hook_v4 enforcement surface).",
             }
         )
     if live_hooks.is_file() and portable_hooks.is_file() and _sha256_prefix(live_hooks) != _sha256_prefix(portable_hooks):
@@ -191,8 +216,11 @@ def collect_snapshot(
             "gemini_md_sha12": _sha256_prefix(live_gemini_md),
             "repo_gemini_md_sha12": _sha256_prefix(repo_gemini_md),
             "hooks_in_sync_with_portable": _sha256_prefix(live_hooks) == _sha256_prefix(portable_hooks),
-            "hook_v4_has_unit_tests": (cfg_dir / "scripts" / "tests" / "test_hook_v4.py").is_file(),
+            "hook_v4_has_unit_tests": hv4_tests.is_file(),
+            "hook_v4_test_count": hv4_test_count,
             "operator_router_has_unit_tests": (cfg_dir / "scripts" / "tests" / "test_operator_router.py").is_file(),
+            "operator_router_eval_present": (cfg_dir / "scripts" / "eval_router.py").is_file(),
+            "test_quality_gate_present": (cfg_dir / "scripts" / "test_quality_gate.py").is_file(),
             "external_skill_roots": external_skill_roots,
         },
         "session_telemetry": _collect_session_telemetry(brain_dir, session_id),

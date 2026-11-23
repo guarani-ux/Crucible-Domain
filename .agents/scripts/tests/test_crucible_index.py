@@ -241,8 +241,114 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             self.assertTrue(snap["session_telemetry"]["present"])
             self.assertEqual(snap["session_telemetry"]["reliability_events_total"], 1)
             weakness_ids = {w["id"] for w in snap["known_weaknesses"]}
+            self.assertEqual(snap["antigravity_host"]["hook_v4_test_count"], 0)
             self.assertIn("GAP-HV4-NO-TESTS", weakness_ids)
             self.assertIn("GAP-HOOKS-PORTABILITY", weakness_ids)
+
+            tests_dir = cfg_dir / "scripts" / "tests"
+            tests_dir.mkdir(parents=True)
+            hv4_test_file = tests_dir / "test_hook_v4.py"
+            hv4_test_file.write_text(
+                "\n".join(f"def test_case_{i}():\n    assert 1 + {i} != 99\n" for i in range(2)),
+                encoding="utf-8",
+            )
+            snap_thin = collect_observatory.collect_snapshot(
+                REPO_ROOT,
+                gemini_dir=gemini_dir,
+                session_id="synthetic-session-001",
+            )
+            thin_ids = {w["id"] for w in snap_thin["known_weaknesses"]}
+            self.assertEqual(snap_thin["antigravity_host"]["hook_v4_test_count"], 2)
+            self.assertNotIn("GAP-HV4-NO-TESTS", thin_ids)
+            self.assertIn("GAP-HV4-THIN-TESTS", thin_ids)
+
+            hv4_test_file.write_text(
+                "\n".join(f"def test_case_{i}():\n    assert 1 + {i} != 99\n" for i in range(10)),
+                encoding="utf-8",
+            )
+            snap_deep = collect_observatory.collect_snapshot(
+                REPO_ROOT,
+                gemini_dir=gemini_dir,
+                session_id="synthetic-session-001",
+            )
+            deep_ids = {w["id"] for w in snap_deep["known_weaknesses"]}
+            self.assertEqual(snap_deep["antigravity_host"]["hook_v4_test_count"], 10)
+            self.assertNotIn("GAP-HV4-NO-TESTS", deep_ids)
+            self.assertNotIn("GAP-HV4-THIN-TESTS", deep_ids)
+
+    def test_exhibits_parse_mechanisms_breakpoints_and_transfers(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        exhibits = [e for e in idx.entries.values() if e.kind == "exhibit"]
+        self.assertEqual(len(exhibits), 10)
+        for ex in exhibits:
+            self.assertTrue(ex.mechanisms.strip(), f"{ex.id} missing mechanisms")
+            self.assertTrue(ex.breakpoints.strip(), f"{ex.id} missing breakpoints")
+            self.assertTrue(ex.transfers.strip(), f"{ex.id} missing transfers")
+
+    def test_forge_brief_surfaces_checkpoint_prior_art_and_k_arch_01(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        brief = crucible_index.forge_brief(idx, "build a resilient sqlite checkpoint resume engine for failed steps")
+        self.assertFalse(brief.abstained)
+        exhibit_ids = {p["id"] for p in brief.prior_systems}
+        lesson_ids = {k["id"] for k in brief.governing_lessons}
+        self.assertIn("A09", exhibit_ids)
+        self.assertIn("K-ARCH-01", lesson_ids)
+        self.assertTrue(any("[K-ARCH-01 / A09]" in r for r in brief.verification_requirements))
+
+    def test_forge_brief_surfaces_retrieval_sidecar_and_k_arch_02(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        brief = crucible_index.forge_brief(idx, "build a knowledge retrieval sidecar for prior lessons and schema replay")
+        self.assertFalse(brief.abstained)
+        exhibit_ids = {p["id"] for p in brief.prior_systems}
+        lesson_ids = {k["id"] for k in brief.governing_lessons}
+        self.assertIn("A06", exhibit_ids)
+        self.assertIn("K-ARCH-02", lesson_ids)
+        self.assertIn("K-SIDECAR-01", lesson_ids)
+        self.assertTrue(any("[K-ARCH-02 / A04 / A06]" in r for r in brief.verification_requirements))
+
+    def test_forge_brief_abstains_on_noise_while_keeping_tq_floor(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        brief = crucible_index.forge_brief(idx, "quantum espresso banana smoothie recipe")
+        self.assertTrue(brief.abstained)
+        self.assertEqual(brief.existing_projects, [])
+        self.assertEqual(brief.prior_systems, [])
+        self.assertEqual(brief.governing_lessons, [])
+        self.assertEqual(brief.procedures_and_roles, [])
+        self.assertTrue(any("[TQ-01..TQ-05]" in r for r in brief.verification_requirements))
+
+    def test_cli_forge_subcommand_json_and_missing_arg_rejection(self) -> None:
+        proc_ok = subprocess.run(
+            [
+                sys.executable,
+                str(GATE_SCRIPT),
+                "--root",
+                str(REPO_ROOT),
+                "forge",
+                "--json",
+                "--no-global",
+                "checkpoint resume workflow",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(proc_ok.returncode, 0, proc_ok.stderr)
+        data = json.loads(proc_ok.stdout)
+        self.assertIn("prior_systems", data)
+        self.assertIn("governing_lessons", data)
+        self.assertIn("verification_requirements", data)
+
+        proc_missing = subprocess.run(
+            [sys.executable, str(GATE_SCRIPT), "--root", str(REPO_ROOT), "forge"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(proc_missing.returncode, 2)
 
 
 if __name__ == "__main__":

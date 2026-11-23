@@ -151,14 +151,14 @@ def _build_system_map(root: Path = ROOT) -> str:
     active_wip = _extract_active_wip(root / "IDEAS.md")
     install_status = _check_local_install_and_plugins(root)
 
-    cap_line = 'Route capabilities: python ".agents/scripts/crucible_gate.py" route "<task or ID>" | Health: doctor'
+    cap_line = 'Route/Forge: python ".agents/scripts/crucible_gate.py" route|forge "<task or problem>" | Health: doctor'
     try:
         idx = _resolve_index_module().build_index(root)
         counts = idx.counts_by_kind
         cap_line = (
             f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
             f"roles={counts.get('role', 0)}, knowledge={counts.get('knowledge', 0)}, "
-            f"skills={counts.get('skill', 0)} | route \"<task/ID>\" | doctor"
+            f"skills={counts.get('skill', 0)} | route \"<task/ID>\" | forge \"<problem>\" | doctor"
         )
     except Exception:
         pass
@@ -582,6 +582,18 @@ def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bo
     return 0
 
 
+def cmd_forge(root: Path, problem_parts: list[str], *, top_k: int = 4, as_json: bool = False, no_global: bool = False) -> int:
+    if not problem_parts:
+        print("usage: crucible_gate.py forge <problem description>", file=sys.stderr)
+        return 2
+    ci = _resolve_index_module()
+    global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
+    idx = ci.build_index(root, global_config_dir=global_dir)
+    brief = ci.forge_brief(idx, " ".join(problem_parts), top_k=top_k)
+    print(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_forge_text(brief))
+    return 0
+
+
 def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, skip_exec: bool = False) -> int:
     ci = _resolve_index_module()
     global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
@@ -600,13 +612,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop", "route", "doctor"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop", "route", "forge", "doctor"),
         help="Gate action to execute.",
     )
-    parser.add_argument("query", nargs="*", help="Query tokens or ID for 'route'.")
-    parser.add_argument("--top", type=int, default=5, help="Max matches for 'route'.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route' or 'doctor'.")
-    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
+    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route' or problem description for 'forge'.")
+    parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route' or 'forge'.")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'forge', or 'doctor'.")
+    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -621,6 +633,14 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_stop(root)
     if args.subcommand == "route":
         return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
+    if args.subcommand == "forge":
+        return cmd_forge(
+            root,
+            args.query,
+            top_k=4 if args.top == 5 else args.top,
+            as_json=args.json,
+            no_global=args.no_global,
+        )
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
     return cmd_check(root)

@@ -154,6 +154,18 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Knowledge_Register.md",
 )
 
+EXHIBIT_LESSON_LINKS: dict[str, tuple[str, ...]] = {
+    "A02": ("K-ARCH-03",),
+    "A03": ("K-WOS-03",),
+    "A04": ("K-ARCH-02",),
+    "A05": ("K-WOS-03",),
+    "A06": ("K-SIDECAR-01", "K-ARCH-02"),
+    "A07": ("K-STORY-01",),
+    "A08": ("K-WOS-03",),
+    "A09": ("K-ARCH-01",),
+    "A10": ("K-ARCH-03", "K-WOS-03"),
+}
+
 PROC_HEADING_RE = re.compile(r"^#{1,4}\s+((?:MW|MP|MK|CD|CH|OP)-\d+)\b[:\s·—-]*(.*)$")
 TABLE_ROW_RE = re.compile(r"^\|\s*([KPAC]-\S+?)\s*\|\s*(.*)$")
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -176,6 +188,10 @@ class CapabilityEntry:
     use_when: str = ""
     related_ids: tuple[str, ...] = ()
     reachability: str = "local"  # local | slash_only | host_global
+    mechanisms: str = ""
+    breakpoints: str = ""
+    transfers: str = ""
+    limit_or_action: str = ""
 
 
 @dataclass(frozen=True)
@@ -427,6 +443,7 @@ def _index_markdown_table(
             continue
         title = cells[0][:140]
         use_when = cells[1][:220] if len(cells) > 1 else ""
+        limit_or_action = cells[2][:260] if len(cells) > 2 else ""
         summary = " · ".join(cells[:3])[:320]
         _add_entry(
             entries,
@@ -441,8 +458,49 @@ def _index_markdown_table(
                 summary=summary,
                 use_when=use_when,
                 reachability="local",
+                limit_or_action=limit_or_action,
             ),
         )
+
+
+def _parse_exhibit_sections(text: str) -> dict[str, str]:
+    """Extract mechanisms, breakpoints, and transfers from an archaeology exhibit's 3 sections."""
+    sections: list[list[str]] = []
+    current: list[str] | None = None
+    in_fence = False
+    for raw in text.splitlines():
+        st = raw.strip()
+        if st.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if st.startswith("## "):
+            if current is not None:
+                sections.append(current)
+            current = []
+        elif current is not None and not st.startswith("### "):
+            if st:
+                current.append(st)
+    if current is not None:
+        sections.append(current)
+
+    def clean_section(sec_lines: list[str]) -> str:
+        kept: list[str] = []
+        for idx, line in enumerate(sec_lines):
+            if line.startswith("| ---"):
+                continue
+            if line.startswith("|") and idx + 1 < len(sec_lines) and sec_lines[idx + 1].startswith("| ---"):
+                continue
+            kept.append(line)
+        joined = re.sub(r"\s*\|\s*", " · ", " ".join(kept))
+        return _strip_md(joined)
+
+    return {
+        "mechanisms": clean_section(sections[0])[:500] if len(sections) >= 1 else "",
+        "breakpoints": clean_section(sections[1])[:600] if len(sections) >= 2 else "",
+        "transfers": clean_section(sections[2])[:600] if len(sections) >= 3 else "",
+    }
 
 
 def _index_exhibits(root: Path, entries: dict[str, CapabilityEntry], alias_map: dict[str, str]) -> None:
@@ -456,13 +514,15 @@ def _index_exhibits(root: Path, entries: dict[str, CapabilityEntry], alias_map: 
         if not num_match:
             continue
         exhibit_id = f"A{num_match.group(1)}"
-        lines = md_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        full_text = md_file.read_text(encoding="utf-8", errors="replace")
+        lines = full_text.splitlines()
         title = num_match.group(2)
         for line in lines:
             if line.strip().startswith("# "):
                 title = _strip_md(line.strip()[2:])
                 break
         summary = _strip_md(" ".join(ln.strip() for ln in lines[1:8] if ln.strip()))[:300]
+        sections = _parse_exhibit_sections(full_text)
         _add_entry(
             entries,
             alias_map,
@@ -474,7 +534,11 @@ def _index_exhibits(root: Path, entries: dict[str, CapabilityEntry], alias_map: 
                 line=1,
                 domain="archaeology",
                 summary=summary,
+                related_ids=EXHIBIT_LESSON_LINKS.get(exhibit_id, ()),
                 reachability="local",
+                mechanisms=sections["mechanisms"],
+                breakpoints=sections["breakpoints"],
+                transfers=sections["transfers"],
             ),
         )
 
@@ -654,6 +718,80 @@ def _extract_chatgpt_skill_id(query: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
+@dataclass(frozen=True)
+class ForgeBrief:
+    """In-RAM prior-art, lesson, project-home, and falsifiable verification synthesis for building new systems."""
+
+    problem: str
+    abstained: bool
+    reason: str
+    build_ms: float
+    existing_projects: list[dict[str, Any]]
+    prior_systems: list[dict[str, Any]]
+    governing_lessons: list[dict[str, Any]]
+    procedures_and_roles: list[dict[str, Any]]
+    verification_requirements: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _score_entries(
+    index: CapabilityIndex,
+    q_tokens: list[str],
+    *,
+    min_score: float = 1.5,
+    include_deep_fields: bool = False,
+) -> list[RouteMatch]:
+    doc_tokens_map: dict[str, tuple[set[str], set[str], set[str]]] = {}
+    df: dict[str, int] = {}
+    for eid, entry in index.entries.items():
+        title_toks = set(_tokenize(f"{entry.id} {entry.title}"))
+        use_toks = set(_tokenize(f"{entry.use_when} {entry.domain} {entry.kind}"))
+        body_source = (
+            f"{entry.summary} {entry.mechanisms} {entry.breakpoints} {entry.transfers} {entry.limit_or_action}"
+            if include_deep_fields
+            else entry.summary
+        )
+        body_toks = set(_tokenize(body_source))
+        doc_tokens_map[eid] = (title_toks, use_toks, body_toks)
+        for tok in title_toks | use_toks | body_toks:
+            df[tok] = df.get(tok, 0) + 1
+
+    n_docs = max(1, len(index.entries))
+    q_unique = set(q_tokens)
+    scored: list[RouteMatch] = []
+    for eid, entry in index.entries.items():
+        title_toks, use_toks, body_toks = doc_tokens_map[eid]
+        score = 0.0
+        hit_tokens: list[str] = []
+        for qtok in q_unique:
+            idf = math.log(1.0 + (n_docs - df.get(qtok, 0) + 0.5) / (df.get(qtok, 0) + 0.5))
+            weight = 0.0
+            if qtok in title_toks:
+                weight += 3.0
+            if qtok in use_toks:
+                weight += 2.0
+            if qtok in body_toks:
+                weight += 1.0
+            if weight > 0:
+                score += idf * min(weight, 4.0)
+                hit_tokens.append(qtok)
+        if score > 0 and entry.kind == "procedure" and len(hit_tokens) >= 2:
+            score += 0.5
+        if score >= min_score:
+            scored.append(
+                RouteMatch(
+                    entry=entry,
+                    score=score,
+                    matched_via="tokens:" + ",".join(sorted(hit_tokens)),
+                )
+            )
+
+    scored.sort(key=lambda m: (-m.score, m.entry.kind != "procedure", m.entry.id))
+    return scored
+
+
 def route_query(
     index: CapabilityIndex,
     query: str,
@@ -713,46 +851,7 @@ def route_query(
             matches=[],
         )
 
-    doc_tokens_map: dict[str, tuple[set[str], set[str], set[str]]] = {}
-    df: dict[str, int] = {}
-    for eid, entry in index.entries.items():
-        title_toks = set(_tokenize(f"{entry.id} {entry.title}"))
-        use_toks = set(_tokenize(f"{entry.use_when} {entry.domain} {entry.kind}"))
-        body_toks = set(_tokenize(entry.summary))
-        doc_tokens_map[eid] = (title_toks, use_toks, body_toks)
-        for tok in title_toks | use_toks | body_toks:
-            df[tok] = df.get(tok, 0) + 1
-
-    n_docs = max(1, len(index.entries))
-    scored: list[RouteMatch] = []
-    for eid, entry in index.entries.items():
-        title_toks, use_toks, body_toks = doc_tokens_map[eid]
-        score = 0.0
-        hit_tokens: list[str] = []
-        for qtok in set(q_tokens):
-            idf = math.log(1.0 + (n_docs - df.get(qtok, 0) + 0.5) / (df.get(qtok, 0) + 0.5))
-            weight = 0.0
-            if qtok in title_toks:
-                weight += 3.0
-            if qtok in use_toks:
-                weight += 2.0
-            if qtok in body_toks:
-                weight += 1.0
-            if weight > 0:
-                score += idf * min(weight, 4.0)
-                hit_tokens.append(qtok)
-        if score > 0 and entry.kind == "procedure" and len(hit_tokens) >= 2:
-            score += 0.5
-        if score >= min_score:
-            scored.append(
-                RouteMatch(
-                    entry=entry,
-                    score=score,
-                    matched_via="tokens:" + ",".join(sorted(hit_tokens)),
-                )
-            )
-
-    scored.sort(key=lambda m: (-m.score, m.entry.kind != "procedure", m.entry.id))
+    scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=False)
     top_matches = scored[:top_k]
     if not top_matches:
         return RouteResult(
@@ -769,6 +868,179 @@ def route_query(
         abstained=False,
         reason=f"Matched {len(top_matches)} local capability item(s) in {index.build_ms:.1f}ms.",
         matches=top_matches,
+    )
+
+
+def _build_verification_requirements(matched_ids: set[str]) -> list[str]:
+    reqs = [
+        "[TQ-01..TQ-05] Enforce real assertions (no assert True / x == x), no unconditional skips, "
+        "no hardcoded user paths or session UUIDs, live execution tests, and at least one negative/failure-path test."
+    ]
+    if matched_ids & {"A09", "K-ARCH-01"}:
+        reqs.append(
+            "[K-ARCH-01 / A09] Add a resume fixture where a prerequisite step FAILED and assert downstream steps "
+            "do not execute or report COMPLETED."
+        )
+    if matched_ids & {"A04", "A06", "K-ARCH-02"}:
+        reqs.append(
+            "[K-ARCH-02 / A04 / A06] Run a counterfactual baseline comparison and an out-of-domain abstention probe; "
+            "record neutral results honestly."
+        )
+    if matched_ids & {"A06", "K-SIDECAR-01"}:
+        reqs.append(
+            "[K-SIDECAR-01 / A06] Add a schema-key mismatch / zero-row silent-loss regression test and verify source "
+            "identity is preserved across views."
+        )
+    if matched_ids & {"A02", "A03", "A10", "K-ARCH-03"}:
+        reqs.append(
+            "[K-ARCH-03 / A02 / A03 / A10] Bind receipts and pass claims to exact revision, cwd, and executed test "
+            "output; reject cross-operation replay."
+        )
+    if matched_ids & {"A07", "K-STORY-01"}:
+        reqs.append(
+            "[K-STORY-01 / A07] Verify outputs trace to verified source transcripts/locators and explicitly mark "
+            "missing or unverified items."
+        )
+    if matched_ids & {"WOS-GRAPH", "K-GRAPH-01"}:
+        reqs.append(
+            "[K-GRAPH-01] Distinguish verified blocking edges (-->) from advisory or unverified links (-.->)."
+        )
+    return reqs
+
+
+def forge_brief(
+    index: CapabilityIndex,
+    problem: str,
+    *,
+    top_k: int = 4,
+    min_score: float = 1.5,
+) -> ForgeBrief:
+    """Synthesize prior systems, failure breakpoints, governing lessons, existing homes, and test floors in RAM."""
+    q_tokens = _tokenize(problem)
+    if not problem.strip() or not q_tokens:
+        return ForgeBrief(
+            problem=problem,
+            abstained=True,
+            reason="Empty or non-domain problem statement; apply TQ-01..TQ-05 baseline checks.",
+            build_ms=round(index.build_ms, 2),
+            existing_projects=[],
+            prior_systems=[],
+            governing_lessons=[],
+            procedures_and_roles=[],
+            verification_requirements=_build_verification_requirements(set()),
+        )
+
+    scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=True)
+    existing_projects: list[dict[str, Any]] = []
+    prior_systems: list[dict[str, Any]] = []
+    governing_lessons: list[dict[str, Any]] = []
+    procedures_and_roles: list[dict[str, Any]] = []
+
+    for m in scored:
+        e = m.entry
+        sc = round(m.score, 3)
+        if e.kind == "project" and len(existing_projects) < top_k:
+            existing_projects.append(
+                {
+                    "id": e.id,
+                    "title": e.title,
+                    "path": e.path,
+                    "line": e.line,
+                    "score": sc,
+                    "matched_via": m.matched_via,
+                    "summary": e.summary,
+                    "next_point": e.limit_or_action,
+                }
+            )
+        elif e.kind == "exhibit" and len(prior_systems) < top_k:
+            prior_systems.append(
+                {
+                    "id": e.id,
+                    "title": e.title,
+                    "path": e.path,
+                    "score": sc,
+                    "matched_via": m.matched_via,
+                    "mechanisms": e.mechanisms,
+                    "breakpoints": e.breakpoints,
+                    "transfers": e.transfers,
+                }
+            )
+        elif e.kind == "knowledge" and len(governing_lessons) < top_k:
+            governing_lessons.append(
+                {
+                    "id": e.id,
+                    "title": e.title,
+                    "path": e.path,
+                    "line": e.line,
+                    "score": sc,
+                    "matched_via": m.matched_via,
+                    "summary": e.summary,
+                    "use_when": e.use_when,
+                    "limit_or_action": e.limit_or_action,
+                }
+            )
+        elif e.kind in ("procedure", "role", "skill", "doc") and len(procedures_and_roles) < top_k:
+            procedures_and_roles.append(
+                {
+                    "id": e.id,
+                    "kind": e.kind,
+                    "title": e.title,
+                    "path": e.path,
+                    "line": e.line,
+                    "score": sc,
+                    "matched_via": m.matched_via,
+                    "summary": e.summary,
+                }
+            )
+
+    seen_lessons = {item["id"] for item in governing_lessons}
+    for ex_item in prior_systems:
+        ex_entry = index.entries.get(ex_item["id"])
+        if ex_entry is None:
+            continue
+        for rel_id in ex_entry.related_ids:
+            if rel_id in seen_lessons or rel_id not in index.entries:
+                continue
+            k_entry = index.entries[rel_id]
+            if k_entry.kind != "knowledge":
+                continue
+            seen_lessons.add(rel_id)
+            governing_lessons.append(
+                {
+                    "id": k_entry.id,
+                    "title": k_entry.title,
+                    "path": k_entry.path,
+                    "line": k_entry.line,
+                    "score": ex_item["score"],
+                    "matched_via": f"linked_from:{ex_item['id']}",
+                    "summary": k_entry.summary,
+                    "use_when": k_entry.use_when,
+                    "limit_or_action": k_entry.limit_or_action,
+                }
+            )
+
+    abstained = not (existing_projects or prior_systems or governing_lessons or procedures_and_roles)
+    matched_ids = (
+        {p["id"] for p in existing_projects}
+        | {p["id"] for p in prior_systems}
+        | {k["id"] for k in governing_lessons}
+        | {r["id"] for r in procedures_and_roles}
+    )
+    reason = (
+        f"No Crucible project, exhibit, lesson, or procedure reached threshold ({min_score}); abstaining cleanly while keeping universal verification floor."
+        if abstained
+        else f"Synthesized {len(existing_projects)} project(s), {len(prior_systems)} exhibit(s), {len(governing_lessons)} lesson(s), and {len(procedures_and_roles)} procedure/role(s) in {index.build_ms:.1f}ms."
+    )
+    return ForgeBrief(
+        problem=problem,
+        abstained=abstained,
+        reason=reason,
+        build_ms=round(index.build_ms, 2),
+        existing_projects=existing_projects,
+        prior_systems=prior_systems,
+        governing_lessons=governing_lessons,
+        procedures_and_roles=procedures_and_roles,
+        verification_requirements=_build_verification_requirements(matched_ids),
     )
 
 
@@ -1173,6 +1445,42 @@ def _format_route_text(result: RouteResult) -> str:
     return "\n".join(lines)
 
 
+def _format_forge_text(brief: ForgeBrief) -> str:
+    lines = [
+        f"Crucible Forge Brief ({'ABSTAINED' if brief.abstained else 'GROUNDED'} in {brief.build_ms}ms)",
+        f"Problem: {brief.problem}",
+        f"Status: {brief.reason}",
+    ]
+    if brief.existing_projects:
+        lines.append("\n1. Existing Project Homes (anti-duplication check):")
+        for p in brief.existing_projects:
+            lines.append(f"  - {p['id']}: {p['title']} (score={p['score']}, {p['path']}:{p['line']})")
+            if p["next_point"]:
+                lines.append(f"    Next point: {p['next_point']}")
+    if brief.prior_systems:
+        lines.append("\n2. Prior Systems & Known Breakpoints (Archaeology A01..A10):")
+        for s in brief.prior_systems:
+            lines.append(f"  - {s['id']}: {s['title']} (score={s['score']}, {s['path']})")
+            if s["breakpoints"]:
+                lines.append(f"    Breakpoint: {s['breakpoints'][:220]}")
+            if s["transfers"]:
+                lines.append(f"    Carry forward: {s['transfers'][:220]}")
+    if brief.governing_lessons:
+        lines.append("\n3. Governing Knowledge Lessons (K-*):")
+        for k in brief.governing_lessons:
+            lines.append(f"  - {k['id']} ({k['matched_via']}): {k['title']} ({k['path']}:{k['line']})")
+            if k["limit_or_action"]:
+                lines.append(f"    Limit/Action: {k['limit_or_action']}")
+    if brief.procedures_and_roles:
+        lines.append("\n4. Local Procedures, Roles & Skills:")
+        for r in brief.procedures_and_roles:
+            lines.append(f"  - {r['id']} ({r['kind']}, score={r['score']}): {r['title']} ({r['path']}:{r['line']})")
+    lines.append("\n5. Mandatory Verification Requirements:")
+    for req in brief.verification_requirements:
+        lines.append(f"  - {req}")
+    return "\n".join(lines)
+
+
 def _format_doctor_text(report: DoctorReport) -> str:
     m = report.metrics
     lines = [
@@ -1198,7 +1506,7 @@ def _format_doctor_text(report: DoctorReport) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Crucible Domain in-RAM index, router, and doctor.")
+    parser = argparse.ArgumentParser(description="Crucible Domain in-RAM index, router, forge, and doctor.")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -1207,6 +1515,12 @@ def main(argv: list[str] | None = None) -> int:
     p_route.add_argument("--top", type=int, default=5)
     p_route.add_argument("--json", action="store_true")
     p_route.add_argument("--no-global", action="store_true")
+
+    p_forge = sub.add_parser("forge", help="Synthesize prior systems, breakpoints, lessons, and test requirements in RAM.")
+    p_forge.add_argument("problem", nargs="+")
+    p_forge.add_argument("--top", type=int, default=4)
+    p_forge.add_argument("--json", action="store_true")
+    p_forge.add_argument("--no-global", action="store_true")
 
     p_doc = sub.add_parser("doctor", help="Audit hooks, bindings, links, duplicates, and storage.")
     p_doc.add_argument("--json", action="store_true")
@@ -1220,6 +1534,12 @@ def main(argv: list[str] | None = None) -> int:
         idx = build_index(args.root, global_config_dir=global_dir)
         res = route_query(idx, " ".join(args.query), top_k=args.top)
         print(json.dumps(res.to_dict(), indent=2, ensure_ascii=False) if args.json else _format_route_text(res))
+        return 0
+
+    if args.cmd == "forge":
+        idx = build_index(args.root, global_config_dir=global_dir)
+        brief = forge_brief(idx, " ".join(args.problem), top_k=args.top)
+        print(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False) if args.json else _format_forge_text(brief))
         return 0
 
     report = run_doctor(args.root, global_config_dir=global_dir, execute_hooks=not args.skip_exec)
