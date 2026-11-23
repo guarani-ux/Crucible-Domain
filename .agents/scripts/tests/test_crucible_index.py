@@ -163,6 +163,18 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertIn("summary", doc_json)
         self.assertEqual(doc_json["metrics"]["chatgpt_unbound"], 0)
 
+    def test_collect_observatory_snapshot_and_weakness_reporting(self) -> None:
+        ig_dir = REPO_ROOT / "Project" / "Inner Gravity"
+        if str(ig_dir) not in sys.path:
+            sys.path.insert(0, str(ig_dir))
+        import collect_observatory  # noqa: E402
+
+        snap = collect_observatory.collect_snapshot(REPO_ROOT, session_id="4188f88a-dc0c-4bba-96bb-c69ea9c4c1ee")
+        self.assertEqual(snap["crucible_domain"]["doctor_summary"]["fail"], 0)
+        self.assertTrue(snap["session_telemetry"]["present"])
+        weakness_ids = {w["id"] for w in snap["known_weaknesses"]}
+        self.assertIn("GAP-HV4-NO-TESTS", weakness_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

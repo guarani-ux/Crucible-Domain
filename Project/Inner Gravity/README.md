@@ -28,10 +28,11 @@
 
 | File | WOS Graph Type(s) Covered | Question Answered |
 | --- | --- | --- |
-| [01_Architecture_and_Locations.md](./01_Architecture_and_Locations.md) | **7. Target System Architecture** (Observed vs. Target Wiring) | How is the Antigravity harness wired on disk, and how does installing `Inner Gravity` connect `Crucible Domain` to `.gemini`? |
-| [02_Lifecycle_and_Signal_Flow.md](./02_Lifecycle_and_Signal_Flow.md) | **2. Reference Process Model** & **5. Execution and Provenance Trace** | How does every prompt/tool/stop cycle run (`operator_router.py` + `hook_v4.py`), and what actually happened in session `79d6267e`? |
-| [03_Tools_Skills_and_MCP_Topology.md](./03_Tools_Skills_and_MCP_Topology.md) | **1. Capability Inventory** | What tools, plugins, lazy MCPs, skills, and subagents exist, and which are verified active vs. disconnected or filtered out? |
-| [04_Strengths_Weaknesses_Upgrades_and_Gaps.md](./04_Strengths_Weaknesses_Upgrades_and_Gaps.md) | **3. Planning Decision Flow**, **4. Plan Dependency Graph**, & **6. Outcome Map** | How does this harness compare to Frontier Labs systems, what is the installation dependency order, and what receiving checks prove each upgrade works? |
+| [01_Architecture_and_Locations.md](./01_Architecture_and_Locations.md) | **7. Target System Architecture** (Nov 15 Baseline) | Initial architectural map and authority boundaries before the Nov 22–23 realization. |
+| [02_Lifecycle_and_Signal_Flow.md](./02_Lifecycle_and_Signal_Flow.md) | **2. Reference Process Model** & **5. Execution and Provenance Trace** | How turn/hook cycles run and what occurred in session `79d6267e`. |
+| [03_Tools_Skills_and_MCP_Topology.md](./03_Tools_Skills_and_MCP_Topology.md) | **1. Capability Inventory** | Native tools, plugins, lazy MCPs, and skill availability. |
+| [04_Strengths_Weaknesses_Upgrades_and_Gaps.md](./04_Strengths_Weaknesses_Upgrades_and_Gaps.md) | **3. Planning Decision Flow**, **4. Plan Dependency Graph**, & **6. Outcome Map** | Initial installation dependency order and Frontier comparison. |
+| [05_Session_4188f88a_Causal_Trace_and_Gaps.md](./05_Session_4188f88a_Causal_Trace_and_Gaps.md) | **7. Architecture**, **5. Causal Trace (`4188f88a`)**, & **6. Hardening / Gap Ledger** | **Current Nov 23 live observatory:** `Crucible-Domain` + `antigravity-config`, exact session causal flow, and explicit bottlenecks/weaknesses (`collect_observatory.py`). |
 
 ---
 

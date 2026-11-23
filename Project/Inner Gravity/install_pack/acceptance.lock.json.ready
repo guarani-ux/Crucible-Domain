@@ -11,10 +11,12 @@
     "Knowledge/Media Agency/Skills and Workflows/README.md",
     "Project/Work Operating System/README.md",
     "Project/Work Operating System/Work_Operating_System_Graph_Catalog.md",
-    "Project/Inner Gravity/README.md"
+    "Project/Inner Gravity/README.md",
+    "Project/Inner Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md"
   ],
   "python_syntax": [
     ".agents/scripts/crucible_gate.py",
-    ".agents/scripts/crucible_index.py"
+    ".agents/scripts/crucible_index.py",
+    "Project/Inner Gravity/collect_observatory.py"
   ]
 }
