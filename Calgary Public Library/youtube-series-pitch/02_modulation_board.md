@@ -35,7 +35,7 @@ To prove the Writers' Room can hold **one exact CPL context** steady while modul
 | **Same Underlying Reality:** Free library audio/maker gear solves creative barriers (`HOLD-04` exact branch/booking facts confirmed before release). | **Opening 5 Seconds:** Host drops a clunky phone-recorded voice memo next to a studio condenser mic: *"Can I record a real demo with zero gear of my own in 45 minutes?"* | **Opening 5 Seconds:** Macro shot (`35mm` close presence) of copper XLR pins clicking into a preamp. Two seconds of pure room tone (`[NAT SOUND POCKET]`). No host monologue. | **Opening 5 Seconds:** Over-the-shoulder view of an error/confused patron search screen. Voice begins mid-solution: *"Three steps to go from library card to booked mic time."* |
 | **Voice & Subtraction:** | Energetic back-and-forth with staff specialist; voice drops out when first raw playback lands. | Minimalist—50% fewer spoken words; visual steps carry causality while hands work. | Right-branching mouth-shape syntax; zero jokes, zero tour detours. |
 | **Relationship Outcome:** | *"I didn't know I could try that here—now I want to see what weird thing they test next."* | *"This room calms my nervous system down and makes me want to build something with my hands."* | *"That solved my exact headache in 3 minutes—I trust this channel when I'm stuck."* |
-| **Platform Split:** | YT Long + 1 narrative-turn Short + IG Reel (`discover`) | YT Long + 30s sensory ambient Short + FB local space invite (`belong`) | YT Searchable Video + direct `calgarylibrary.ca` page embed (**SKIP** IG/FB hype feed unless campaign-linked) |
+| **Platform Split (Compact Summary — see unbundled 8-row tables in `03_five_series_pitch.md`):** | YT Long + 1 narrative-turn Short + IG Reel (`discover`) | YT Long + 30s sensory ambient Short + FB local space invite (`belong`) | YT Searchable Video + direct `calgarylibrary.ca` page embed (**SKIP** IG/FB hype feed unless campaign-linked) |
 
 ---
 
@@ -59,14 +59,14 @@ Any new series spark, campaign video, or quarterly slate enters through this exa
 
 ```mermaid
 flowchart TD
-    S0["Stage 0 · GROUND_TRUTH.md\nFixed facts, crew ceiling & holds"] -->|"Blocks drafting until context & holds explicit"| S1["Stage 1 · Quarry & Tension (MK-01 / MK-03)\nLived barrier + producible proof + peer check"]
+    S0["Stage 0 · GROUND_TRUTH.md & G01 Scope Alignment\nFixed facts, crew ceiling, holds & decision owner"] -->|"Blocks drafting until context & holds explicit"| S1["Stage 1 · Quarry & Tension (MK-01 / MK-03)\nLived barrier + producible proof + peer check"]
     PEERS["Peer Examples (MK-03)"] -.->|"Advisory mechanism only"| S1
     S1 -->|"Passes Producible Access Check"| S2["Stage 2 · Modulation Board\nLock Fixed Context + Tune 4 Experience Dials"]
-    S2 -->|"Passes Portfolio Diversity Gate (Zero duplicate posture/engine)"| S3["Stage 3 · Pitch & Repurposing Package (MW-03 / CH-02 / CH-06)\nPilot Charter + 3-Ep Slate + Capture-Once Platform Map"]
+    S2 -->|"Passes Portfolio Diversity Gate (Zero duplicate posture/engine)"| S3["Stage 3 · Pitch & Unbundled 8-Row Platform Map (MW-03 / CH-02 / CH-06)\nPilot Charter + 3-Ep Slate + Capture-Once Roles"]
     S3 -->|"Independent read-only audit"| S4["Stage 4 · Adversarial Writers' Room Critique\nChecks: Brochure Smell · Ep-3 Exhaustion · Lazy Crops · Authority"]
     S4 -->|"Contradicted / Needs Repair"| S2
-    S4 -->|"Supported & Holds Explicit"| G01["Gate G01–G06 Human Authorization\nPilot greenlight, clearances & calendar slots"]
-    G01 -->|"Pilot Episode 1 executed & measured (MK-04 / CH-08)"| LEARN["After-Action Review -> Updates Modulation Board & Slate"]
+    S4 -->|"Supported & Holds Explicit"| G02["Gate G02 Ready for Production -> G03–G06 Execution & Release\nConfirm clearances (HOLD-04), capture, MP-10 QC, G05 handoff & G06 release"]
+    G02 -->|"Pilot Episode 1 executed & measured (MK-04 / CH-08)"| LEARN["After-Action Review -> Updates Modulation Board & Slate"]
     LEARN -.->|"Feeds verified audience signal into"| S1
 ```
 

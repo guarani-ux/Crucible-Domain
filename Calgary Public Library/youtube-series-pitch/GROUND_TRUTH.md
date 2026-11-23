@@ -1,6 +1,6 @@
 # Stage 0 Intake & Ground Truth — Calgary Public Library YouTube 5-Series Pitch & Writers' Room
 
-> **Status:** Autonomous Stage 0 Intake (`SHIFTING_SAND` satisfied locally; zero coworker names; Asana read-only).
+> **Status:** Autonomous Stage 0 Intake (`SHIFTING_SAND` gate in `.agents/scripts/crucible_gate.py` satisfied locally; zero coworker names; Asana read-only).
 > **Workspace Home:** `Calgary Public Library/youtube-series-pitch/`
 > **Purpose:** Establish verified institutional facts, autonomous working defaults, and explicit owner holds before drafting a 5-series YouTube pitch, capture-once cross-platform repurposing map, and Context × Experience Writers' Room process.
 
@@ -20,7 +20,7 @@
   - `CH-08` (*Measure and choose the next experiment*)
   - `MW-05` (*Adapt for audience, purpose and placement*)
   - `MK-01`, `MK-03`, `MK-04` (*Content opportunity, peer/trend scan, audience & engagement testing*)
-  - `av-craft` (*Quarry, Leading Word, `Because -> But -> Therefore` Spine, Visual-First Subtraction, Physical Bridges, 5-Shot Coverage*)
+  - `av-craft` (`~/.gemini/config/skills/av-craft/SKILL.md` — *Quarry, Leading Word, `Because -> But -> Therefore` Spine, Visual-First Subtraction, Physical Bridges, 5-Shot Coverage*)
 
 ---
 

@@ -37,3 +37,5 @@ Every concrete defect inside `pilot-a-the-next-question-ep01/` was fixed directl
 ## 3. Residual Cross-Folder Item Logged (Preserving Part B Folder Scope)
 
 - Because Part B strictly constrained edits inside `Calgary Public Library/pilot-a-the-next-question-ep01/`, [Calgary Public Library/GROUND_TRUTH.md](../GROUND_TRUTH.md#L57) still links to `./pilot-a-the-next-question-ep01/01_av_script_v1.md` (which now links straight to `04_chg01_trim_reconciliation.md` at lines 3–6). In the next root pass, add `04_chg01_trim_reconciliation.md` directly beside `01_av_script_v1.md` in `../GROUND_TRUTH.md#L57`.
+
+> **Update (`2026-11-23`):** Resolved — [Calgary Public Library/GROUND_TRUTH.md](../GROUND_TRUTH.md) Section 3 now links directly to `04_chg01_trim_reconciliation.md`, `03_release_package_v2.md`, and the plain-English [06_ra_specialist_prep_sheet.md](./06_ra_specialist_prep_sheet.md).

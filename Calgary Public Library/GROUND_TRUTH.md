@@ -53,5 +53,10 @@
 
 ## 3. Active Calgary Public Library Workspaces
 
-- [youtube-series-pitch/](./youtube-series-pitch/03_five_series_pitch.md) — 5-Series YouTube Pitch, Context × Experience Modulation Board, Capture-Once Cross-Platform Map, and System Field Report (`Stage 0–4`, independently audited).
-- [pilot-a-the-next-question-ep01/](./pilot-a-the-next-question-ep01/01_av_script_v1.md) — Downstream Execution & `CHG-01` Live Receiving Test for Pilot A Episode 1 (*The Next Question*).
+- **5-Series YouTube Pitch:**
+  - **Sendable Colleague Brief (Plain English):** [06_stakeholder_pitch_brief.md](./youtube-series-pitch/06_stakeholder_pitch_brief.md)
+  - **Full Audited Architecture & Series Bibles:** [03_five_series_pitch.md](./youtube-series-pitch/03_five_series_pitch.md) · [04_pitch_review.md](./youtube-series-pitch/04_pitch_review.md)
+- **Pilot A · Episode 1 (*The Next Question*):**
+  - **Sendable RA Specialist Prep Sheet (Plain English):** [06_ra_specialist_prep_sheet.md](./pilot-a-the-next-question-ep01/06_ra_specialist_prep_sheet.md)
+  - **Controlling `V2` Custody & Release Pack:** [04_chg01_trim_reconciliation.md](./pilot-a-the-next-question-ep01/04_chg01_trim_reconciliation.md) · [03_release_package_v2.md](./pilot-a-the-next-question-ep01/03_release_package_v2.md)
+  - **Production Script, Call Sheet & Audit:** [01_av_script_v1.md](./pilot-a-the-next-question-ep01/01_av_script_v1.md) · [02_capture_plan_and_call_sheet.md](./pilot-a-the-next-question-ep01/02_capture_plan_and_call_sheet.md) · [05_receiver_handoff_audit.md](./pilot-a-the-next-question-ep01/05_receiver_handoff_audit.md)
