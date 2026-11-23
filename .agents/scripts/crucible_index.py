@@ -671,6 +671,150 @@ def _resolve_chatgpt_bindings(root: Path, entries: dict[str, CapabilityEntry]) -
     return resolved
 
 
+PRIMITIVE_VALID_STATUSES = frozenset({"WIRED_HERE", "EXTERNAL_PROVEN", "PROTOTYPE"})
+PRIMITIVE_REQUIRED_KEYS = (
+    "id",
+    "name",
+    "family",
+    "domains",
+    "inputs",
+    "mechanism",
+    "outputs",
+    "breakpoints",
+    "status",
+    "sources",
+    "receiving_check",
+)
+
+
+def _index_primitives(
+    root: Path,
+    entries: dict[str, CapabilityEntry],
+    alias_map: dict[str, str],
+) -> None:
+    """Load atomic primitives from Knowledge/Crucible_Primitives.json into RAM index."""
+    prim_file = root / "Knowledge" / "Crucible_Primitives.json"
+    if not prim_file.is_file():
+        return
+    try:
+        payload = json.loads(prim_file.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return
+    primitives = payload.get("primitives")
+    if not isinstance(primitives, list):
+        return
+
+    rel_path = "Knowledge/Crucible_Primitives.json"
+    for item in primitives:
+        if not isinstance(item, dict):
+            continue
+        pid = str(item.get("id") or "").strip()
+        name = str(item.get("name") or "").strip()
+        if not pid or not name:
+            continue
+        family = str(item.get("family") or "").strip()
+        domains = item.get("domains") if isinstance(item.get("domains"), list) else []
+        status = str(item.get("status") or "").strip()
+        summary = f"[{family} | {status}] {item.get('mechanism', '')}".strip()
+        use_when = f"inputs={item.get('inputs', '')} -> outputs={item.get('outputs', '')}".strip()
+        sources = item.get("sources") if isinstance(item.get("sources"), list) else []
+        related = [
+            m.group(1)
+            for s in sources
+            for m in [re.search(r"\b(A\d{2}|K-[A-Z0-9-]+)\b", str(s))]
+            if m
+        ]
+        entries[pid] = CapabilityEntry(
+            id=pid,
+            kind="primitive",
+            title=name,
+            path=rel_path,
+            line=1,
+            domain=" ".join(str(d) for d in domains) or family or "general",
+            summary=summary,
+            use_when=use_when,
+            reachability="local",
+            related_ids=related,
+            mechanisms=str(item.get("mechanism") or ""),
+            breakpoints=str(item.get("breakpoints") or ""),
+            transfers=str(item.get("receiving_check") or ""),
+            limit_or_action=str(item.get("receiving_check") or ""),
+        )
+        alias_map[pid.lower()] = pid
+        alias_map[name.lower()] = pid
+
+
+def validate_primitives_registry(root: Path, findings: list[DiagnosticFinding]) -> int:
+    """Validate Knowledge/Crucible_Primitives.json schema and return primitive count."""
+    prim_file = root / "Knowledge" / "Crucible_Primitives.json"
+    if not prim_file.is_file():
+        return 0
+    try:
+        payload = json.loads(prim_file.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError as exc:
+        findings.append(
+            DiagnosticFinding(
+                category="primitives",
+                severity="FAIL",
+                subject="Knowledge/Crucible_Primitives.json",
+                detail=f"invalid JSON: {exc}",
+            )
+        )
+        return 0
+
+    families = set(payload.get("families") or [])
+    primitives = payload.get("primitives")
+    if not isinstance(primitives, list) or not primitives:
+        findings.append(
+            DiagnosticFinding(
+                category="primitives",
+                severity="FAIL",
+                subject="Knowledge/Crucible_Primitives.json",
+                detail="missing or empty 'primitives' list",
+            )
+        )
+        return 0
+
+    seen_ids: set[str] = set()
+    errors: list[str] = []
+    for idx, item in enumerate(primitives):
+        if not isinstance(item, dict):
+            errors.append(f"entry[{idx}] is not an object")
+            continue
+        pid = str(item.get("id") or f"entry[{idx}]")
+        if pid in seen_ids:
+            errors.append(f"duplicate id '{pid}'")
+        seen_ids.add(pid)
+        for key in PRIMITIVE_REQUIRED_KEYS:
+            val = item.get(key)
+            if not val:
+                errors.append(f"{pid} missing/empty '{key}'")
+        if families and item.get("family") not in families:
+            errors.append(f"{pid} unknown family '{item.get('family')}'")
+        if item.get("status") not in PRIMITIVE_VALID_STATUSES:
+            errors.append(f"{pid} invalid status '{item.get('status')}'")
+
+    if errors:
+        findings.append(
+            DiagnosticFinding(
+                category="primitives",
+                severity="FAIL",
+                subject="Knowledge/Crucible_Primitives.json",
+                detail="; ".join(errors[:5]),
+            )
+        )
+    else:
+        findings.append(
+            DiagnosticFinding(
+                category="primitives",
+                severity="PASS",
+                subject="Knowledge/Crucible_Primitives.json",
+                detail=f"{len(primitives)} atomic primitives validated across {len(families)} families",
+            )
+        )
+    return len(primitives)
+
+
 def build_index(
     root: Path,
     global_config_dir: Path | None = DEFAULT_GLOBAL_CONFIG_DIR,
@@ -687,6 +831,7 @@ def build_index(
     _index_markdown_table(root / "Project" / "Project_Register.md", root, "project", entries, alias_map)
     _index_exhibits(root, entries, alias_map)
     _index_core_docs(root, entries, alias_map)
+    _index_primitives(root, entries, alias_map)
     fm_bytes = _index_skills(root, global_config_dir, entries, alias_map)
 
     bindings = _resolve_chatgpt_bindings(root, entries)
@@ -1416,11 +1561,13 @@ def run_doctor(
     hook_metrics = _audit_hooks(root, global_config_dir, execute_hooks, findings)
     link_metrics = _audit_links_and_bindings(root, index, findings)
     storage_metrics = _audit_duplicates_and_storage(root, global_config_dir, findings)
+    primitive_count = validate_primitives_registry(root, findings)
 
     metrics: dict[str, Any] = {
         "index_build_ms": round(index.build_ms, 2),
         "indexed_total": len(index.entries),
         "indexed_counts": index.counts_by_kind,
+        "primitives_validated": primitive_count,
         "skill_frontmatter_bytes": index.skill_frontmatter_bytes,
         **hook_metrics,
         **link_metrics,

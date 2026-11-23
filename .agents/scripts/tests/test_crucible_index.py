@@ -534,6 +534,44 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             self.assertEqual(p_over_cap.returncode, 2)
             self.assertIn("batch cap exceeded", p_over_cap.stderr)
 
+    def test_primitives_registry_indexes_routes_and_validates_negative_schema(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        primitives = [e for e in idx.entries.values() if e.kind == "primitive"]
+        self.assertGreaterEqual(len(primitives), 12)
+
+        routed = crucible_index.route_query(idx, "PRIM-02")
+        self.assertFalse(routed.abstained)
+        self.assertEqual(routed.match_mode, "exact")
+        self.assertEqual(routed.matches[0].entry.id, "PRIM-02")
+
+        findings: list[crucible_index.DiagnosticFinding] = []
+        count = crucible_index.validate_primitives_registry(REPO_ROOT, findings)
+        self.assertGreaterEqual(count, 12)
+        self.assertTrue(any(f.category == "primitives" and f.severity == "PASS" for f in findings))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bad_root = Path(tmp)
+            (bad_root / "Knowledge").mkdir()
+            (bad_root / "Knowledge" / "Crucible_Primitives.json").write_text(
+                json.dumps(
+                    {
+                        "families": ["intake-grounding"],
+                        "primitives": [
+                            {
+                                "id": "PRIM-99",
+                                "name": "Broken",
+                                "family": "unknown-family",
+                                "status": "INVALID_STATUS",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            bad_findings: list[crucible_index.DiagnosticFinding] = []
+            crucible_index.validate_primitives_registry(bad_root, bad_findings)
+            self.assertTrue(any(f.category == "primitives" and f.severity == "FAIL" for f in bad_findings))
+
 
 if __name__ == "__main__":
     unittest.main()
