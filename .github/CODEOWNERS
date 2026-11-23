@@ -1,0 +1,10 @@
+# Crucible Domain — Referee & Governance Code Owners
+/.github/ @guarani-ux
+/.agents/hooks.json @guarani-ux
+/.agents/acceptance.lock.json @guarani-ux
+/.agents/scripts/crucible_gate.py @guarani-ux
+/.agents/scripts/crucible/ @guarani-ux
+/.agents/scripts/test_quality_gate.py @guarani-ux
+/.agents/scripts/mutation_gate.py @guarani-ux
+/.agents/scripts/tests/ @guarani-ux
+/AGENTS.md @guarani-ux
