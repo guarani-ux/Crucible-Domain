@@ -224,6 +224,168 @@ class TestCrucibleGateContractStop(unittest.TestCase):
             self.assertEqual(stp.returncode, 0, stp.stderr)
             self.assertEqual(json.loads(stp.stdout), {"decision": "allow"})
 
+    def test_export_map_writes_valid_json(self) -> None:
+        valid_primitives = {
+            "schema_version": 1,
+            "families": ["intake-grounding"],
+            "primitives": [
+                {
+                    "id": "PRIM-01",
+                    "name": "Ground-Truth Intake Gate",
+                    "family": "intake-grounding",
+                    "domains": ["systems"],
+                    "inputs": "Empty folder",
+                    "mechanism": "Require GROUND_TRUTH.md before deliverables.",
+                    "outputs": "Bounded scope",
+                    "breakpoints": "Hallucinated deliverables",
+                    "status": "WIRED_HERE",
+                    "sources": ["AGENTS.md"],
+                    "receiving_check": "PreToolUse denies ungrounded writes.",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = _init_repo(tmp_path, None)
+            (repo / "Knowledge" / "Media Agency" / "Skills and Workflows").mkdir(parents=True)
+            (repo / "Knowledge" / "Media Agency" / "Skills and Workflows" / "media-writing.md").write_text(
+                "## MW-04: Write A/V Script\n\nDual-channel script draft.\n",
+                encoding="utf-8",
+            )
+            (repo / "Knowledge" / "Media Agency" / "PROD-S.md").write_text(
+                "# PROD-S — Production Specialist\n\nOwns media execution.\n",
+                encoding="utf-8",
+            )
+            (repo / "Knowledge" / "Knowledge_Register.md").write_text(
+                "| ID | Topic | Rule | Status |\n| --- | --- | --- | --- |\n| K-WOS-01 | Graphs | Use 7 graph types | Live |\n",
+                encoding="utf-8",
+            )
+            (repo / "Knowledge" / "Crucible_Primitives.json").write_text(
+                json.dumps(valid_primitives, indent=2),
+                encoding="utf-8",
+            )
+            skill_dir = repo / ".agents" / "plugins" / "inner-gravity" / "skills" / "ig-demo"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: ig-demo\ndescription: Demo local skill.\n---\n# ig-demo\n",
+                encoding="utf-8",
+            )
+
+            proc = _run_gate(repo, "export-map", "--no-global")
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            map_path = repo / "Graphs" / "capability_map.json"
+            self.assertTrue(map_path.is_file())
+
+            first_text = map_path.read_text(encoding="utf-8")
+            payload = json.loads(first_text)
+            self.assertEqual(payload["schema"], "crucible-capability-map/v1")
+            self.assertEqual(payload["total"], 5)
+            self.assertEqual(len(payload["entries"]), payload["total"])
+            self.assertEqual(sum(payload["counts_by_kind"].values()), payload["total"])
+
+            ids = [entry["id"] for entry in payload["entries"]]
+            self.assertEqual(ids, sorted(ids))
+            self.assertEqual(ids, ["K-WOS-01", "MW-04", "PRIM-01", "PROD-S", "ig-demo"])
+
+            expected_keys = {"id", "kind", "title", "path", "line", "domain", "reachability", "summary"}
+            for entry in payload["entries"]:
+                self.assertEqual(set(entry.keys()), expected_keys)
+            by_id = {entry["id"]: entry for entry in payload["entries"]}
+            self.assertEqual(by_id["ig-demo"]["path"], ".agents/plugins/inner-gravity/skills/ig-demo/SKILL.md")
+
+            custom_out = Path("custom") / "map.json"
+            proc_custom = _run_gate(repo, "export-map", "--no-global", "--json", "--output", str(custom_out))
+            self.assertEqual(proc_custom.returncode, 0, proc_custom.stdout + proc_custom.stderr)
+            self.assertEqual((repo / custom_out).read_text(encoding="utf-8"), first_text)
+            self.assertEqual(json.loads(proc_custom.stdout), payload)
+
+            bad_dir_proc = _run_gate(repo, "export-map", "--no-global", "--output", "Graphs")
+            self.assertNotEqual(bad_dir_proc.returncode, 0)
+            self.assertIn("BLOCKED:", bad_dir_proc.stderr)
+
+            missing_root_proc = subprocess.run(
+                [sys.executable, str(GATE_SCRIPT), "--root", str(tmp_path / "missing-repo"), "export-map", "--no-global"],
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            self.assertNotEqual(missing_root_proc.returncode, 0)
+            self.assertIn("BLOCKED:", missing_root_proc.stderr)
+
+    def test_check_blocks_invalid_primitives_json(self) -> None:
+        valid_primitives = {
+            "schema_version": 1,
+            "families": ["intake-grounding"],
+            "primitives": [
+                {
+                    "id": "PRIM-01",
+                    "name": "Ground-Truth Intake Gate",
+                    "family": "intake-grounding",
+                    "domains": ["systems"],
+                    "inputs": "Empty folder",
+                    "mechanism": "Require GROUND_TRUTH.md before deliverables.",
+                    "outputs": "Bounded scope",
+                    "breakpoints": "Hallucinated deliverables",
+                    "status": "WIRED_HERE",
+                    "sources": ["AGENTS.md"],
+                    "receiving_check": "PreToolUse denies ungrounded writes.",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            (repo / "Knowledge").mkdir(parents=True)
+            prim_path = repo / "Knowledge" / "Crucible_Primitives.json"
+            prim_path.write_text(json.dumps(valid_primitives, indent=2), encoding="utf-8")
+
+            ok_proc = _run_gate(repo, "check")
+            self.assertEqual(ok_proc.returncode, 0, ok_proc.stdout + ok_proc.stderr)
+            self.assertIn("PASS:", ok_proc.stdout)
+
+            invalid_schema = {
+                "families": ["intake-grounding"],
+                "primitives": [
+                    {
+                        "id": "PRIM-99",
+                        "name": "Broken Primitive",
+                        "family": "unknown-family",
+                        "status": "INVALID_STATUS",
+                    }
+                ],
+            }
+            prim_path.write_text(json.dumps(invalid_schema, indent=2), encoding="utf-8")
+            bad_schema_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_schema_proc.returncode, 1, bad_schema_proc.stdout + bad_schema_proc.stderr)
+            self.assertIn("BLOCKED:", bad_schema_proc.stdout)
+            self.assertIn("Crucible_Primitives.json", bad_schema_proc.stdout)
+
+            prim_path.write_text("{not valid json", encoding="utf-8")
+            bad_json_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_json_proc.returncode, 1, bad_json_proc.stdout + bad_json_proc.stderr)
+            self.assertIn("BLOCKED:", bad_json_proc.stdout)
+            self.assertIn("invalid JSON", bad_json_proc.stdout)
+
+    def test_check_blocks_python_syntax_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            pkg_dir = repo / ".agents" / "scripts" / "crucible"
+            pkg_dir.mkdir(parents=True)
+            sample_py = pkg_dir / "sample.py"
+            sample_py.write_text("VALUE = 42\n", encoding="utf-8")
+
+            ok_proc = _run_gate(repo, "check")
+            self.assertEqual(ok_proc.returncode, 0, ok_proc.stdout + ok_proc.stderr)
+            self.assertIn("PASS:", ok_proc.stdout)
+
+            sample_py.write_text("def broken(:\n", encoding="utf-8")
+            bad_proc = _run_gate(repo, "check")
+            self.assertEqual(bad_proc.returncode, 1, bad_proc.stdout + bad_proc.stderr)
+            self.assertIn("BLOCKED:", bad_proc.stdout)
+            self.assertIn("sample.py", bad_proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

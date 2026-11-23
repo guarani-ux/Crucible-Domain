@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import py_compile
 import re
 import subprocess
 import sys
@@ -153,7 +154,9 @@ def _build_system_map(root: Path = ROOT) -> str:
 
     cap_line = 'Route/Forge: python ".agents/scripts/crucible_gate.py" route|forge "<task or problem>" | Health: doctor'
     try:
-        idx = _resolve_index_module().build_index(root)
+        ci = _resolve_index_module()
+        global_dir = ci.DEFAULT_GLOBAL_CONFIG_DIR if ci.DEFAULT_GLOBAL_CONFIG_DIR.is_dir() else None
+        idx = ci.build_index(root, global_config_dir=global_dir)
         counts = idx.counts_by_kind
         cap_line = (
             f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
@@ -511,6 +514,27 @@ def cmd_check(root: Path = ROOT) -> int:
             if norm.startswith("Calgary Public Library/") and _staged_contains_asana(norm, root):
                 reasons.append(f"staged CPL file contains app.asana.com: {norm}")
 
+    for py_dir in (root / ".agents" / "scripts", root / ".agents" / "scripts" / "crucible"):
+        if not py_dir.is_dir():
+            continue
+        for py_file in sorted(py_dir.glob("*.py")):
+            try:
+                py_compile.compile(str(py_file), doraise=True)
+            except (py_compile.PyCompileError, OSError) as exc:
+                rel_py = str(py_file.relative_to(root)).replace("\\", "/")
+                reasons.append(f"python syntax error in {rel_py}: {exc}")
+
+    if (root / "Knowledge" / "Crucible_Primitives.json").is_file():
+        ci = _resolve_index_module()
+        prim_findings: list[object] = []
+        try:
+            ci.validate_primitives_registry(root, prim_findings)
+        except AttributeError as exc:
+            reasons.append(f"Knowledge/Crucible_Primitives.json: invalid JSON root structure ({exc})")
+        for finding in prim_findings:
+            if getattr(finding, "severity", "") == "FAIL":
+                reasons.append(f"{finding.subject}: {finding.detail}")
+
     try:
         scripts_dir = str(Path(__file__).resolve().parent)
         if scripts_dir not in sys.path:
@@ -528,7 +552,7 @@ def cmd_check(root: Path = ROOT) -> int:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
 
-    print("PASS: IDEAS.md present; no staged .tmp.drive*, CPL app.asana.com, or test-quality violations.")
+    print("PASS: IDEAS.md present; Python syntax, primitives schema, staged files, and test-quality checks clean.")
     return 0
 
 
@@ -569,6 +593,15 @@ def _resolve_index_module():
     import crucible_index
 
     return crucible_index
+
+
+def _resolve_exporter_module():
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from crucible import exporter
+
+    return exporter
 
 
 def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bool = False, no_global: bool = False) -> int:
@@ -659,6 +692,29 @@ def cmd_melt_scan(
     return 0
 
 
+def cmd_export_map(
+    root: Path,
+    output: Path | None = None,
+    *,
+    no_global: bool = False,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    exporter = _resolve_exporter_module()
+    global_dir = None if no_global else (ci.DEFAULT_GLOBAL_CONFIG_DIR if ci.DEFAULT_GLOBAL_CONFIG_DIR.is_dir() else None)
+    try:
+        out_path, payload = exporter.write_capability_map(
+            root,
+            output_path=output,
+            global_config_dir=global_dir,
+        )
+    except Exception as exc:
+        print(f"BLOCKED: export-map failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"Exported {payload['total']} capabilities to {out_path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -681,6 +737,7 @@ def main(argv: list[str] | None = None) -> int:
             "doctor",
             "melt-diff",
             "melt-scan",
+            "export-map",
         ),
         help="Gate action to execute.",
     )
@@ -690,11 +747,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Query tokens/ID for 'route', problem description for 'forge', or 1..5 repo names for 'melt-scan'.",
     )
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route' or 'forge'.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', or 'melt-scan'.")
-    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor.")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', 'melt-scan', or 'export-map'.",
+    )
+    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor/export-map.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--owner", default="guarani-ux", help="GitHub owner for 'melt-diff' or 'melt-scan'.")
     parser.add_argument("--from-json", type=Path, default=None, help="Offline JSON fixture path for 'melt-diff' or 'melt-scan'.")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional output path for 'export-map' (defaults to Graphs/capability_map.json).",
+    )
     parser.add_argument(
         "--domain",
         choices=("systems", "media", "writing", "worldbuilding", "general"),
@@ -729,6 +796,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_melt_diff(root, owner=args.owner, from_json=args.from_json, as_json=args.json)
     if args.subcommand == "melt-scan":
         return cmd_melt_scan(args.query, owner=args.owner, from_json=args.from_json, as_json=args.json)
+    if args.subcommand == "export-map":
+        return cmd_export_map(root, output=args.output, no_global=args.no_global, as_json=args.json)
     return cmd_check(root)
 
 
