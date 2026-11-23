@@ -119,19 +119,21 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             self.assertEqual(len(dup_warns), 1)
 
     def test_live_workspace_bindings_and_local_entry_links(self) -> None:
+        """Fails if live hooks, local links, ChatGPT bindings, or test quality gate regress."""
         report = crucible_index.run_doctor(
             REPO_ROOT,
             global_config_dir=crucible_index.DEFAULT_GLOBAL_CONFIG_DIR,
-            execute_hooks=False,
+            execute_hooks=True,
         )
         self.assertEqual(report.metrics.get("chatgpt_unbound"), 0)
         self.assertGreaterEqual(report.metrics.get("chatgpt_bound", 0), 10)
         self.assertEqual(report.metrics.get("media_agency_diverged", 0), 0)
+        self.assertEqual(report.metrics.get("test_quality_violations", 0), 0)
 
         link_fails = [f for f in report.findings if f.category == "links" and f.severity == "FAIL"]
         self.assertEqual(link_fails, [], f"Broken local entry links found: {link_fails}")
 
-        # Live workspace hooks are now patched and verified green.
+        # Live workspace hooks actually executed above and verified green.
         hook_fails = [f for f in report.findings if f.category == "hooks" and f.severity == "FAIL"]
         self.assertEqual(hook_fails, [], f"Live hook failures detected: {hook_fails}")
         self.assertEqual(report.fail_count, 0)
@@ -164,16 +166,105 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertEqual(doc_json["metrics"]["chatgpt_unbound"], 0)
 
     def test_collect_observatory_snapshot_and_weakness_reporting(self) -> None:
+        """Fails if observatory omits missing-test gap or continues flagging it after tests exist."""
         ig_dir = REPO_ROOT / "Project" / "Inner Gravity"
         if str(ig_dir) not in sys.path:
             sys.path.insert(0, str(ig_dir))
         import collect_observatory  # noqa: E402
 
-        snap = collect_observatory.collect_snapshot(REPO_ROOT, session_id="4188f88a-dc0c-4bba-96bb-c69ea9c4c1ee")
-        self.assertEqual(snap["crucible_domain"]["doctor_summary"]["fail"], 0)
-        self.assertTrue(snap["session_telemetry"]["present"])
-        weakness_ids = {w["id"] for w in snap["known_weaknesses"]}
-        self.assertIn("GAP-HV4-NO-TESTS", weakness_ids)
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_gemini = Path(tmp) / ".gemini"
+            scripts_dir = fake_gemini / "config" / "scripts"
+            scripts_dir.mkdir(parents=True)
+            (scripts_dir / "hook_v4.py").write_text("# synthetic hook\n", encoding="utf-8")
+
+            brain_session = fake_gemini / "antigravity" / "brain" / "test-session"
+            brain_session.mkdir(parents=True)
+            (brain_session / "reliability-events.jsonl").write_text(
+                '{"tool": "read_file", "failed": false}\n', encoding="utf-8"
+            )
+
+            snap_missing = collect_observatory.collect_snapshot(
+                REPO_ROOT, gemini_dir=fake_gemini, session_id="test-session"
+            )
+            self.assertEqual(snap_missing["crucible_domain"]["doctor_summary"]["fail"], 0)
+            self.assertTrue(snap_missing["session_telemetry"]["present"])
+            weakness_missing = {w["id"] for w in snap_missing["known_weaknesses"]}
+            self.assertIn("GAP-HV4-NO-TESTS", weakness_missing)
+
+            tests_sub = scripts_dir / "tests"
+            tests_sub.mkdir(parents=True)
+            (tests_sub / "test_hook_v4.py").write_text("import unittest\n", encoding="utf-8")
+            snap_present = collect_observatory.collect_snapshot(
+                REPO_ROOT, gemini_dir=fake_gemini, session_id="test-session"
+            )
+            weakness_present = {w["id"] for w in snap_present["known_weaknesses"]}
+            self.assertNotIn("GAP-HV4-NO-TESTS", weakness_present)
+
+    def test_routing_benchmark_ten_real_queries_and_abstentions(self) -> None:
+        """Fails if RAM router drops real CPL/media capabilities or stops abstaining on noise."""
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=crucible_index.DEFAULT_GLOBAL_CONFIG_DIR)
+        expected_cases = [
+            ("testing philosophy", {"TEST-PHIL", "K-TEST-01"}),
+            ("K-TEST-01", {"K-TEST-01"}),
+            ("write an audiovisual script", {"MW-04"}),
+            ("write and check call sheet", {"MP-04"}),
+            ("wrap copy sync verify ingest", {"MP-08"}),
+            ("prepare a youtube upload", {"CH-03"}),
+            ("pitch five series ideas", {"MW-03"}),
+            ("adapt message across social web email", {"CH-06"}),
+            ("newsletter preview", {"CH-09"}),
+            ("recover controlling version check hash", {"ig-reconcile"}),
+        ]
+        for query, expected_ids in expected_cases:
+            res = crucible_index.route_query(idx, query, top_k=5)
+            found_ids = {m.entry.id for m in res.matches}
+            self.assertFalse(res.abstained, f"Query abstained unexpectedly: {query}")
+            self.assertTrue(
+                found_ids & expected_ids,
+                f"Query '{query}' expected one of {expected_ids}, got {found_ids}",
+            )
+
+        for noise in (
+            "quantum espresso banana smoothie",
+            "kubernetes helm chart yaml",
+            "sourdough starter hydration",
+        ):
+            res = crucible_index.route_query(idx, noise)
+            self.assertTrue(res.abstained, f"Out-of-domain query did not abstain: {noise}")
+            self.assertEqual(res.matches, [])
+
+    def test_doctor_catches_broken_hub_links_and_weak_test_file(self) -> None:
+        """Fails if doctor ignores broken CPL links or accepts trivial TQ-01 test files."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            cpl = repo / "Calgary Public Library"
+            cpl.mkdir(parents=True)
+            gt = cpl / "GROUND_TRUTH.md"
+            gt.write_text("[Missing](missing_target.md)\n", encoding="utf-8")
+
+            bad_links = crucible_index.run_doctor(repo, global_config_dir=None, execute_hooks=False)
+            link_fails = [f for f in bad_links.findings if f.category == "links" and f.severity == "FAIL"]
+            self.assertTrue(link_fails, "Expected broken link FAIL on Calgary Public Library/GROUND_TRUTH.md")
+
+            (cpl / "missing_target.md").write_text("# Present\n", encoding="utf-8")
+            good_links = crucible_index.run_doctor(repo, global_config_dir=None, execute_hooks=False)
+            self.assertEqual(
+                [f for f in good_links.findings if f.category == "links" and f.severity == "FAIL"],
+                [],
+            )
+
+            tests_dir = repo / ".agents" / "scripts" / "tests"
+            tests_dir.mkdir(parents=True)
+            (tests_dir / "test_bad.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+            bad_tq = crucible_index.run_doctor(
+                repo,
+                global_config_dir=crucible_index.DEFAULT_GLOBAL_CONFIG_DIR,
+                execute_hooks=False,
+            )
+            tq_fails = [f for f in bad_tq.findings if f.category == "test_quality" and f.severity == "FAIL"]
+            self.assertTrue(tq_fails, "Expected test_quality FAIL on TQ-01 violation")
+            self.assertIn("TQ-01", tq_fails[0].detail)
 
 
 if __name__ == "__main__":

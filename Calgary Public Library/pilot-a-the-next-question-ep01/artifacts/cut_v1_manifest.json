@@ -1,0 +1,25 @@
+{
+  "cut_id": "TNQ-EP01-V1",
+  "project": "Calgary Public Library — Pilot A Ep 1 (The Next Question: One Storm, Under 220 Pages)",
+  "version": "v1",
+  "runtime_sec": 282,
+  "format": "16:9 master (center-safe 9:16 Beat 2 window)",
+  "beats": [
+    {"beat": "Beat 1", "label": "Hook: The Doorstopper Problem", "start": "00:00:00,000", "end": "00:00:42,000"},
+    {"beat": "Beat 2", "label": "The Rejected Pick (Capture-Once 9:16 Hook)", "start": "00:00:42,000", "end": "00:01:38,000"},
+    {"beat": "Beat 3", "label": "Question 1 -> Pick 1 (Fast Momentum)", "start": "00:01:38,000", "end": "00:02:35,000"},
+    {"beat": "Beat 4", "label": "Question 2 -> Pick 2 (Small Room)", "start": "00:02:35,000", "end": "00:03:30,000"},
+    {"beat": "Beat 5", "label": "Question 3 -> Pick 3 (Nonfiction Curveball)", "start": "00:03:30,000", "end": "00:04:15,000"},
+    {"beat": "Beat 6", "label": "The Return Question (Viewer Loop)", "start": "00:04:15,000", "end": "00:04:42,000"}
+  ],
+  "companion_artifacts": {
+    "captions": "artifacts/captions_v1.srt",
+    "short_cutdown": "artifacts/short_cutdown_v1.md",
+    "web_copy": "artifacts/web_copy_v1.md"
+  },
+  "gates": {
+    "g03_production_qc": "PASSED_INTERNAL_PREVIEW",
+    "g05_receiving_handoff": "PENDING_RECEIVER_CHECK",
+    "g06_release_authorization": "UNKNOWN_DO_NOT_RELEASE"
+  }
+}

@@ -6,9 +6,7 @@ mainAgent: false
 subagent: true
 commandExecutionPolicy: "off"
 tools:
-  - view_file
-  - grep_search
-  - find_by_name
+  - read_file
 inheritMcp: false
 inheritCustomizations: false
 ---

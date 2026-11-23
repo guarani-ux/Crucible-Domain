@@ -1,4 +1,4 @@
-# Inner Gravity 0.1.0
+# Inner Gravity 0.1.1
 
 Workspace plugin for Google Antigravity. It brings forward useful methods when a decision is still open, separates evidence from claims of readiness, reconciles interrupted work, and turns observed misses into testable improvements. The three skills are readable outside Antigravity. Each receiving host supplies and verifies its own tool access and authority.
 
@@ -10,6 +10,14 @@ Workspace plugin for Google Antigravity. It brings forward useful methods when a
 4. Run the cases in `evaluation/ASSIGNMENTS.md` before and after enabling the plugin, using the same source versions, host, model, and permissions. Give workers only their assignment and inputs. An independent reviewer uses `evaluation/REVIEW.md`.
 
 [Plugin format and validation](https://antigravity.google/docs/build-plugins/) · [Workspace plugin discovery](https://antigravity.google/docs/plugins) · [Hook contracts](https://antigravity.google/docs/hooks)
+
+## Verify a receiving copy
+
+Use the supplied read-only comparison when the controlling handoff gives a receiving path and SHA-256. From the plugin root:
+
+    python skills/ig-reconcile/scripts/check_artifact.py "<workspace>" "<relative-receiving-file>" "<expected-sha256>"
+
+The result records byte match, mismatch, missing file, or unreadable destination. A match verifies the observed bytes at that path. The recipient's ability to open the exact artifact and authorization for its next use have their own evidence.
 
 ## What runs
 

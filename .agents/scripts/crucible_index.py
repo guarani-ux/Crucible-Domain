@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import re
@@ -145,6 +146,11 @@ CORE_ENTRY_DOCS: dict[str, tuple[str, str, str]] = {
         "Project/Inner Gravity/README.md",
         "Seven-graph map, install_pack specs, and verification evidence for Antigravity inside Crucible Domain.",
     ),
+    "TEST-PHIL": (
+        "Testing Philosophy & 4 Evidence Rungs",
+        "Knowledge/Testing_Philosophy.md",
+        "Four Evidence Rungs, 3 Non-Negotiable Test Laws, red-first/mutation kills, and Rung-3 planted-defect evals (K-TEST-01).",
+    ),
 }
 
 CANONICAL_LOCAL_FIRST_FILES = (
@@ -152,6 +158,10 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Media Agency/Skills and Workflows/README.md",
     "Knowledge/Media Agency/Media_Work_Routing.md",
     "Knowledge/Knowledge_Register.md",
+    "Knowledge/Testing_Philosophy.md",
+    "Calgary Public Library/GROUND_TRUTH.md",
+    "Project/Project_Register.md",
+    "Archive/README.md",
 )
 
 PROC_HEADING_RE = re.compile(r"^#{1,4}\s+((?:MW|MP|MK|CD|CH|OP)-\d+)\b[:\s·—-]*(.*)$")
@@ -1123,6 +1133,63 @@ def _audit_duplicates_and_storage(
     return metrics
 
 
+def _audit_test_quality(
+    root: Path,
+    global_config_dir: Path | None,
+    findings: list[DiagnosticFinding],
+) -> dict[str, Any]:
+    """Run AST test-quality checks (TQ-01..TQ-05) on workspace tests when gate is available."""
+    if global_config_dir is None:
+        return {"test_quality_violations": 0}
+    tests_dir = root / ".agents" / "scripts" / "tests"
+    if not tests_dir.is_dir():
+        return {"test_quality_violations": 0}
+    test_files = sorted(
+        f for f in tests_dir.rglob("*.py") if f.name.startswith("test_") or f.name.endswith("_test.py")
+    )
+    if not test_files:
+        return {"test_quality_violations": 0}
+
+    tq_path = global_config_dir / "scripts" / "test_quality_gate.py"
+    if not tq_path.is_file():
+        tq_path = DEFAULT_GLOBAL_CONFIG_DIR / "scripts" / "test_quality_gate.py"
+    if not tq_path.is_file():
+        return {"test_quality_violations": 0}
+
+    spec = importlib.util.spec_from_file_location("crucible_tq_gate", tq_path)
+    if spec is None or spec.loader is None:
+        return {"test_quality_violations": 0}
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+
+    tq_findings = mod.audit_paths([tests_dir])
+    if tq_findings:
+        for item in tq_findings:
+            try:
+                rel = Path(item.file).resolve().relative_to(root).as_posix()
+            except ValueError:
+                rel = Path(item.file).name
+            findings.append(
+                DiagnosticFinding(
+                    category="test_quality",
+                    severity="FAIL",
+                    subject=f"{rel}:{item.line}",
+                    detail=f"[{item.rule_id}] {item.message}",
+                )
+            )
+    else:
+        findings.append(
+            DiagnosticFinding(
+                category="test_quality",
+                severity="PASS",
+                subject=".agents/scripts/tests",
+                detail=f"all {len(test_files)} test file(s) satisfy TQ-01..TQ-05",
+            )
+        )
+    return {"test_quality_violations": len(tq_findings)}
+
+
 def run_doctor(
     root: Path,
     *,
@@ -1137,6 +1204,7 @@ def run_doctor(
     hook_metrics = _audit_hooks(root, global_config_dir, execute_hooks, findings)
     link_metrics = _audit_links_and_bindings(root, index, findings)
     storage_metrics = _audit_duplicates_and_storage(root, global_config_dir, findings)
+    tq_metrics = _audit_test_quality(root, global_config_dir, findings)
 
     metrics: dict[str, Any] = {
         "index_build_ms": round(index.build_ms, 2),
@@ -1146,6 +1214,7 @@ def run_doctor(
         **hook_metrics,
         **link_metrics,
         **storage_metrics,
+        **tq_metrics,
     }
     return DoctorReport(root=str(root), findings=findings, metrics=metrics)
 

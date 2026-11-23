@@ -16,6 +16,7 @@ CONTEXT_DIRS = ("Knowledge", "Project")
 GROUND_TRUTH_FILES = {"GROUND_TRUTH.MD", "INTAKE.MD", "BASELINE.MD"}
 LOCK_DIRS = (".tmp.drivedownload", ".tmp.driveupload")
 SESSION_BASE_FILENAME = "crucible-session-base"
+ASANA_URL_RE = re.compile(r"(?:https?://app\.asana\.com\b|app\.asana\.com/\S+)", re.IGNORECASE)
 
 
 def _count_files(directory: Path) -> int:
@@ -178,7 +179,7 @@ def _build_system_map(root: Path = ROOT) -> str:
             f"Active WIP: {active_wip}",
             install_status,
             cap_line,
-            "SHIFTING_SAND: Establish ground truth (workflow, audience, purpose) before proposing deliverables in any [EMPTY — INTAKE REQUIRED] folder.",
+            "SHIFTING_SAND: Check existing local ground truth first; if a domain folder is [EMPTY — INTAKE REQUIRED], synthesize GROUND_TRUTH.md from local sources with explicit [PROPOSED DEFAULT] / [UNKNOWN — OWNER TO CONFIRM] holds and push right instead of quizzing the operator on reversible defaults.",
             'Gate check: python ".agents/scripts/crucible_gate.py" check',
             'Sync check: python "Project/Inner Gravity/check_sync.py"',
         ]
@@ -215,7 +216,7 @@ def _staged_contains_asana(rel_path: str, root: Path = ROOT) -> bool:
         if not target.is_file():
             return False
         content = target.read_text(encoding="utf-8", errors="replace")
-    return "app.asana.com" in content.lower()
+    return bool(ASANA_URL_RE.search(content))
 
 
 def _extract_target_path(args: dict[str, object], root: Path = ROOT) -> Path | None:
@@ -267,6 +268,24 @@ def cmd_pre_tool(root: Path = ROOT) -> int:
         print(json.dumps({"decision": "allow"}))
         return 0
 
+    if matched_domain == "Calgary Public Library":
+        for field_key in ("Content", "Replacement"):
+            val = args.get(field_key)
+            if isinstance(val, str) and ASANA_URL_RE.search(val):
+                print(
+                    json.dumps(
+                        {
+                            "decision": "deny",
+                            "reason": (
+                                "ASANA_BOUNDARY: Refusing to write an internal Asana URL into "
+                                "Calgary Public Library/. Keep Asana strictly read-only and link pointers outside synced files."
+                            ),
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                return 0
+
     if _count_files(root / matched_domain) == 0 and target.name.upper() not in GROUND_TRUTH_FILES:
         print(
             json.dumps(
@@ -274,8 +293,8 @@ def cmd_pre_tool(root: Path = ROOT) -> int:
                     "decision": "deny",
                     "reason": (
                         f"SHIFTING_SAND: '{matched_domain}/' has 0 files. "
-                        "Establish ground truth (GROUND_TRUTH.md, INTAKE.md, or BASELINE.md) "
-                        "covering existing workflow, audience, and purpose before creating deliverables."
+                        "Synthesize GROUND_TRUTH.md from existing local context with explicit "
+                        "[PROPOSED DEFAULT] and [UNKNOWN — OWNER TO CONFIRM] holds before creating deliverables."
                     ),
                 },
                 ensure_ascii=False,
@@ -497,7 +516,7 @@ def cmd_check(root: Path = ROOT) -> int:
     if not (root / "IDEAS.md").is_file():
         reasons.append("IDEAS.md missing")
 
-    rc, diff_out = _git_output(["diff", "--cached", "--name-only"], root)
+    rc, diff_out = _git_output(["-c", "core.quotepath=false", "diff", "--cached", "--name-only"], root)
     if rc != 0:
         reasons.append("git diff --cached failed")
     else:
@@ -510,11 +529,29 @@ def cmd_check(root: Path = ROOT) -> int:
             if norm.startswith("Calgary Public Library/") and _staged_contains_asana(norm, root):
                 reasons.append(f"staged CPL file contains app.asana.com: {norm}")
 
+    wt_cpl: set[str] = set()
+    for git_args in (
+        ["-c", "core.quotepath=false", "diff", "--name-only", "--", "Calgary Public Library"],
+        ["-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "--", "Calgary Public Library"],
+    ):
+        rc_wt, out_wt = _git_output(git_args, root)
+        if rc_wt == 0:
+            for line in out_wt.splitlines():
+                norm = line.strip().replace("\\", "/")
+                if norm:
+                    wt_cpl.add(norm)
+    for norm in sorted(wt_cpl):
+        target = root / norm
+        if target.is_file():
+            content = target.read_text(encoding="utf-8", errors="replace")
+            if ASANA_URL_RE.search(content):
+                reasons.append(f"working-tree CPL file contains app.asana.com URL: {norm}")
+
     if reasons:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
 
-    print("PASS: IDEAS.md present; no staged .tmp.drive* or CPL app.asana.com violations.")
+    print("PASS: IDEAS.md present; no staged .tmp.drive* or CPL Asana URL violations.")
     return 0
 
 
