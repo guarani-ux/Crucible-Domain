@@ -53,14 +53,14 @@ Live owner inventory on `2026-11-23` via `crucible_gate.py melt-diff` and `gh ap
 | [mugen](https://github.com/guarani-ux/mugen) | private | main | 2026-11-05 | 5154KB | Selective Skill Check (`PRIM-13` CPL skills) |
 | [Storylines](https://github.com/guarani-ux/Storylines) | private | main | 2026-11-04 | 10943KB | Untested Scaffold / Prototype |
 | [Kageyoni](https://github.com/guarani-ux/Kageyoni) | private | main | 2026-10-28 | 17326KB | Melted (A02) |
-| [genesis](https://github.com/guarani-ux/genesis) | private | main | 2026-10-24 | 36468KB | Skip Stub (<=5KB / 0 code) |
+| [genesis](https://github.com/guarani-ux/genesis) | private | main | 2026-10-24 | 36468KB | Skip Stub (0 code / 0 tests; initialized README + asset) |
 | [nelson-media](https://github.com/guarani-ux/nelson-media) | public | main | 2026-10-24 | 97KB | Untested Scaffold / Prototype (1 code file, 0 tests) |
 | [SAMSARA](https://github.com/guarani-ux/SAMSARA) | private | main | 2026-10-24 | 2369614KB | Melted (A04) |
 | [cognitive-os](https://github.com/guarani-ux/cognitive-os) | private | main | 2026-10-23 | 196KB | Melted (A09) |
 | [script-builder](https://github.com/guarani-ux/script-builder) | private | main | 2026-10-22 | 51KB | Untested Scaffold / Prototype |
 | [Video-House](https://github.com/guarani-ux/Video-House) | private | main | 2026-10-22 | 1323KB | Primitive-Extracted (`PRIM-05`, `PRIM-10`) |
 | [video-house-intel](https://github.com/guarani-ux/video-house-intel) | private | main | 2026-10-21 | 32KB | Selective Skill Check |
-| [The-Canvas](https://github.com/guarani-ux/The-Canvas) | private | main | 2026-10-08 | 1167KB | Untested Scaffold / Prototype (Rust CLI; 27 code, 22 tests) |
+| [The-Canvas](https://github.com/guarani-ux/The-Canvas) | private | main | 2026-10-08 | 1167KB | Tested Rust CLI (27 code, 22 tests; not primitive-extracted) |
 | [Shinobi](https://github.com/guarani-ux/Shinobi) | private | main | 2026-10-06 | 143522KB | Melted (A03) |
 | [Constellation](https://github.com/guarani-ux/Constellation) | private | main | 2026-10-03 | 46KB | Melted (A05) |
 | [Nelson](https://github.com/guarani-ux/Nelson) | private | main | 2026-09-18 | 1676KB | Melted (A10) |
@@ -72,7 +72,7 @@ Live owner inventory on `2026-11-23` via `crucible_gate.py melt-diff` and `gh ap
 | [ten-shadows-control](https://github.com/guarani-ux/ten-shadows-control) | public | master | 2026-08-28 | 105KB | Primitive-Extracted (`PRIM-11`; `10-shadows` pair) |
 | [ichimonji](https://github.com/guarani-ux/ichimonji) | private | main | 2026-08-25 | 954KB | Untested Scaffold / Prototype |
 | [espada](https://github.com/guarani-ux/espada) | private | main | 2026-08-01 | 364KB | Primitive-Extracted (`PRIM-08`, `PRIM-09`) |
-| [PPW-Prime](https://github.com/guarani-ux/PPW-Prime) | private | main | 2026-04-19 | 64KB | Skip Stub (<=5KB / 0 code) |
+| [PPW-Prime](https://github.com/guarani-ux/PPW-Prime) | private | main | 2026-04-19 | 64KB | Skip Stub (0 code / 0 tests; README only) |
 | [Komorebi](https://github.com/guarani-ux/Komorebi) | private | master | 2026-04-16 | 6784KB | Selective Skill Check |
 | [Dangai](https://github.com/guarani-ux/Dangai) | private | main | 2026-04-14 | 0KB | Skip Stub (<=5KB / 0 code) |
 | [entonkageyoni](https://github.com/guarani-ux/entonkageyoni) | private | main | 2026-04-12 | 11521KB | Melted (A01) |
