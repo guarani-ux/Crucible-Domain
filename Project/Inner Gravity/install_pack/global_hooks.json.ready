@@ -1,0 +1,111 @@
+{
+  "reliability_v4": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "write_file|edit_file|read_file|run_command|call_mcp_tool|mcp_.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/hook_v4.py pre",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/hook_v4.py post",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/hook_v4.py stop",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "operator-crucible": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python ./scripts/operator_router.py session-start",
+        "timeout": 5
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python ./scripts/operator_router.py pre-invocation",
+        "timeout": 5
+      }
+    ]
+  },
+  "judgment-floor": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python ./scripts/judgment_gate.py session-start",
+        "timeout": 5
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python ./scripts/judgment_gate.py pre-invocation",
+        "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "read_file|view_file|run_command|command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/judgment_gate.py pre",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "read_file|view_file|write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content|run_command|command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/judgment_gate.py post",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ./scripts/judgment_gate.py stop",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
