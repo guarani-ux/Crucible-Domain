@@ -27,15 +27,15 @@ flowchart TD
 ### `SLICE-1` — Decouple `crucible_index.py` (2,552L -> Modular Package) · **DONE (`de90370`)**
 * **Observed State:** Split `.agents/scripts/crucible_index.py` into focused modules under `.agents/scripts/crucible/`:
   * [`__init__.py`](../.agents/scripts/crucible/__init__.py) (20L) — public entrypoint re-exports
-  * [`models.py`](../.agents/scripts/crucible/models.py) (553L) — constants, regexes, and dataclasses (`CapabilityEntry`, `CapabilityIndex`, `ForgeBrief`, `DoctorReport`, etc.)
+  * [`models.py`](../.agents/scripts/crucible/models.py) (575L) — constants, regexes, `CORE_ENTRY_DOCS`, and dataclasses (`CapabilityEntry`, `CapabilityIndex`, `ForgeBrief`, `DoctorReport`, etc.)
   * [`indexer.py`](../.agents/scripts/crucible/indexer.py) (545L) — `build_index`, `validate_primitives_registry`, Markdown/JSON/frontmatter parsers
   * [`router.py`](../.agents/scripts/crucible/router.py) (178L) — `route_query`, `_score_entries`
   * [`forge.py`](../.agents/scripts/crucible/forge.py) (403L) — `forge_brief`, exhibit/primitive synthesis
-  * [`doctor.py`](../.agents/scripts/crucible/doctor.py) (433L) — `run_doctor`, hook/link/duplicate audits
+  * [`doctor.py`](../.agents/scripts/crucible/doctor.py) (443L) — `run_doctor`, hook/link/duplicate audits, `[INFO] portability`
   * [`sieve.py`](../.agents/scripts/crucible/sieve.py) (489L) — `fetch_github_repos`, `compute_melt_diff`, `run_melt_scan`
-  * `exporter.py` (added in Wave 2A) — `build_capability_map`, `write_capability_map`
-* **Backwards Compatibility:** [`crucible_index.py`](../.agents/scripts/crucible_index.py) remains a 102L re-export + CLI shim for [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) and existing tests.
-* **Observed Check:** `29 passed` pytest at `de90370` + `16 PASS | 0 WARN | 0 FAIL` doctor + [`test_quality_gate.py`](../.agents/scripts/test_quality_gate.py) (`TQ-01..TQ-05`) PASS.
+  * [`exporter.py`](../.agents/scripts/crucible/exporter.py) (88L, added in Wave 2A) — `build_capability_map`, `write_capability_map`
+* **Backwards Compatibility:** [`crucible_index.py`](../.agents/scripts/crucible_index.py) remains a 102L re-export + CLI shim for [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) (805L) and existing tests.
+* **Observed Check:** Wave 3 verified `34 passed` pytest, `18 PASS | 0 WARN | 0 FAIL` doctor, `146` capabilities in [`capability_map.json`](./capability_map.json), and [`test_quality_gate.py`](../.agents/scripts/test_quality_gate.py) (`TQ-01..TQ-05`) PASS.
 
 ### `SLICE-2` — Harden `acceptance.lock.json` & Host Portability (`C-03`, `D-02`) · **DONE IN CODE + `RW-04` STAGED**
 * **Observed State:**

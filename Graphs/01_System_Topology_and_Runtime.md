@@ -46,28 +46,34 @@ sequenceDiagram
 
 ---
 
-## 2. Internal Anatomy of `crucible_index.py` (The 2,552-Line Monolith)
+## 2. Modular Package Architecture (`crucible/` + Thin Shim)
 
-Currently, [`crucible_index.py`](../.agents/scripts/crucible_index.py) houses **five unrelated subsystems** in one file, while [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) dynamically imports it via `_resolve_index_module()`.
+Following Wave 1 (`de90370`) and Wave 2 (`97a5b61`, `13152ec`), the former 2,552-line `crucible_index.py` monolith is split into focused acyclic modules under [`.agents/scripts/crucible/`](../.agents/scripts/crucible/__init__.py) behind a 102-line backwards-compatible shim at [`crucible_index.py`](../.agents/scripts/crucible_index.py), while [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) (805L) imports it via `_resolve_index_module()`.
 
 ```mermaid
 flowchart LR
-    GATE["crucible_gate.py (736L)<br/>Hooks + Contract + CLI Dispatch"] -->|"_resolve_index_module()"| MONO
+    GATE["crucible_gate.py (805L)<br/>Hooks + Contract + CLI Dispatch"] -->|"_resolve_index_module()"| SHIM["crucible_index.py (102L)<br/>Backwards-compatible shim"]
 
-    subgraph MONO["crucible_index.py (2,552L · 53 top-level defs)"]
-        P1["1. Parsers & RAM Indexer<br/>build_index, _index_procedures/roles/exhibits/skills/primitives"]
-        P2["2. Query Router & Forge<br/>route_query, forge_brief, _score_entries"]
-        P3["3. Health & Hook Doctor<br/>run_doctor, _audit_hooks, _audit_links_and_bindings"]
-        P4["4. GitHub Ore Sieve<br/>fetch_github_repos, compute_melt_diff, run_melt_scan"]
-        P5["5. CLI & Text Formatters<br/>_format_*_text, main"]
+    subgraph PKG[".agents/scripts/crucible/ (8 Modular Files)"]
+        MOD["models.py (575L)<br/>Dataclasses, constants, CORE_ENTRY_DOCS"]
+        IDX["indexer.py (545L)<br/>build_index (~32-37ms RAM) + primitive validation"]
+        RTR["router.py (178L)<br/>route_query, lexical/ID scoring"]
+        FRG["forge.py (403L)<br/>forge_brief domain synthesis"]
+        DOC["doctor.py (443L)<br/>run_doctor, links, [INFO] portability"]
+        SIV["sieve.py (489L · Standalone)<br/>fetch_github_repos, melt-diff, melt-scan"]
+        EXP["exporter.py (88L)<br/>write_capability_map -> capability_map.json"]
     end
 
-    P1 -->|"Feeds CapabilityIndex"| P2
-    P1 -->|"Feeds CapabilityIndex"| P3
-    P3 -.->|"Hardcoded Path.home()/.gemini/config"| HOST["Host Global Config"]
-    P4 -.->|"Shells out to gh api (network)"| GH["GitHub API (guarani-ux)"]
+    SHIM --> PKG
+    IDX -->|"Data types & maps"| MOD
+    RTR -->|"Data types & stopwords"| MOD
+    FRG -->|"Domain cues + scoring"| RTR
+    DOC -->|"Index + primitive checks"| IDX
+    DOC -.->|"Optional Path.home()/.gemini/config"| HOST["Host Global Config ([INFO] when absent)"]
+    SIV -.->|"Shells out to gh api (network)"| GH["GitHub API (guarani-ux)"]
+    EXP -->|"Writes 146 capabilities"| MAP["Graphs/capability_map.json"]
 ```
 
 ### Why this matters for runtime & maintenance
-- **Cold-start speed is great (~32 ms)** because `build_index()` only reads local Markdown/JSON files.
-- **Cognitive & edit friction is high** because `melt-scan` (networked GitHub API sieving), `doctor` (host-coupled hook auditing), `forge` (heuristics), and `build_index` (core parser) all live in the same 2,552-line file.
+- **Cold-start speed stays ~32–37 ms** because `build_index()` only parses local Markdown and JSON files.
+- **Clean boundaries:** Networked GitHub sieving (`sieve.py`), portability-aware diagnostics (`doctor.py`), heuristic synthesis (`forge.py`), and JSON map export (`exporter.py`) are decoupled from core parsing (`indexer.py`).
