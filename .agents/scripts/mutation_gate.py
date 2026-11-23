@@ -56,6 +56,12 @@ GATE_MUTATIONS: tuple[GateMutation, ...] = (
         target='if not (root / "IDEAS.md").is_file():',
         replacement="if False:",
     ),
+    GateMutation(
+        id="M6_DISABLE_LEDGER_SCHEMA_CHECK",
+        description="Disable Knowledge/outcome_ledger.json schema validation inside cmd_check.",
+        target='if (root / "Knowledge" / "outcome_ledger.json").is_file():',
+        replacement="if False:",
+    ),
 )
 
 

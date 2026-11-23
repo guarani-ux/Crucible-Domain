@@ -481,6 +481,42 @@ class TestCrucibleGateContractStop(unittest.TestCase):
             self.assertIn("BLOCKED:", bad_proc.stdout)
             self.assertIn("IDEAS.md missing", bad_proc.stdout)
 
+    def test_check_blocks_invalid_outcome_ledger_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp), None)
+            (repo / "Knowledge").mkdir(parents=True)
+            ledger_path = repo / "Knowledge" / "outcome_ledger.json"
+
+            ok_learn = _run_gate(
+                repo,
+                "learn",
+                "--verdict",
+                "PASS",
+                "--source",
+                "ci:test",
+                "--cap",
+                "CRUCIBLE-ATLAS",
+            )
+            self.assertEqual(ok_learn.returncode, 0, ok_learn.stdout + ok_learn.stderr)
+            ok_proc = _run_gate(repo, "check")
+            self.assertEqual(ok_proc.returncode, 0, ok_proc.stdout + ok_proc.stderr)
+            self.assertIn("PASS:", ok_proc.stdout)
+
+            ledger_path.write_text(
+                json.dumps({"schema_version": 99, "capability_priors": {}, "file_risk": {}, "events": []}),
+                encoding="utf-8",
+            )
+            bad_schema = _run_gate(repo, "check")
+            self.assertEqual(bad_schema.returncode, 1, bad_schema.stdout + bad_schema.stderr)
+            self.assertIn("BLOCKED:", bad_schema.stdout)
+            self.assertIn("outcome_ledger.json", bad_schema.stdout)
+
+            ledger_path.write_text("{corrupt json", encoding="utf-8")
+            bad_json = _run_gate(repo, "check")
+            self.assertEqual(bad_json.returncode, 1, bad_json.stdout + bad_json.stderr)
+            self.assertIn("BLOCKED:", bad_json.stdout)
+            self.assertIn("invalid JSON", bad_json.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

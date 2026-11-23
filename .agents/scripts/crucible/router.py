@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import math
 import re
+from typing import Any
 
+from .ledger import capability_posterior_multiplier
 from .models import (
     CHATGPT_SKILL_BINDINGS,
     STOPWORDS,
@@ -33,6 +35,7 @@ def _score_entries(
     *,
     min_score: float = 1.5,
     include_deep_fields: bool = False,
+    ledger: dict[str, Any] | None = None,
 ) -> list[RouteMatch]:
     doc_tokens_map: dict[str, tuple[set[str], set[str], set[str]]] = {}
     df: dict[str, int] = {}
@@ -71,11 +74,16 @@ def _score_entries(
         if score > 0 and entry.kind == "procedure" and len(hit_tokens) >= 2:
             score += 0.5
         if score >= min_score:
+            prior_mult = capability_posterior_multiplier(ledger, entry.id) if ledger is not None else 1.0
+            adj_score = score * prior_mult
+            via = "tokens:" + ",".join(sorted(hit_tokens))
+            if prior_mult != 1.0:
+                via += f" (prior={prior_mult:.2f}x)"
             scored.append(
                 RouteMatch(
                     entry=entry,
-                    score=score,
-                    matched_via="tokens:" + ",".join(sorted(hit_tokens)),
+                    score=adj_score,
+                    matched_via=via,
                 )
             )
 
@@ -89,6 +97,7 @@ def route_query(
     *,
     top_k: int = 5,
     min_score: float = 1.5,
+    ledger: dict[str, Any] | None = None,
 ) -> RouteResult:
     """Resolve an ID, ChatGPT skill_id, or natural-language task in RAM with selective abstention."""
     raw = query.strip()
@@ -142,7 +151,7 @@ def route_query(
             matches=[],
         )
 
-    scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=False)
+    scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=False, ledger=ledger)
     top_matches = scored[:top_k]
     if not top_matches:
         return RouteResult(

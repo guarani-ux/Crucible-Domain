@@ -535,6 +535,13 @@ def cmd_check(root: Path = ROOT) -> int:
             if getattr(finding, "severity", "") == "FAIL":
                 reasons.append(f"{finding.subject}: {finding.detail}")
 
+    if (root / "Knowledge" / "outcome_ledger.json").is_file():
+        ledger_mod = _resolve_ledger_module()
+        try:
+            ledger_mod.load_ledger(root)
+        except ValueError as exc:
+            reasons.append(str(exc))
+
     try:
         scripts_dir = str(Path(__file__).resolve().parent)
         if scripts_dir not in sys.path:
@@ -604,14 +611,37 @@ def _resolve_exporter_module():
     return exporter
 
 
-def cmd_route(root: Path, query_parts: list[str], *, top_k: int = 5, as_json: bool = False, no_global: bool = False) -> int:
+def _resolve_ledger_module():
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    from crucible import ledger
+
+    return ledger
+
+
+def cmd_route(
+    root: Path,
+    query_parts: list[str],
+    *,
+    top_k: int = 5,
+    as_json: bool = False,
+    no_global: bool = False,
+    no_learn: bool = False,
+) -> int:
     if not query_parts:
         print("usage: crucible_gate.py route <task query or canonical ID>", file=sys.stderr)
         return 2
     ci = _resolve_index_module()
     global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
     idx = ci.build_index(root, global_config_dir=global_dir)
-    result = ci.route_query(idx, " ".join(query_parts), top_k=top_k)
+    ledger_data = None
+    if not no_learn and (root / "Knowledge" / "outcome_ledger.json").is_file():
+        try:
+            ledger_data = _resolve_ledger_module().load_ledger(root)
+        except ValueError:
+            ledger_data = None
+    result = ci.route_query(idx, " ".join(query_parts), top_k=top_k, ledger=ledger_data)
     print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_route_text(result))
     return 0
 
@@ -715,6 +745,89 @@ def cmd_export_map(
     return 0
 
 
+def cmd_learn(
+    root: Path,
+    *,
+    verdict: str | None,
+    source: str | None,
+    capabilities: list[str],
+    files: list[str],
+    commit: str = "",
+    refresh_git: bool = False,
+    as_json: bool = False,
+) -> int:
+    if not verdict or not source:
+        print("usage: crucible_gate.py learn --verdict PASS|FAIL|REVERT --source <label> [--cap ID ...] [--file PATH ...] [--refresh-git]", file=sys.stderr)
+        return 2
+    ledger_mod = _resolve_ledger_module()
+    try:
+        ledger = ledger_mod.record_outcome(
+            root,
+            source=source,
+            verdict=verdict,
+            capabilities=capabilities,
+            files=files,
+            commit=commit,
+            refresh_git=refresh_git,
+        )
+    except ValueError as exc:
+        print(f"BLOCKED: learn failed: {exc}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(ledger, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Recorded {verdict.upper()} from '{source}' "
+            f"(priors={len(ledger['capability_priors'])}, file_risk={len(ledger['file_risk'])}, events={len(ledger['events'])})"
+        )
+    return 0
+
+
+def cmd_risk(
+    root: Path,
+    files: list[str],
+    *,
+    threshold: float = 0.45,
+    as_json: bool = False,
+) -> int:
+    ledger_mod = _resolve_ledger_module()
+    try:
+        ledger = ledger_mod.load_ledger(root)
+    except ValueError as exc:
+        print(f"BLOCKED: risk failed: {exc}", file=sys.stderr)
+        return 1
+
+    target_files = list(files)
+    if not target_files:
+        rc, status_out = _git_output(["status", "--porcelain"], root)
+        if rc == 0:
+            for line in status_out.splitlines():
+                if len(line) > 3:
+                    raw_path = line[3:].strip()
+                    if " -> " in raw_path:
+                        raw_path = raw_path.split(" -> ", 1)[1].strip()
+                    if raw_path:
+                        target_files.append(raw_path)
+
+    report = ledger_mod.assess_risk(ledger, target_files, threshold=threshold)
+    if as_json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Risk ({len(report['files'])} file(s), threshold={threshold}): "
+            f"{report['recommended_action']}"
+        )
+        for item in report["files"]:
+            flags = []
+            if item["high_risk"]:
+                flags.append("HIGH_RISK")
+            if item["referee_boundary"]:
+                flags.append("REFEREE")
+            tag = f" [{' | '.join(flags)}]" if flags else ""
+            print(f"  - {item['path']}: risk={item['risk_score']:.4f} (fix={item['fix_commits']}/{item['commits']}){tag}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -738,21 +851,24 @@ def main(argv: list[str] | None = None) -> int:
             "melt-diff",
             "melt-scan",
             "export-map",
+            "learn",
+            "risk",
         ),
         help="Gate action to execute.",
     )
     parser.add_argument(
         "query",
         nargs="*",
-        help="Query tokens/ID for 'route', problem description for 'forge', or 1..5 repo names for 'melt-scan'.",
+        help="Query tokens/ID for 'route', problem description for 'forge', repo names for 'melt-scan', or paths for 'risk'.",
     )
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route' or 'forge'.")
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', 'melt-scan', or 'export-map'.",
+        help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', 'melt-scan', 'export-map', 'learn', or 'risk'.",
     )
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor/export-map.")
+    parser.add_argument("--no-learn", action="store_true", help="Disable learned priors in 'route' for static baseline comparison.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--owner", default="guarani-ux", help="GitHub owner for 'melt-diff' or 'melt-scan'.")
     parser.add_argument("--from-json", type=Path, default=None, help="Offline JSON fixture path for 'melt-diff' or 'melt-scan'.")
@@ -768,6 +884,13 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional domain scope override for 'forge'.",
     )
+    parser.add_argument("--verdict", choices=("PASS", "FAIL", "REVERT"), default=None, help="Outcome verdict for 'learn'.")
+    parser.add_argument("--source", default=None, help="Evidence source label (e.g. ci:45234665272) for 'learn'.")
+    parser.add_argument("--cap", action="append", default=[], help="Capability ID updated by 'learn' (repeatable).")
+    parser.add_argument("--file", action="append", default=[], help="File path associated with 'learn' (repeatable).")
+    parser.add_argument("--commit", default="", help="Optional commit SHA for 'learn'.")
+    parser.add_argument("--refresh-git", action="store_true", help="Refresh file_risk scores from git history during 'learn'.")
+    parser.add_argument("--threshold", type=float, default=0.45, help="Risk escalation threshold for 'risk'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -780,7 +903,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "stop":
         return cmd_stop(root)
     if args.subcommand == "route":
-        return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
+        return cmd_route(
+            root,
+            args.query,
+            top_k=args.top,
+            as_json=args.json,
+            no_global=args.no_global,
+            no_learn=args.no_learn,
+        )
     if args.subcommand == "forge":
         return cmd_forge(
             root,
@@ -798,6 +928,19 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_melt_scan(args.query, owner=args.owner, from_json=args.from_json, as_json=args.json)
     if args.subcommand == "export-map":
         return cmd_export_map(root, output=args.output, no_global=args.no_global, as_json=args.json)
+    if args.subcommand == "learn":
+        return cmd_learn(
+            root,
+            verdict=args.verdict,
+            source=args.source,
+            capabilities=args.cap,
+            files=args.file,
+            commit=args.commit,
+            refresh_git=args.refresh_git,
+            as_json=args.json,
+        )
+    if args.subcommand == "risk":
+        return cmd_risk(root, args.query, threshold=args.threshold, as_json=args.json)
     return cmd_check(root)
 
 
