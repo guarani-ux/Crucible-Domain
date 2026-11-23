@@ -350,6 +350,190 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         )
         self.assertEqual(proc_missing.returncode, 2)
 
+    def test_compute_melt_diff_classifies_melted_stale_hub_unmelted_and_stubs(self) -> None:
+        synthetic_repos = [
+            {
+                "name": "Kageyoni",
+                "pushedAt": "2026-10-28T12:00:00Z",
+                "diskUsage": 17326,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": {"name": "Python"},
+                "description": "Prior system",
+            },
+            {
+                "name": "sidecar",
+                "pushedAt": "2026-11-23T08:00:00Z",
+                "diskUsage": 122,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": {"name": "Python"},
+                "description": "Updated after exhibit date",
+            },
+            {
+                "name": "Crucible-Domain",
+                "pushedAt": "2026-11-23T09:00:00Z",
+                "diskUsage": 339,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": {"name": "Python"},
+                "description": "Hub repo",
+            },
+            {
+                "name": "mercury",
+                "pushedAt": "2026-11-23T07:00:00Z",
+                "diskUsage": 112,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": {"name": "Python"},
+                "description": "Modular Preview/Program Engine",
+            },
+            {
+                "name": "Story-House",
+                "pushedAt": "2026-11-09T07:00:00Z",
+                "diskUsage": 1612,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": {"name": "Python"},
+                "description": "",
+            },
+            {
+                "name": "Dangai",
+                "pushedAt": "2026-04-14T07:00:00Z",
+                "diskUsage": 0,
+                "isPrivate": True,
+                "isArchived": False,
+                "primaryLanguage": None,
+                "description": "",
+            },
+        ]
+        diff = crucible_index.compute_melt_diff(REPO_ROOT, synthetic_repos)
+        self.assertEqual(diff["exhibit_baseline_date"], "2026-11-15")
+        self.assertEqual(diff["counts"]["melted"], 1)
+        self.assertEqual(diff["counts"]["stale_melted"], 1)
+        self.assertEqual(diff["counts"]["active_hub"], 1)
+        self.assertEqual(diff["counts"]["unmelted"], 2)
+        self.assertEqual(diff["counts"]["skip_stub"], 1)
+        self.assertEqual(diff["stale_melted"][0]["exhibit_id"], "A06")
+        unmelted_by_name = {r["name"]: r for r in diff["unmelted"]}
+        self.assertFalse(unmelted_by_name["mercury"]["in_project_register"])
+        self.assertTrue(unmelted_by_name["Story-House"]["in_project_register"])
+
+    def test_run_melt_scan_enforces_batch_cap_and_filters_binaries_and_empty_repos(self) -> None:
+        with self.assertRaises(ValueError):
+            crucible_index.run_melt_scan([])
+        with self.assertRaises(ValueError):
+            crucible_index.run_melt_scan(["r1", "r2", "r3", "r4", "r5", "r6"])
+
+        fixtures = {
+            "mercury": {
+                "tree_payload": {
+                    "truncated": False,
+                    "tree": [
+                        {"type": "blob", "path": "pyproject.toml"},
+                        {"type": "blob", "path": "src/main.py"},
+                        {"type": "blob", "path": "src/engine.py"},
+                        {"type": "blob", "path": "tests/test_engine.py"},
+                        {"type": "blob", "path": "node_modules/pkg/index.js"},
+                        {"type": "blob", "path": "assets/demo.mp4"},
+                    ],
+                },
+                "readme_text": "# Mercury\n\n" + ("Modular writing desk and preview engine. " * 30),
+            },
+            "Dangai": {
+                "tree_payload": {"error_status": 409, "empty_repo": True},
+                "readme_text": "",
+            },
+            "media-dump": {
+                "tree_payload": {
+                    "truncated": False,
+                    "tree": [
+                        {"type": "blob", "path": "clips/intro.mp4"},
+                        {"type": "blob", "path": "README.md"},
+                    ],
+                },
+                "readme_text": "# Media Dump",
+            },
+        }
+        report = crucible_index.run_melt_scan(["mercury", "Dangai", "media-dump"], fixtures=fixtures)
+        self.assertEqual(report["scanned_count"], 3)
+        by_name = {r["repo"]: r for r in report["results"]}
+        self.assertEqual(by_name["mercury"]["triage_verdict"], "MELT_READY")
+        self.assertEqual(by_name["mercury"]["code_files"], 2)
+        self.assertEqual(by_name["mercury"]["test_files"], 1)
+        self.assertEqual(by_name["mercury"]["ignored_or_asset_files"], 2)
+        self.assertLessEqual(len(by_name["mercury"]["readme_excerpt"]), crucible_index.MAX_README_EXCERPT_CHARS)
+        self.assertEqual(by_name["Dangai"]["triage_verdict"], "EMPTY_REPO")
+        self.assertEqual(by_name["media-dump"]["triage_verdict"], "SKIP_ASSET_OR_STUB")
+
+        formatted = crucible_index._format_melt_scan_text(report)
+        self.assertIn("[MELT_READY] mercury", formatted)
+        self.assertIn("[EMPTY_REPO] Dangai", formatted)
+
+    def test_cli_melt_diff_and_melt_scan_offline_json_and_cap_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            diff_fix = tmp_path / "repos.json"
+            diff_fix.write_text(
+                json.dumps(
+                    [
+                        {
+                            "name": "mercury",
+                            "pushedAt": "2026-11-23T07:00:00Z",
+                            "diskUsage": 112,
+                            "isPrivate": True,
+                            "isArchived": False,
+                            "primaryLanguage": {"name": "Python"},
+                            "description": "Desk",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            p_diff = subprocess.run(
+                [
+                    sys.executable,
+                    str(GATE_SCRIPT),
+                    "--root",
+                    str(REPO_ROOT),
+                    "melt-diff",
+                    "--from-json",
+                    str(diff_fix),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(p_diff.returncode, 0, p_diff.stderr)
+            diff_out = json.loads(p_diff.stdout)
+            self.assertEqual(diff_out["counts"]["unmelted"], 1)
+
+            p_over_cap = subprocess.run(
+                [
+                    sys.executable,
+                    str(GATE_SCRIPT),
+                    "--root",
+                    str(REPO_ROOT),
+                    "melt-scan",
+                    "r1",
+                    "r2",
+                    "r3",
+                    "r4",
+                    "r5",
+                    "r6",
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(p_over_cap.returncode, 2)
+            self.assertIn("batch cap exceeded", p_over_cap.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

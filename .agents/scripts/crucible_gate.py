@@ -602,6 +602,54 @@ def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, sk
     return 0 if report.ok else 1
 
 
+def cmd_melt_diff(
+    root: Path,
+    *,
+    owner: str = "guarani-ux",
+    from_json: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    try:
+        if from_json is not None:
+            repos_data = json.loads(from_json.read_text(encoding="utf-8"))
+        else:
+            repos_data = ci.fetch_github_repos(owner=owner)
+        report = ci.compute_melt_diff(root, repos_data)
+    except Exception as exc:
+        print(f"BLOCKED: melt-diff failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(report, indent=2, ensure_ascii=False) if as_json else ci._format_melt_diff_text(report))
+    return 0
+
+
+def cmd_melt_scan(
+    repos: list[str],
+    *,
+    owner: str = "guarani-ux",
+    from_json: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    ci = _resolve_index_module()
+    fixtures: dict[str, Any] | None = None
+    if from_json is not None:
+        try:
+            fixtures = json.loads(from_json.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"BLOCKED: could not load --from-json fixture: {exc}", file=sys.stderr)
+            return 1
+    try:
+        report = ci.run_melt_scan(repos, owner=owner, fixtures=fixtures)
+    except ValueError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:
+        print(f"BLOCKED: melt-scan failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(report, indent=2, ensure_ascii=False) if as_json else ci._format_melt_scan_text(report))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -612,14 +660,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "verify", "stop", "route", "forge", "doctor"),
+        choices=(
+            "session-start",
+            "pre-tool",
+            "check",
+            "pre-commit",
+            "verify",
+            "stop",
+            "route",
+            "forge",
+            "doctor",
+            "melt-diff",
+            "melt-scan",
+        ),
         help="Gate action to execute.",
     )
-    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route' or problem description for 'forge'.")
+    parser.add_argument(
+        "query",
+        nargs="*",
+        help="Query tokens/ID for 'route', problem description for 'forge', or 1..5 repo names for 'melt-scan'.",
+    )
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route' or 'forge'.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'forge', or 'doctor'.")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'forge', 'doctor', 'melt-diff', or 'melt-scan'.")
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/forge/doctor.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
+    parser.add_argument("--owner", default="guarani-ux", help="GitHub owner for 'melt-diff' or 'melt-scan'.")
+    parser.add_argument("--from-json", type=Path, default=None, help="Offline JSON fixture path for 'melt-diff' or 'melt-scan'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -643,6 +709,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
+    if args.subcommand == "melt-diff":
+        return cmd_melt_diff(root, owner=args.owner, from_json=args.from_json, as_json=args.json)
+    if args.subcommand == "melt-scan":
+        return cmd_melt_scan(args.query, owner=args.owner, from_json=args.from_json, as_json=args.json)
     return cmd_check(root)
 
 
