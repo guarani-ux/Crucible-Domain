@@ -6,12 +6,14 @@ description: >-
   anchor/shape checks, and commit verified revisions with independent subagent review.
 ---
 
-# Writer's Room MCP Coupling (`Crucible Domain -> The Writer's Room`)
+# Writer's Room MCP Spoke (`Crucible Orchestrator-Producer Hub -> The Writer's Room`)
 
-## Coupling Rules (`READOUT.md` Invariants)
+> **Role Boundary (`K-MCP-01`):** `Crucible Domain` is the **Orchestrator-Producer Hub (single control plane)** owning assignment framing, local `GROUND_TRUTH.md` authority, and producer/receiving judgment. `The Writer's Room` acts strictly as a deterministic domain spoke—never as a second competing orchestration loop.
+
+## Coupling Rules (`K-MCP-01` & `READOUT.md` Invariants)
 1. **Selection != Craft:** Never wire Crucible lexical `route` directly to generation. Call `writersroom_recognize` first; Writer's Room selects the form and pulls at most one pinned procedure (`MW-01`, `MW-02`, `MW-04`), abstaining (`null`) on unmapped forms like `call_sheet`.
 2. **Authority != Craft:** Crucible craft excerpts enter strictly as `role: "method"`, `use: "craft"`. They can never support `fact`, `asset`, or `permission` claims. Fresh or resumed timed cuts require project-bound approval (`direction` with `project_id`) or hold at preflight.
-3. **Placement != Lookup:** Locating a craft step does not prove it landed in the right passage. After `writersroom_deliver(action="review_packet")`, send the returned `verification_packet` to an **independent read-only `ig-evidence-review` subagent** (distinct `reviewer_id != author_id`) before calling `writersroom_deliver(action="submit")`.
+3. **Stage-Matched Verification (No Forensic Art-Direction Churn):** After `writersroom_deliver(action="review_packet")`, run an **independent read-only review** (`reviewer_id != author_id`). Enforce strict claim-by-claim evidentiary checks on locked downstream execution (`timed_av` cuts on existing material, public factual claims). On exploratory upstream forms (`treatment`, `production_brief`), check real source/authority limits and recipient usability—never reject creative art-direction prose for unlogged sensory details (such as sign fonts or lighting mood) or force multi-round CYA disclaimer churn.
 
 ## 4-Step Producer Loop
 1. **Recognize:** Call `writersroom_recognize` with the raw brief, domain `GROUND_TRUTH.md` sources, and optional `client` (`calgary-public-library`).

@@ -1,9 +1,10 @@
 # Crucible Domain
 
-Crucible Domain is the starting point for finding what we are working on, what we have already tried, and what we can carry forward. It connects projects, GitHub repositories, conversations, skills, graphs, and evidence so people and agents can resume work without reconstructing its history from scratch.
+Crucible Domain is both the **Orchestrator-Producer Hub (single control plane)** for commissioning real work and the canonical memory connecting projects, GitHub repositories, skills, graphs, and evidence. Rather than acting only as an archive or a place to build standalone tools, Crucible defines the assignment, resolves local ground truth and authority, supplies craft methods, and drives specialized **domain MCP spokes** (such as [The Writer's Room](.agents/plugins/writers-room/skills/writers-room/SKILL.md), with the same lightweight floor extending to systems like `Story-Lane`).
 
 ## Start here
 
+- **How does Crucible run domain tools (`Writer's Room`, `Story-Lane`)?** Read [Role: Orchestrator-Producer Hub & MCP Spokes](#role-orchestrator-producer-hub--mcp-spokes) below, [AGENTS.md](AGENTS.md) (`Section 4`), and [`K-MCP-01`](Knowledge/Knowledge_Register.md).
 - **What exists and what is underway?** Open the [Project Register](Project/Project_Register.md) *([Drive](https://drive.google.com/file/d/1hejOpxES0oMfwcZHxAgxb7cvvnUcLm3i/view?usp=drivesdk))*. It distinguishes reviewed projects, conversation leads, and repositories that still need inspection.
 - **What did we learn or get wrong?** Open the [Knowledge Register](Knowledge/Knowledge_Register.md) *([Drive](https://drive.google.com/file/d/1XwzOf6ifYPTq0NDlnU9luciRQMPkjxH-/view?usp=drivesdk))*. It links findings, failures, and tested practices to evidence and shows when they apply.
 - **How do we prove changes work instead of writing "made-to-pass" tests?** Open [Testing Philosophy](Knowledge/Testing_Philosophy.md) (`K-TEST-01` — 4 Evidence Rungs, 3 Test Laws, Red-First & Rung-3 planted-defect evals).
@@ -13,6 +14,15 @@ Crucible Domain is the starting point for finding what we are working on, what w
 - **How does this connect?** Keep a project graph with its project. Use [Graphs](Graphs) *([Drive](https://drive.google.com/drive/folders/1h02pFvfRZbjk796qQp9-7O7_kvZiA_kL))* for views spanning projects or domains. Link the same project and knowledge IDs across views.
 - **Where does the current work live?** Follow the register to the controlling artifact. Use [Calgary Public Library](Calgary%20Public%20Library) *([Drive](https://drive.google.com/drive/folders/1MfKl4RU-9fPmyKPmwMk_8zoxd8OD9qbw))* for authorized Library project material, [Personal Work](Personal%20Work) *([Drive](https://drive.google.com/drive/folders/125LCIJs0LtkvL9-Aitqa9BC32moPTY71))* for personal work, and [Project](Project) *([Drive](https://drive.google.com/drive/folders/1OjT4JloI0IaYmzgnQDgJQ_7lDOtRC6eE))* for shared systems such as the [Work Operating System](Project/Work%20Operating%20System/README.md) *([Drive](https://drive.google.com/drive/folders/1Wa4YCSoXhpfuv01dfgVysKEg-g_bP6ZT))* and [Inner Gravity](Project/Inner%20Gravity/README.md).
 - **Route, forge, sieve, or check workspace health in local RAM:** Run `python ".agents/scripts/crucible_gate.py" route "<task or ID>"`, `forge "<problem>"`, `melt-diff`, `melt-scan <repo...>`, or `doctor`.
+
+## Role: Orchestrator-Producer Hub & MCP Spokes
+
+Crucible operates as the **Orchestrator-Producer Hub** on the bridge, delegating specialized domain execution to lightweight MCP spokes registered under `.agents/plugins/<spoke>/` with zero heavy Hub glue scripts (`K-MCP-01`):
+
+| Layer | Role & What It Owns | What It Never Does |
+| --- | --- | --- |
+| **Crucible Domain (Orchestrator-Producer Hub)** | Frames the assignment and recipient task; resolves local `GROUND_TRUTH.md` sources, project history, and approval gates; supplies non-evidentiary craft playbooks (`MW-*`, `MP-*`); orchestrates subagents; judges whether the deliverable works for the human recipient. | Re-implement domain-specific parsers/renderers inside Hub scripts, or treat craft procedures as factual evidence or release authority. |
+| **Domain MCP Spokes** (`.agents/plugins/<spoke>/`, e.g., [`writers-room`](.agents/plugins/writers-room/skills/writers-room/SKILL.md), future `Story-Lane`) | Recognize domain forms/artifacts; attach at most one form-pinned Crucible craft excerpt (`role: "method"`, `use: "craft"`) or abstain (`null`); enforce fast deterministic domain floors (cut-authority holds, section/table shape, `timed_av` math); render/export deliverables (`.md`, `.docx`, clip selects). | Act as a competing second control plane, consume raw lexical `route` ranks blindly, or trap exploratory creative prose (`treatment`, `production_brief`) in multi-round forensic churn over unlogged art-direction details. |
 
 ## Rule for representing work
 
