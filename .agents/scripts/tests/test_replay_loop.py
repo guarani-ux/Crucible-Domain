@@ -22,8 +22,11 @@ from crucible.campaign_ir import (
     load_ratchet_ledger,
 )
 from crucible.replay_loop import (
+    CounterexampleProbe,
+    CounterexampleRatchet,
     discover_gaps,
     execute_replay_verified_slice,
+    is_grounded_anchor,
     replay_trace_file,
     run_autonomous_campaign,
 )
@@ -392,3 +395,139 @@ def test_run_autonomous_campaign_breaker_and_replay_trace(tmp_path: Path) -> Non
 
     fail_rows = load_ratchet_ledger(fail_ledger)
     assert [row.status for row in fail_rows] == ["REVERT", "TRIPPED"]
+
+
+def test_withheld_holdout_rolls_back_without_leaking_private_output(tmp_path: Path) -> None:
+    target = tmp_path / "app.py"
+    target.write_text("MODE = 'orig'\n", encoding="utf-8")
+
+    node = SliceNode(
+        id="s-withheld",
+        target_paths=["app.py"],
+        verify_cmd=f'"{sys.executable}" -c "import app; assert app.MODE == \'candidate\'"',
+        withheld_verify_cmd=(
+            f'"{sys.executable}" -c "import sys; print(\'PRIVATE_SECRET_ANSWER_99\'); sys.exit(1)"'
+        ),
+        withheld_failure_category="unicode_encoding_damage",
+    )
+
+    def apply_candidate(root: Path) -> None:
+        (root / "app.py").write_text("MODE = 'candidate'\n", encoding="utf-8")
+
+    diff = execute_replay_verified_slice(tmp_path, node, apply_fn=apply_candidate)
+    assert diff.passed is False
+    assert diff.rolled_back is True
+    assert "WITHHELD_HOLDOUT_FAILED: unicode_encoding_damage" in diff.error
+    assert "PRIVATE_SECRET_ANSWER_99" not in diff.error
+    assert target.read_text(encoding="utf-8") == "MODE = 'orig'\n"
+
+
+def test_counterexample_ratchet_catches_refund_bug_and_promotes_inherited_check(tmp_path: Path) -> None:
+    target = tmp_path / "ledger.py"
+    target.write_text("def net_total(xs):\n    return 0\n", encoding="utf-8")
+
+    objective = "Compute net cents from signed integers. Negative refunds must subtract from the total."
+    ratchet_file = tmp_path / "ratchet.json"
+    ratchet = CounterexampleRatchet(persist_path=ratchet_file)
+
+    node = SliceNode(
+        id="s-refund",
+        target_paths=["ledger.py"],
+        verify_cmd=f'"{sys.executable}" -c "import ledger; assert ledger.net_total([100, 50]) == 150"',
+    )
+
+    refund_probe = CounterexampleProbe(
+        id="cx-refund-1",
+        anchor="Negative refunds must subtract from the total.",
+        command=f'"{sys.executable}" -c "import ledger; print(ledger.net_total([100, -40]))"',
+        expected_stdout="60",
+        repair_category="compute result",
+    )
+
+    # Round 1: buggy abs() implementation passes public check, caught by confirmed counterexample
+    def apply_buggy_abs(root: Path) -> None:
+        (root / "ledger.py").write_text("def net_total(xs):\n    return sum(abs(x) for x in xs)\n", encoding="utf-8")
+
+    diff1 = execute_replay_verified_slice(
+        tmp_path,
+        node,
+        apply_fn=apply_buggy_abs,
+        ratchet=ratchet,
+        objective=objective,
+        propose_fn=lambda: refund_probe,
+        second_opinion_fn=lambda _p: (True, "Negative refunds must subtract from the total.", "60"),
+    )
+    assert diff1.passed is False
+    assert diff1.rolled_back is True
+    assert "REALIGN_GOAL: compute result to satisfy Negative refunds must subtract from the total." in diff1.error
+    assert target.read_text(encoding="utf-8") == "def net_total(xs):\n    return 0\n"
+    assert len(ratchet.inherited) == 1
+    assert ratchet_file.is_file()
+
+    # Round 2: reload ratchet from disk; repaired candidate passes public + inherited refund probe
+    reloaded_ratchet = CounterexampleRatchet(persist_path=ratchet_file)
+    assert len(reloaded_ratchet.inherited) == 1
+
+    def apply_fixed_sum(root: Path) -> None:
+        (root / "ledger.py").write_text("def net_total(xs):\n    return sum(xs)\n", encoding="utf-8")
+
+    diff2 = execute_replay_verified_slice(
+        tmp_path,
+        node,
+        apply_fn=apply_fixed_sum,
+        ratchet=reloaded_ratchet,
+        objective=objective,
+    )
+    assert diff2.passed is True
+    assert diff2.rolled_back is False
+    assert target.read_text(encoding="utf-8") == "def net_total(xs):\n    return sum(xs)\n"
+
+
+def test_counterexample_ratchet_guards_grounding_duplicates_and_disagreement(tmp_path: Path) -> None:
+    objective = "Negative refunds must subtract from the total."
+    assert is_grounded_anchor("Negative refunds", objective) is True
+    assert is_grounded_anchor("invented requirement", objective) is False
+    assert is_grounded_anchor("refunds", objective) is False
+
+    ratchet = CounterexampleRatchet()
+
+    ungrounded = CounterexampleProbe(
+        id="cx-bad",
+        anchor="invented requirement",
+        command=f'"{sys.executable}" -c "print(1)"',
+        expected_stdout="1",
+    )
+    res_ungrounded = ratchet.evaluate(tmp_path, objective, propose_fn=lambda: ungrounded)
+    assert res_ungrounded.passed is False
+    assert "GOAL_REQUIRES_CLARIFICATION" in res_ungrounded.reason
+    assert len(ratchet.inherited) == 0
+
+    disputed = CounterexampleProbe(
+        id="cx-disputed",
+        anchor="Negative refunds must subtract",
+        command=f'"{sys.executable}" -c "print(140)"',
+        expected_stdout="60",
+    )
+    res_disputed = ratchet.evaluate(
+        tmp_path,
+        objective,
+        propose_fn=lambda: disputed,
+        second_opinion_fn=lambda _p: (True, "Negative refunds must subtract", "999"),
+    )
+    assert res_disputed.passed is False
+    assert "GOAL_REQUIRES_CLARIFICATION" in res_disputed.reason
+    assert len(ratchet.inherited) == 0
+
+    passing = CounterexampleProbe(
+        id="cx-ok",
+        anchor="Negative refunds must subtract",
+        command=f'"{sys.executable}" -c "print(60)"',
+        expected_stdout="60",
+    )
+    res_ok = ratchet.evaluate(tmp_path, objective, propose_fn=lambda: passing)
+    assert res_ok.passed is True
+    assert len(ratchet.inherited) == 1
+
+    res_dup = ratchet.evaluate(tmp_path, objective, propose_fn=lambda: passing)
+    assert res_dup.passed is False
+    assert "REJECT_DUPLICATE_PROBE" in res_dup.reason

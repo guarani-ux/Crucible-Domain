@@ -849,3 +849,41 @@ def test_campaign_checkpoint_roundtrip_and_corrupt_json(tmp_path: Path) -> None:
     cp_path.write_text("{corrupt json", encoding="utf-8")
     with pytest.raises(ValueError, match="Corrupt campaign checkpoint"):
         load_campaign_checkpoint(cp_path)
+
+
+def test_withheld_holdout_parsed_hashed_and_hidden_from_worker_prompt(tmp_path: Path) -> None:
+    target = tmp_path / "calc.py"
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+
+    spec = load_campaign_spec(
+        {
+            "name": "holdout-campaign",
+            "repo_root": str(tmp_path),
+            "slices": [
+                {
+                    "id": "s-holdout",
+                    "target_paths": ["calc.py"],
+                    "verify_cmd": "pytest -q tests/test_public.py",
+                    "withheld_verify_cmd": "python -c \"assert 'SECRET_EXPECTED_42'\"",
+                    "withheld_failure_category": "encoding_damage",
+                }
+            ],
+        }
+    )
+    node = spec.slices[0]
+    assert node.withheld_verify_cmd == "python -c \"assert 'SECRET_EXPECTED_42'\""
+    assert node.withheld_failure_category == "encoding_damage"
+
+    base_node = SliceNode(
+        id="s-holdout",
+        target_paths=["calc.py"],
+        verify_cmd="pytest -q tests/test_public.py",
+    )
+    assert compute_slice_input_sha256(node, tmp_path) != compute_slice_input_sha256(base_node, tmp_path)
+
+    compiled = optimize_campaign(spec)
+    prompt = build_slice_worker_prompt(compiled.active_slices[0], tmp_path)
+    assert "SECRET_EXPECTED_42" not in prompt
+    assert "withheld_verify_cmd" not in prompt
+    assert "encoding_damage" not in prompt
+    assert "verify_cmd: pytest -q tests/test_public.py" in prompt

@@ -7,6 +7,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -143,6 +144,227 @@ class ReplayTraceEvent:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+VALID_REPAIR_CATEGORIES = frozenset(
+    {
+        "interpret input",
+        "preserve data",
+        "compute result",
+        "serialize output",
+        "handle boundary",
+    }
+)
+
+
+@dataclass(frozen=True)
+class CounterexampleProbe:
+    """Executable recipient-goal counterexample anchored verbatim to the active objective."""
+
+    id: str
+    anchor: str
+    command: str
+    expected_stdout: str
+    repair_category: str = "compute result"
+    expected_exit_code: int = 0
+
+    def signature(self) -> tuple[str, int, str]:
+        return (self.command.strip(), int(self.expected_exit_code), self.expected_stdout.strip())
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CounterexampleProbe:
+        return cls(
+            id=str(data["id"]),
+            anchor=str(data["anchor"]),
+            command=str(data["command"]),
+            expected_stdout=str(data["expected_stdout"]),
+            repair_category=str(data.get("repair_category", "compute result")),
+            expected_exit_code=int(data.get("expected_exit_code", 0)),
+        )
+
+
+@dataclass
+class CounterexampleResult:
+    """Outcome of running CounterexampleRatchet.evaluate()."""
+
+    passed: bool
+    reason: str
+    promoted_probe: CounterexampleProbe | None = None
+    inherited_count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "reason": self.reason,
+            "promoted_probe": self.promoted_probe.to_dict() if self.promoted_probe else None,
+            "inherited_count": self.inherited_count,
+        }
+
+
+def is_grounded_anchor(anchor: str, objective: str) -> bool:
+    """Verify anchor appears verbatim in objective with at least min(2, word_count) tokens."""
+    clean_anchor = anchor.strip()
+    obj_words = re.findall(r"\w+", objective)
+    anchor_words = re.findall(r"\w+", clean_anchor)
+    return bool(obj_words and clean_anchor in objective and len(anchor_words) >= min(2, len(obj_words)))
+
+
+def run_counterexample_probe(exec_root: Path, probe: CounterexampleProbe) -> tuple[bool, int, str]:
+    """Execute a single CounterexampleProbe in exec_root and compare exit code + stdout."""
+    proc = subprocess.run(
+        probe.command,
+        cwd=exec_root,
+        shell=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    matched = proc.returncode == probe.expected_exit_code and proc.stdout.strip() == probe.expected_stdout.strip()
+    return matched, proc.returncode, proc.stdout.strip()
+
+
+class CounterexampleRatchet:
+    """Adversarial counterexample ratchet with verbatim anchor grounding and second-opinion confirmation."""
+
+    def __init__(
+        self,
+        inherited: list[CounterexampleProbe] | None = None,
+        persist_path: Path | str | None = None,
+    ) -> None:
+        self.persist_path: Path | None = Path(persist_path) if persist_path is not None else None
+        self.inherited: list[CounterexampleProbe] = []
+        self._signatures: set[tuple[str, int, str]] = set()
+        if self.persist_path is not None and self.persist_path.is_file():
+            raw = json.loads(self.persist_path.read_text(encoding="utf-8"))
+            for item in raw.get("inherited", []):
+                self._add_inherited(CounterexampleProbe.from_dict(item), save=False)
+        for probe in inherited or []:
+            self._add_inherited(probe, save=False)
+
+    def _add_inherited(self, probe: CounterexampleProbe, *, save: bool = True) -> bool:
+        sig = probe.signature()
+        if sig in self._signatures:
+            return False
+        self._signatures.add(sig)
+        self.inherited.append(probe)
+        if save and self.persist_path is not None:
+            self._save()
+        return True
+
+    def _save(self) -> None:
+        if self.persist_path is None:
+            return
+        self.persist_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(
+            {"inherited": [p.to_dict() for p in self.inherited]},
+            indent=2,
+            sort_keys=True,
+        ) + "\n"
+        fd, tmp_name = tempfile.mkstemp(prefix=".ratchet_", dir=str(self.persist_path.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(payload)
+            os.replace(tmp_name, self.persist_path)
+        except Exception:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
+            raise
+
+    def evaluate(
+        self,
+        exec_root: Path,
+        objective: str,
+        propose_fn: Callable[[], CounterexampleProbe | None] | None = None,
+        second_opinion_fn: Callable[[CounterexampleProbe], tuple[bool, str, str]] | None = None,
+    ) -> CounterexampleResult:
+        """Replay inherited probes, then optionally challenge candidate with a fresh grounded counterexample."""
+        for probe in self.inherited:
+            matched, _, _ = run_counterexample_probe(exec_root, probe)
+            if not matched:
+                return CounterexampleResult(
+                    passed=False,
+                    reason=f"REALIGN_INHERITED: {probe.repair_category} to satisfy {probe.anchor[:200]}",
+                    promoted_probe=None,
+                    inherited_count=len(self.inherited),
+                )
+
+        if propose_fn is None:
+            return CounterexampleResult(
+                passed=True,
+                reason="inherited_probes_ok",
+                promoted_probe=None,
+                inherited_count=len(self.inherited),
+            )
+
+        proposed = propose_fn()
+        if proposed is None:
+            return CounterexampleResult(
+                passed=True,
+                reason="no_new_counterexample",
+                promoted_probe=None,
+                inherited_count=len(self.inherited),
+            )
+
+        if not is_grounded_anchor(proposed.anchor, objective):
+            return CounterexampleResult(
+                passed=False,
+                reason="GOAL_REQUIRES_CLARIFICATION: counterexample anchor not grounded in active objective",
+                promoted_probe=None,
+                inherited_count=len(self.inherited),
+            )
+
+        if proposed.repair_category not in VALID_REPAIR_CATEGORIES:
+            return CounterexampleResult(
+                passed=False,
+                reason=f"INVALID_COUNTEREXAMPLE: unknown repair_category '{proposed.repair_category}'",
+                promoted_probe=None,
+                inherited_count=len(self.inherited),
+            )
+
+        if proposed.signature() in self._signatures:
+            return CounterexampleResult(
+                passed=False,
+                reason="REJECT_DUPLICATE_PROBE: counterexample repeats a previously checked input",
+                promoted_probe=None,
+                inherited_count=len(self.inherited),
+            )
+
+        matched, _, _ = run_counterexample_probe(exec_root, proposed)
+        if matched:
+            self._add_inherited(proposed, save=True)
+            return CounterexampleResult(
+                passed=True,
+                reason="counterexample_passed_and_promoted",
+                promoted_probe=proposed,
+                inherited_count=len(self.inherited),
+            )
+
+        if second_opinion_fn is not None:
+            determinate, second_anchor, second_expected = second_opinion_fn(proposed)
+            if (
+                not determinate
+                or not is_grounded_anchor(second_anchor, objective)
+                or second_expected.strip() != proposed.expected_stdout.strip()
+            ):
+                return CounterexampleResult(
+                    passed=False,
+                    reason="GOAL_REQUIRES_CLARIFICATION: independent expected outcomes disagree",
+                    promoted_probe=None,
+                    inherited_count=len(self.inherited),
+                )
+
+        self._add_inherited(proposed, save=True)
+        return CounterexampleResult(
+            passed=False,
+            reason=f"REALIGN_GOAL: {proposed.repair_category} to satisfy {proposed.anchor[:200]}",
+            promoted_probe=proposed,
+            inherited_count=len(self.inherited),
+        )
 
 
 def _utc_now_iso() -> str:
@@ -553,6 +775,27 @@ def _compute_unified_diff(
     return "".join(chunks)
 
 
+def _run_withheld_holdout(exec_root: Path, node: SliceNode) -> tuple[bool, str]:
+    """Run optional private withheld_verify_cmd without leaking private stdout/stderr on failure."""
+    cmd = node.withheld_verify_cmd.strip()
+    if not cmd:
+        return True, ""
+    proc = subprocess.run(
+        cmd,
+        cwd=exec_root,
+        shell=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if proc.returncode == 0:
+        return True, "withheld_holdout_ok"
+    category = node.withheld_failure_category.strip() or "private_holdout_mismatch"
+    return False, f"WITHHELD_HOLDOUT_FAILED: {category}"
+
+
 def _run_slice_verify(
     exec_root: Path,
     node: SliceNode,
@@ -560,7 +803,12 @@ def _run_slice_verify(
 ) -> tuple[bool, str]:
     if verify_fn is not None:
         ok, detail = verify_fn(exec_root)
-        return bool(ok), str(detail)
+        if not ok:
+            return False, str(detail)
+        w_ok, w_detail = _run_withheld_holdout(exec_root, node)
+        if not w_ok:
+            return False, w_detail
+        return True, str(detail)
 
     if node.verify_cmd.strip():
         proc = subprocess.run(
@@ -574,7 +822,12 @@ def _run_slice_verify(
             check=False,
         )
         combined = "\n".join(part for part in (proc.stdout.strip(), proc.stderr.strip()) if part)
-        return (proc.returncode == 0), (combined or f"exit_code={proc.returncode}")
+        if proc.returncode != 0:
+            return False, (combined or f"exit_code={proc.returncode}")
+        w_ok, w_detail = _run_withheld_holdout(exec_root, node)
+        if not w_ok:
+            return False, w_detail
+        return True, (combined or f"exit_code={proc.returncode}")
 
     for raw_path in node.target_paths:
         target = (exec_root / raw_path).resolve()
@@ -590,6 +843,9 @@ def _run_slice_verify(
                 json.loads(target.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 return False, f"json error in {raw_path}: {exc}"
+    w_ok, w_detail = _run_withheld_holdout(exec_root, node)
+    if not w_ok:
+        return False, w_detail
     return True, "structural_ok"
 
 
@@ -632,6 +888,7 @@ def _execute_in_worktree(
     apply_fn: Callable[[Path], None] | None,
     verify_fn: Callable[[Path], tuple[bool, str]] | None,
     checkpoint: CampaignCheckpoint,
+    ratchet_check: Callable[[Path], tuple[bool, str]] | None = None,
 ) -> VerifiedDiff:
     if checkpoint.rounds_used >= checkpoint.max_rounds:
         return VerifiedDiff(
@@ -712,7 +969,11 @@ def _execute_in_worktree(
             detail1 = f"{type(exc).__name__}: {exc}"
 
         replay_match = bool(ok1 and ok2 and after_sha256 == replay_sha256)
-        if ok1 and replay_match:
+        ratchet_ok = True
+        ratchet_detail = ""
+        if ok1 and replay_match and ratchet_check is not None:
+            ratchet_ok, ratchet_detail = ratchet_check(wt_dir)
+        if ok1 and replay_match and ratchet_ok:
             diff_text = _compute_unified_diff(before_map, after_map)
             tx = TransactionBuffer(root)
             for rel, data in after_map.items():
@@ -753,8 +1014,10 @@ def _execute_in_worktree(
                 err = detail1 or "initial verification failed"
             elif not ok2:
                 err = f"REPLAY_FAILED: {detail2}"
-            else:
+            elif after_sha256 != replay_sha256:
                 err = f"REPLAY_DRIFT: after_sha256 {after_sha256} != replay_sha256 {replay_sha256}"
+            else:
+                err = ratchet_detail or "counterexample ratchet rejected candidate"
             diff = VerifiedDiff(
                 slice_id=node.id,
                 passed=False,
@@ -803,6 +1066,10 @@ def execute_replay_verified_slice(
     use_worktree: bool = False,
     checkpoint: CampaignCheckpoint | None = None,
     trace_path: Path | None = None,
+    ratchet: CounterexampleRatchet | None = None,
+    objective: str = "",
+    propose_fn: Callable[[], CounterexampleProbe | None] | None = None,
+    second_opinion_fn: Callable[[CounterexampleProbe], tuple[bool, str, str]] | None = None,
 ) -> VerifiedDiff:
     """Execute a slice in RAM or isolated git worktree, verify twice for replay determinism, and rollback on any fault."""
     root = Path(repo_root).resolve()
@@ -814,6 +1081,17 @@ def execute_replay_verified_slice(
     input_sha256 = compute_slice_input_sha256(node, root)
     active_cp = checkpoint if checkpoint is not None else CampaignCheckpoint(campaign_name="single-slice", max_rounds=1)
 
+    def _run_ratchet(exec_root: Path) -> tuple[bool, str]:
+        if ratchet is None:
+            return True, ""
+        res = ratchet.evaluate(
+            exec_root=exec_root,
+            objective=objective,
+            propose_fn=propose_fn,
+            second_opinion_fn=second_opinion_fn,
+        )
+        return res.passed, res.reason
+
     if use_worktree and (root / ".git").exists():
         diff = _execute_in_worktree(
             root=root,
@@ -824,6 +1102,7 @@ def execute_replay_verified_slice(
             apply_fn=apply_fn,
             verify_fn=verify_fn,
             checkpoint=active_cp,
+            ratchet_check=_run_ratchet if ratchet is not None else None,
         )
         status_override = "HALT_MAX_ROUNDS" if diff.error.startswith("HALT_MAX_ROUNDS") else ""
         _emit_trace(trace_path, node, input_sha256, diff, active_cp.rounds_used, status_override=status_override)
@@ -852,6 +1131,10 @@ def execute_replay_verified_slice(
             return False, f"REPLAY_FAILED: {detail2}"
         if state["after_sha256"] != state["replay_sha256"]:
             return False, f"REPLAY_DRIFT: after_sha256 {state['after_sha256']} != replay_sha256 {state['replay_sha256']}"
+        if ratchet is not None:
+            r_ok, r_detail = _run_ratchet(root)
+            if not r_ok:
+                return False, r_detail
         return True, detail1
 
     tx_ok, tx_detail = execute_slice_transaction(

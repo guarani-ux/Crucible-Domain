@@ -33,6 +33,8 @@ class SliceNode:
     depends_on: list[str] = field(default_factory=list)
     verify_cmd: str = ""
     input_sha256: str = ""
+    withheld_verify_cmd: str = ""
+    withheld_failure_category: str = ""
 
 
 @dataclass
@@ -202,6 +204,10 @@ def compute_slice_input_sha256(node: SliceNode, repo_root: Path | str) -> str:
     h.update(b"\x00")
     h.update(node.verify_cmd.encode("utf-8"))
     h.update(b"\x00")
+    if node.withheld_verify_cmd:
+        h.update(b"WITHHELD:")
+        h.update(node.withheld_verify_cmd.encode("utf-8"))
+        h.update(b"\x00")
     for dep in sorted(node.depends_on):
         h.update(dep.encode("utf-8"))
         h.update(b"\x00")
@@ -750,12 +756,20 @@ def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
             depends_on = _expect_str_list(item.get("depends_on", []), f"slices[{idx}].depends_on", errors)
             verify_cmd = item.get("verify_cmd", "")
             input_sha256 = item.get("input_sha256", "")
+            withheld_verify_cmd = item.get("withheld_verify_cmd", "")
+            withheld_failure_category = item.get("withheld_failure_category", "")
             if not isinstance(verify_cmd, str):
                 errors.append(f"slices[{idx}].verify_cmd must be a string")
                 verify_cmd = ""
             if not isinstance(input_sha256, str):
                 errors.append(f"slices[{idx}].input_sha256 must be a string")
                 input_sha256 = ""
+            if not isinstance(withheld_verify_cmd, str):
+                errors.append(f"slices[{idx}].withheld_verify_cmd must be a string")
+                withheld_verify_cmd = ""
+            if not isinstance(withheld_failure_category, str):
+                errors.append(f"slices[{idx}].withheld_failure_category must be a string")
+                withheld_failure_category = ""
             slices.append(
                 SliceNode(
                     id=sid,
@@ -763,6 +777,8 @@ def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
                     depends_on=depends_on,
                     verify_cmd=verify_cmd,
                     input_sha256=input_sha256,
+                    withheld_verify_cmd=withheld_verify_cmd,
+                    withheld_failure_category=withheld_failure_category,
                 )
             )
 

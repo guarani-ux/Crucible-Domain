@@ -157,8 +157,8 @@ def test_context_compiler_and_adaptive_commit_risk() -> None:
     assert "Context Compiler" in ctx["summary_line"]
     assert ctx["active_domain"] in ("crucible_engine", "writers_room", "story_lane", "general")
 
-    # Low-risk non-code doc change -> LOW tier, strict not escalated
-    low = ram_ml_engine.assess_commit_risk(HUB_ROOT, staged_files=["README.md"])
+    # Low-risk non-code doc change (isolated path without live co-change churn) -> LOW tier, strict not escalated
+    low = ram_ml_engine.assess_commit_risk(HUB_ROOT, staged_files=["docs/notes.md"])
     assert low["tier"] == "LOW"
     assert low["enforce_strict"] is False
 

@@ -8,7 +8,7 @@ depends_on:
   - scripts/verify_all.ps1
 depends_on_sha256:
   .agents/scripts/crucible/tx_patch.py: 857e9e127769200bd5e8950c75081f961ace38066f219bacbc5d99b7dc86d984
-  .agents/scripts/crucible/campaign_ir.py: 94b0f5ce14b2be61183ba70822ef298e59e4a9f655604eefbfb219f6d431cdeb
+  .agents/scripts/crucible/campaign_ir.py: e059c28476722b5b98dc2198eff01c8e0f3093fc63c7282b8739f37112ea297b
   scripts/verify_all.ps1: dba15afec46ba76bf13b40491a3005ccaa13554ba9b570f77cf575e23cdb9567
 ---
 
