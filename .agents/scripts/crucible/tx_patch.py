@@ -95,7 +95,7 @@ class TransactionBuffer:
                     errors.append(f"python syntax error in {rel}: {exc}")
                     continue
                 if tqg is not None and tqg.is_test_file(path):
-                    findings = tqg.check_test_source(rel, text)
+                    findings = tqg.check_test_source(text, rel)
                     for f in findings:
                         errors.append(f"{f.rule_id} in {f.file}:{f.line}: {f.message}")
             elif suffix == ".json":
