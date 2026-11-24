@@ -12,17 +12,33 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+import concurrent.futures
+import json
+
 from crucible.campaign_ir import (
+    WORKER_RESULT_SCHEMA,
+    CacheConflictError,
     CampaignCompileError,
     CampaignSpec,
     ErrorCircuitBreaker,
+    LoopStateMachine,
+    PlannedSlice,
+    RatchetEntry,
     SliceNode,
+    StateTransitionError,
+    append_ratchet_ledger,
+    build_slice_worker_prompt,
     compile_campaign,
     compute_slice_input_sha256,
+    file_sha256,
     hash_error_output,
+    load_campaign_spec,
+    load_ratchet_ledger,
     load_receipt_cache,
+    merge_receipt_cache,
     optimize_campaign,
     save_receipt_cache,
+    save_receipt_cache_cas,
 )
 
 
@@ -203,3 +219,279 @@ def test_ast_import_change_invalidates_slice_hash_and_waves(tmp_path: Path) -> N
     second = optimize_campaign(spec, cache)
     assert [s.node.id for s in second.active_slices] == ["a", "c"]
     assert [s.node.id for s in second.skipped_slices] == ["b"]
+
+def test_cas_save_detects_stale_sha_and_missing_file(tmp_path: Path) -> None:
+    """Fails if optimistic CAS overwrites stale disk state or crashes on missing files."""
+    cache_path = tmp_path / "cache" / "receipts.json"
+    assert file_sha256(cache_path) is None
+
+    # Reject: expected non-None sha256 when file does not exist (missing treated as None)
+    with pytest.raises(CacheConflictError):
+        save_receipt_cache_cas(cache_path, {"s1": "h1"}, expected_sha256="deadbeef")
+    assert not cache_path.exists()
+
+    # Allow: initial write and valid CAS compare-and-swap
+    sha1 = save_receipt_cache_cas(cache_path, {"s1": "h1"})
+    assert sha1 == file_sha256(cache_path)
+    sha2 = save_receipt_cache_cas(cache_path, {"s1": "h2"}, expected_sha256=sha1)
+    assert sha2 != sha1
+    assert sha2 == file_sha256(cache_path)
+
+    # Reject: stale expected_sha256 must raise CacheConflictError without mutating disk
+    with pytest.raises(CacheConflictError):
+        save_receipt_cache_cas(cache_path, {"s1": "stale"}, expected_sha256=sha1)
+    assert load_receipt_cache(cache_path) == {"s1": "h2"}
+    assert file_sha256(cache_path) == sha2
+
+
+def test_merge_receipt_cache_preserves_concurrent_keys_and_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fails if concurrent merge_receipt_cache workers drop keys or fail to retry CAS conflicts."""
+    cache_path = tmp_path / "receipts.json"
+
+    with pytest.raises(ValueError):
+        merge_receipt_cache(cache_path, {"k": "v"}, max_retries=-1)
+
+    # Real concurrent workers racing from missing file -> existing file updates
+    def worker(idx: int) -> tuple[dict[str, str], str]:
+        return merge_receipt_cache(cache_path, {f"slice_{idx}": f"sha_{idx}"}, max_retries=16)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(worker, range(16)))
+
+    final_disk = load_receipt_cache(cache_path)
+    assert final_disk == {f"slice_{i}": f"sha_{i}" for i in range(16)}
+    assert all(isinstance(sha, str) and len(sha) == 64 for _, sha in results)
+
+    # Deterministic CAS retry & exhaustion test
+    import crucible.campaign_ir as cir
+
+    real_cas = cir.save_receipt_cache_cas
+    calls = {"n": 0}
+
+    def conflict_once(path: Path | str, data: dict[str, str], expected_sha256: str | None = None) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise CacheConflictError("simulated concurrent write")
+        return real_cas(path, data, expected_sha256=expected_sha256)
+
+    monkeypatch.setattr(cir, "save_receipt_cache_cas", conflict_once)
+    merged, new_sha = merge_receipt_cache(cache_path, {"extra": "ok"}, max_retries=1)
+    assert calls["n"] == 2
+    assert merged["extra"] == "ok"
+    assert new_sha == file_sha256(cache_path)
+
+    def always_conflict(path: Path | str, data: dict[str, str], expected_sha256: str | None = None) -> str:
+        raise CacheConflictError("permanent conflict")
+
+    monkeypatch.setattr(cir, "save_receipt_cache_cas", always_conflict)
+    with pytest.raises(CacheConflictError):
+        merge_receipt_cache(cache_path, {"never": "saved"}, max_retries=2)
+
+
+def test_loop_state_machine_enforces_order_and_rejects_stale_sha() -> None:
+    """Fails if LoopStateMachine permits out-of-order commits or stale SHA verification."""
+    fsm = LoopStateMachine()
+    assert fsm.state == "PLAN"
+
+    # Negative: illegal transitions from PLAN
+    with pytest.raises(StateTransitionError):
+        fsm.verify(0, "abc")
+    with pytest.raises(StateTransitionError):
+        fsm.commit("deadbeef")
+    with pytest.raises(StateTransitionError):
+        fsm.cache()
+    with pytest.raises(StateTransitionError):
+        fsm.stage("")
+    with pytest.raises(StateTransitionError):
+        fsm.plan("", "s1")
+
+    fsm.plan("camp-v4", "wave1")
+    assert fsm.stage("sha-after-1") == "STAGE"
+
+    # Negative: cannot re-plan, skip to commit, or verify stale SHA while in STAGE
+    with pytest.raises(StateTransitionError):
+        fsm.plan("camp-v4", "s2")
+    with pytest.raises(StateTransitionError):
+        fsm.commit("deadbeef")
+    with pytest.raises(StateTransitionError):
+        fsm.verify(0, "sha-stale-other")
+    assert fsm.state == "STAGE"
+
+    # Failure path: exit_code != 0 moves to FAILED, records canonical error hash, requires reset()
+    ok = fsm.verify(1, "sha-after-1", "AssertionError at 2026-11-24T01:02:03Z")
+    assert not ok
+    assert fsm.state == "FAILED"
+    assert fsm.last_error_sha256 == hash_error_output("AssertionError at 2026-11-24T09:00:00Z")
+    with pytest.raises(StateTransitionError):
+        fsm.commit("deadbeef")
+    with pytest.raises(StateTransitionError):
+        fsm.stage("sha-after-2")
+
+    assert fsm.reset() == "PLAN"
+
+    # Positive: full PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE -> RESET round-trip
+    fsm.plan("camp-v4", "wave1")
+    assert fsm.stage("sha-after-2") == "STAGE"
+    assert fsm.verify(0, "sha-after-2") is True
+    assert fsm.state == "VERIFY"
+    with pytest.raises(StateTransitionError):
+        fsm.cache()
+    with pytest.raises(StateTransitionError):
+        fsm.commit("")
+    assert fsm.commit("c0mm1t") == "COMMIT"
+    assert fsm.cache() == "CACHE"
+    with pytest.raises(StateTransitionError):
+        fsm.commit("again")
+    assert fsm.reset() == "PLAN"
+
+
+def test_ratchet_ledger_roundtrip_and_validation(tmp_path: Path) -> None:
+    """Fails if TSV ratchet ledger drops empty trailing columns, corrupts header, or accepts invalid statuses."""
+    ledger = tmp_path / "logs" / "ratchet.tsv"
+    assert load_ratchet_ledger(ledger) == []
+
+    # Negative: invalid status, negative round/seconds, tab injection, corrupt header
+    with pytest.raises(ValueError):
+        RatchetEntry("2026-11-24T00:00:00Z", "c", 1, "s1", "INVALID", 1.0)
+    with pytest.raises(ValueError):
+        RatchetEntry("2026-11-24T00:00:00Z", "c", -1, "s1", "KEEP", 1.0)
+    with pytest.raises(ValueError):
+        RatchetEntry("2026-11-24T00:00:00Z", "c\tbad", 1, "s1", "KEEP", 1.0)
+
+    bad_tsv = tmp_path / "bad.tsv"
+    bad_tsv.write_text("wrong\theader\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_ratchet_ledger(bad_tsv)
+
+    entries = [
+        RatchetEntry("2026-11-24T00:01:00Z", "v4", 1, "s1", "KEEP", 1.2345, "abc123", "def456", ""),
+        RatchetEntry("2026-11-24T00:02:00Z", "v4", 2, "s2", "REVERT", 0.5, "", "ghi789", "err111"),
+        RatchetEntry("2026-11-24T00:03:00Z", "v4", 3, "s3", "SKIP_CACHED", 0.0, "", "", ""),
+        RatchetEntry("2026-11-24T00:04:00Z", "v4", 4, "s4", "TRIPPED", 2.0, "", "jkl000", "err222"),
+    ]
+    for e in entries:
+        append_ratchet_ledger(ledger, e)
+
+    lines = ledger.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 5
+    assert lines[0] == "timestamp\tcampaign\tround_id\tslice_id\tstatus\tseconds\tcommit_sha\tafter_sha256\terror_sha256"
+    assert load_ratchet_ledger(ledger) == entries
+
+
+def test_campaign_spec_loader_worker_schema_and_minimal_prompt(tmp_path: Path) -> None:
+    """Fails if spec loader accepts malformed schemas or worker prompt leaks extra slice/file content."""
+    # Negative: malformed specs raise CampaignCompileError
+    with pytest.raises(CampaignCompileError):
+        load_campaign_spec({"name": "bad", "repo_root": str(tmp_path), "slices": "not-a-list"})
+    with pytest.raises(CampaignCompileError):
+        load_campaign_spec({"name": "bad", "repo_root": str(tmp_path), "slices": [{"id": "s1"}], "max_rounds": True})
+
+    secret_file = tmp_path / "mod.py"
+    secret_file.write_text("SECRET_TOKEN = 'do_not_leak_this_in_prompt'\n", encoding="utf-8")
+
+    spec_dict = {
+        "name": "v4-camp",
+        "repo_root": str(tmp_path),
+        "max_rounds": 6,
+        "slices": [
+            {"id": "s0", "target_paths": ["mod.py"], "verify_cmd": "pytest -q"},
+            {"id": "s1", "target_paths": ["mod.py"], "depends_on": ["s0"], "verify_cmd": "pytest -k s1"},
+        ],
+    }
+    spec_json_path = tmp_path / "campaign.json"
+    spec_json_path.write_text(json.dumps(spec_dict), encoding="utf-8")
+
+    from_dict = load_campaign_spec(spec_dict)
+    from_str = load_campaign_spec(json.dumps(spec_dict))
+    from_path = load_campaign_spec(spec_json_path)
+    from_path_str = load_campaign_spec(str(spec_json_path))
+    assert from_dict == from_str == from_path == from_path_str
+    assert from_dict.max_rounds == 6
+    assert [s.id for s in from_dict.slices] == ["s0", "s1"]
+
+    assert WORKER_RESULT_SCHEMA["type"] == "object"
+    assert set(WORKER_RESULT_SCHEMA["required"]) == {
+        "slice_id",
+        "commit_sha",
+        "after_sha256",
+        "passed",
+        "error_output",
+    }
+    assert WORKER_RESULT_SCHEMA["properties"]["passed"]["type"] == "boolean"
+
+    compiled = optimize_campaign(from_dict, {})
+    target_ps = next(ps for ps in compiled.ordered_slices if ps.node.id == "s1")
+    prompt = build_slice_worker_prompt(target_ps, tmp_path)
+    assert "s1" in prompt
+    assert "mod.py" in prompt
+    assert "s0" in prompt
+    assert "pytest -k s1" in prompt
+    assert target_ps.computed_sha256 in prompt
+    assert "SECRET_TOKEN" not in prompt
+    assert "v4-camp" not in prompt
+
+
+def test_property_100_random_fsm_cas_and_ledger_invariants(tmp_path: Path) -> None:
+    """Fails if randomized CAS merges, FSM state gates, or TSV round-trips lose invariants."""
+    rng = random.Random(20261124)
+    statuses = ["KEEP", "REVERT", "SKIP_CACHED", "TRIPPED"]
+
+    for case in range(100):
+        case_dir = tmp_path / f"w1_case_{case}"
+        case_dir.mkdir()
+        cache_path = case_dir / "receipts.json"
+        ledger_path = case_dir / "ratchet.tsv"
+
+        # 1. Randomized CAS & merge-on-write preservation
+        expected_map: dict[str, str] = {}
+        last_sha: str | None = None
+        for step in range(rng.randint(2, 5)):
+            key = f"s{step}"
+            val = f"{case:03d}-{rng.randint(1000, 9999)}"
+            merged, new_sha = merge_receipt_cache(cache_path, {key: val})
+            expected_map[key] = val
+            assert merged == expected_map
+            if last_sha is not None and new_sha != last_sha:
+                with pytest.raises(CacheConflictError):
+                    save_receipt_cache_cas(cache_path, {"bad": "x"}, expected_sha256=last_sha)
+            last_sha = new_sha
+        assert load_receipt_cache(cache_path) == expected_map
+
+        # 2. Randomized FSM valid + illegal transition fuzzing
+        fsm = LoopStateMachine()
+        after_sha = f"after-{case}-{rng.randint(1, 999)}"
+        fsm.plan(f"camp-{case}", f"slice-{case}")
+        fsm.stage(after_sha)
+        if rng.random() < 0.3:
+            with pytest.raises(StateTransitionError):
+                fsm.verify(0, after_sha + "-stale")
+            assert fsm.state == "STAGE"
+        if rng.random() < 0.5:
+            assert fsm.verify(0, after_sha) is True
+            fsm.commit(f"commit-{case}")
+            fsm.cache()
+            assert fsm.state == "CACHE"
+        else:
+            assert fsm.verify(2, after_sha, f"err-{case}") is False
+            assert fsm.state == "FAILED"
+            with pytest.raises(StateTransitionError):
+                fsm.commit(f"commit-{case}")
+        fsm.reset()
+        assert fsm.state == "PLAN"
+
+        # 3. Randomized RatchetEntry TSV round-trip
+        entry = RatchetEntry(
+            timestamp=f"2026-11-24T00:00:{case % 60:02d}Z",
+            campaign=f"camp-{case}",
+            round_id=case,
+            slice_id=f"s{case % 4}",
+            status=rng.choice(statuses),
+            seconds=round(rng.uniform(0.0, 25.0), 4),
+            commit_sha="" if rng.random() < 0.4 else f"sha{case}",
+            after_sha256=after_sha,
+            error_sha256="" if rng.random() < 0.5 else f"err{case}",
+        )
+        append_ratchet_ledger(ledger_path, entry)
+        assert load_ratchet_ledger(ledger_path) == [entry]

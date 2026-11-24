@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import json
+import math
 import os
 import re
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -248,22 +251,40 @@ def compute_slice_input_sha256(node: SliceNode, repo_root: Path | str) -> str:
     return h.hexdigest()
 
 
-def load_receipt_cache(cache_path: Path | str) -> dict[str, str]:
-    """Load local slice_id -> input_sha256 receipt cache."""
-    p = Path(cache_path)
+class CacheConflictError(RuntimeError):
+    """Raised when optimistic CAS receipt cache write observes a stale SHA-256."""
+
+
+_CACHE_LOCKS_GUARD = threading.Lock()
+_CACHE_LOCKS: dict[Path, threading.RLock] = {}
+
+
+def _path_lock(path: Path) -> threading.RLock:
+    resolved = path.resolve()
+    with _CACHE_LOCKS_GUARD:
+        lock = _CACHE_LOCKS.get(resolved)
+        if lock is None:
+            lock = threading.RLock()
+            _CACHE_LOCKS[resolved] = lock
+        return lock
+
+
+def file_sha256(path: Path | str) -> str | None:
+    """Return SHA-256 hex digest of file if present, or None if missing."""
+    p = Path(path)
     if not p.is_file():
-        return {}
-    data = json.loads(p.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        return {}
-    return {str(k): str(v) for k, v in data.items()}
+        return None
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
-def save_receipt_cache(cache_path: Path | str, cache: dict[str, str]) -> None:
-    """Atomically persist slice_id -> input_sha256 receipt cache."""
-    p = Path(cache_path)
+def _write_receipt_cache_atomic(p: Path, cache: dict[str, str]) -> str:
     p.parent.mkdir(parents=True, exist_ok=True)
-    payload = (json.dumps(dict(sorted(cache.items())), indent=2) + "\n").encode("utf-8")
+    normalized = {str(k): str(v) for k, v in cache.items()}
+    payload = (json.dumps(dict(sorted(normalized.items())), indent=2) + "\n").encode("utf-8")
     fd, tmp_name = tempfile.mkstemp(prefix=".ir_cache_", dir=str(p.parent))
     try:
         with os.fdopen(fd, "wb") as fh:
@@ -273,6 +294,70 @@ def save_receipt_cache(cache_path: Path | str, cache: dict[str, str]) -> None:
         if os.path.exists(tmp_name):
             os.unlink(tmp_name)
         raise
+    return hashlib.sha256(payload).hexdigest()
+
+
+def load_receipt_cache(cache_path: Path | str) -> dict[str, str]:
+    """Load local slice_id -> input_sha256 receipt cache."""
+    p = Path(cache_path)
+    with _path_lock(p):
+        if not p.is_file():
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): str(v) for k, v in data.items()}
+
+
+def save_receipt_cache(cache_path: Path | str, cache: dict[str, str]) -> None:
+    """Atomically persist slice_id -> input_sha256 receipt cache."""
+    p = Path(cache_path)
+    with _path_lock(p):
+        _write_receipt_cache_atomic(p, cache)
+
+
+def save_receipt_cache_cas(
+    cache_path: Path | str,
+    cache: dict[str, str],
+    expected_sha256: str | None = None,
+) -> str:
+    """Atomically persist receipt cache iff current on-disk SHA-256 matches expected_sha256 (when provided)."""
+    p = Path(cache_path)
+    with _path_lock(p):
+        current_sha = file_sha256(p)
+        if expected_sha256 is not None and current_sha != expected_sha256:
+            raise CacheConflictError(
+                f"Receipt cache conflict for '{p}': expected sha256 {expected_sha256}, found {current_sha}"
+            )
+        return _write_receipt_cache_atomic(p, cache)
+
+
+def merge_receipt_cache(
+    cache_path: Path | str,
+    updates: dict[str, str],
+    max_retries: int = 5,
+) -> tuple[dict[str, str], str]:
+    """Read-merge-CAS loop preserving concurrent keys from other slices/workers."""
+    if max_retries < 0:
+        raise ValueError("max_retries must be >= 0")
+    p = Path(cache_path)
+    clean_updates = {str(k): str(v) for k, v in updates.items()}
+
+    for attempt in range(max_retries + 1):
+        expected_sha = file_sha256(p)
+        try:
+            ctx = _path_lock(p) if expected_sha is None else contextlib.nullcontext()
+            with ctx:
+                if expected_sha is None:
+                    expected_sha = file_sha256(p)
+                current = load_receipt_cache(p)
+                merged = {**current, **clean_updates}
+                new_sha = save_receipt_cache_cas(p, merged, expected_sha256=expected_sha)
+                return merged, new_sha
+        except CacheConflictError:
+            if attempt >= max_retries:
+                raise
+    raise CacheConflictError(f"Exceeded max_retries ({max_retries}) merging receipt cache '{p}'")
 
 
 def optimize_campaign(
@@ -383,3 +468,335 @@ class ErrorCircuitBreaker:
             error_sha256=digest,
             consecutive_failures=self.consecutive_failures,
         )
+
+
+class StateTransitionError(RuntimeError):
+    """Raised on illegal LoopStateMachine transitions or stale SHA verification."""
+
+
+class LoopStateMachine:
+    """Deterministic finite state machine enforcing PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE."""
+
+    STATES = ("PLAN", "STAGE", "VERIFY", "COMMIT", "CACHE", "FAILED")
+
+    def __init__(self) -> None:
+        self.state: str = "PLAN"
+        self.campaign_name: str = ""
+        self.slice_id: str = ""
+        self.staged_after_sha256: str = ""
+        self.verified_sha256: str = ""
+        self.commit_sha: str = ""
+        self.last_error_sha256: str | None = None
+
+    def plan(self, campaign_name: str, slice_id: str) -> str:
+        if self.state != "PLAN":
+            raise StateTransitionError(f"plan() requires state PLAN, current state is {self.state}")
+        if not isinstance(campaign_name, str) or not campaign_name.strip():
+            raise StateTransitionError("plan() requires non-empty campaign_name")
+        if not isinstance(slice_id, str) or not slice_id.strip():
+            raise StateTransitionError("plan() requires non-empty slice_id")
+        self.campaign_name = campaign_name.strip()
+        self.slice_id = slice_id.strip()
+        return self.state
+
+    def stage(self, after_sha256: str) -> str:
+        if self.state != "PLAN":
+            raise StateTransitionError(f"stage() requires state PLAN, current state is {self.state}")
+        if not isinstance(after_sha256, str) or not after_sha256.strip():
+            raise StateTransitionError("stage() requires non-empty after_sha256")
+        self.staged_after_sha256 = after_sha256.strip()
+        self.verified_sha256 = ""
+        self.commit_sha = ""
+        self.last_error_sha256 = None
+        self.state = "STAGE"
+        return self.state
+
+    def verify(self, exit_code: int, staged_sha256: str, error_output: str = "") -> bool:
+        if self.state != "STAGE":
+            raise StateTransitionError(f"verify() requires state STAGE, current state is {self.state}")
+        if not isinstance(staged_sha256, str) or not staged_sha256.strip():
+            raise StateTransitionError("verify() requires non-empty staged_sha256")
+        if staged_sha256.strip() != self.staged_after_sha256:
+            raise StateTransitionError(
+                f"stale verification rejected: staged_sha256 '{staged_sha256}' != '{self.staged_after_sha256}'"
+            )
+        if exit_code == 0:
+            self.verified_sha256 = self.staged_after_sha256
+            self.last_error_sha256 = None
+            self.state = "VERIFY"
+            return True
+        self.last_error_sha256 = hash_error_output(error_output)
+        self.state = "FAILED"
+        return False
+
+    def commit(self, commit_sha: str) -> str:
+        if self.state != "VERIFY":
+            raise StateTransitionError(f"commit() requires state VERIFY, current state is {self.state}")
+        if not isinstance(commit_sha, str) or not commit_sha.strip():
+            raise StateTransitionError("commit() requires non-empty commit_sha")
+        if not self.verified_sha256 or self.verified_sha256 != self.staged_after_sha256:
+            raise StateTransitionError("commit() requires verified_sha256 matching staged_after_sha256")
+        self.commit_sha = commit_sha.strip()
+        self.state = "COMMIT"
+        return self.state
+
+    def cache(self) -> str:
+        if self.state != "COMMIT":
+            raise StateTransitionError(f"cache() requires state COMMIT, current state is {self.state}")
+        self.state = "CACHE"
+        return self.state
+
+    def reset(self) -> str:
+        self.state = "PLAN"
+        self.campaign_name = ""
+        self.slice_id = ""
+        self.staged_after_sha256 = ""
+        self.verified_sha256 = ""
+        self.commit_sha = ""
+        self.last_error_sha256 = None
+        return self.state
+
+
+RATCHET_LEDGER_COLUMNS = (
+    "timestamp",
+    "campaign",
+    "round_id",
+    "slice_id",
+    "status",
+    "seconds",
+    "commit_sha",
+    "after_sha256",
+    "error_sha256",
+)
+RATCHET_STATUSES = frozenset({"KEEP", "REVERT", "SKIP_CACHED", "TRIPPED"})
+
+
+@dataclass
+class RatchetEntry:
+    """Single append-only TSV ratchet ledger record."""
+
+    timestamp: str
+    campaign: str
+    round_id: int
+    slice_id: str
+    status: str
+    seconds: float
+    commit_sha: str = ""
+    after_sha256: str = ""
+    error_sha256: str = ""
+
+    def __post_init__(self) -> None:
+        if self.status not in RATCHET_STATUSES:
+            raise ValueError(
+                f"invalid ratchet status '{self.status}'; expected one of {sorted(RATCHET_STATUSES)}"
+            )
+        if isinstance(self.round_id, bool) or not isinstance(self.round_id, int) or self.round_id < 0:
+            raise ValueError(f"round_id must be a non-negative int, got {self.round_id!r}")
+        if (
+            isinstance(self.seconds, bool)
+            or not isinstance(self.seconds, (int, float))
+            or not math.isfinite(float(self.seconds))
+            or self.seconds < 0
+        ):
+            raise ValueError(f"seconds must be a finite number >= 0, got {self.seconds!r}")
+        self.seconds = float(self.seconds)
+        for fname in ("timestamp", "campaign", "slice_id", "commit_sha", "after_sha256", "error_sha256"):
+            val = getattr(self, fname)
+            if not isinstance(val, str):
+                raise ValueError(f"{fname} must be str, got {type(val).__name__}")
+            if any(ch in val for ch in ("\t", "\n", "\r")):
+                raise ValueError(f"{fname} cannot contain tabs or newlines")
+
+
+def append_ratchet_ledger(ledger_path: Path | str, entry: RatchetEntry) -> None:
+    """Append a RatchetEntry row to a TSV ledger, creating the header if missing or empty."""
+    p = Path(ledger_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    row = "\t".join(
+        [
+            entry.timestamp,
+            entry.campaign,
+            str(entry.round_id),
+            entry.slice_id,
+            entry.status,
+            repr(entry.seconds),
+            entry.commit_sha,
+            entry.after_sha256,
+            entry.error_sha256,
+        ]
+    )
+    with _path_lock(p):
+        needs_header = (not p.is_file()) or (p.stat().st_size == 0)
+        with p.open("a", encoding="utf-8", newline="\n") as fh:
+            if needs_header:
+                fh.write("\t".join(RATCHET_LEDGER_COLUMNS) + "\n")
+            fh.write(row + "\n")
+
+
+def load_ratchet_ledger(ledger_path: Path | str) -> list[RatchetEntry]:
+    """Parse an append-only TSV ratchet ledger into RatchetEntry records."""
+    p = Path(ledger_path)
+    with _path_lock(p):
+        if not p.is_file() or p.stat().st_size == 0:
+            return []
+        lines = p.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return []
+    header = lines[0].split("\t")
+    if header != list(RATCHET_LEDGER_COLUMNS):
+        raise ValueError(f"invalid ratchet ledger header: {header!r}")
+    entries: list[RatchetEntry] = []
+    for idx, line in enumerate(lines[1:], start=2):
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) != len(RATCHET_LEDGER_COLUMNS):
+            raise ValueError(
+                f"invalid ratchet ledger column count on line {idx}: expected {len(RATCHET_LEDGER_COLUMNS)}, got {len(parts)}"
+            )
+        entries.append(
+            RatchetEntry(
+                timestamp=parts[0],
+                campaign=parts[1],
+                round_id=int(parts[2]),
+                slice_id=parts[3],
+                status=parts[4],
+                seconds=float(parts[5]),
+                commit_sha=parts[6],
+                after_sha256=parts[7],
+                error_sha256=parts[8],
+            )
+        )
+    return entries
+
+
+WORKER_RESULT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["slice_id", "commit_sha", "after_sha256", "passed", "error_output"],
+    "properties": {
+        "slice_id": {"type": "string", "minLength": 1},
+        "commit_sha": {"type": "string"},
+        "after_sha256": {"type": "string"},
+        "passed": {"type": "boolean"},
+        "error_output": {"type": "string"},
+    },
+}
+
+
+def _expect_str_list(value: Any, label: str, errors: list[str]) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"{label} must be a list of strings")
+        return []
+    return list(value)
+
+
+def _read_campaign_json_file(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise CampaignCompileError([f"invalid campaign spec JSON in '{path}': {exc}"]) from exc
+
+
+def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
+    """Construct CampaignSpec and SliceNode list from a JSON file path, JSON string, or dict."""
+    if isinstance(source, dict):
+        raw: Any = source
+    elif isinstance(source, Path):
+        raw = _read_campaign_json_file(source)
+    elif isinstance(source, str):
+        if source.lstrip().startswith(("{", "[")):
+            try:
+                raw = json.loads(source)
+            except json.JSONDecodeError as exc:
+                raise CampaignCompileError([f"invalid campaign spec JSON string: {exc}"]) from exc
+        else:
+            raw = _read_campaign_json_file(Path(source))
+    else:
+        raise TypeError(f"source must be Path, str, or dict, got {type(source).__name__}")
+
+    if not isinstance(raw, dict):
+        raise CampaignCompileError(["campaign spec root must be a JSON object"])
+
+    errors: list[str] = []
+    name = raw.get("name")
+    repo_root = raw.get("repo_root")
+    if not isinstance(name, str):
+        errors.append("campaign spec 'name' must be a string")
+    if not isinstance(repo_root, str):
+        errors.append("campaign spec 'repo_root' must be a string")
+
+    allowed_roots_raw = raw.get("allowed_roots", [])
+    allowed_roots = _expect_str_list(allowed_roots_raw, "campaign spec 'allowed_roots'", errors)
+
+    max_rounds = raw.get("max_rounds", 12)
+    if isinstance(max_rounds, bool) or not isinstance(max_rounds, int):
+        errors.append("campaign spec 'max_rounds' must be an integer")
+
+    raw_slices = raw.get("slices")
+    slices: list[SliceNode] = []
+    if not isinstance(raw_slices, list):
+        errors.append("campaign spec 'slices' must be a list")
+    else:
+        for idx, item in enumerate(raw_slices):
+            if not isinstance(item, dict):
+                errors.append(f"slices[{idx}] must be an object")
+                continue
+            sid = item.get("id")
+            if not isinstance(sid, str):
+                errors.append(f"slices[{idx}].id must be a string")
+                continue
+            target_paths = _expect_str_list(item.get("target_paths"), f"slices[{idx}].target_paths", errors)
+            depends_on = _expect_str_list(item.get("depends_on", []), f"slices[{idx}].depends_on", errors)
+            verify_cmd = item.get("verify_cmd", "")
+            input_sha256 = item.get("input_sha256", "")
+            if not isinstance(verify_cmd, str):
+                errors.append(f"slices[{idx}].verify_cmd must be a string")
+                verify_cmd = ""
+            if not isinstance(input_sha256, str):
+                errors.append(f"slices[{idx}].input_sha256 must be a string")
+                input_sha256 = ""
+            slices.append(
+                SliceNode(
+                    id=sid,
+                    target_paths=target_paths,
+                    depends_on=depends_on,
+                    verify_cmd=verify_cmd,
+                    input_sha256=input_sha256,
+                )
+            )
+
+    if errors:
+        raise CampaignCompileError(errors)
+
+    return CampaignSpec(
+        name=name,
+        repo_root=repo_root,
+        slices=slices,
+        allowed_roots=allowed_roots,
+        max_rounds=max_rounds,
+    )
+
+
+def build_slice_worker_prompt(planned_slice: PlannedSlice, repo_root: Path | str) -> str:
+    """Emit minimal delta prompt containing only slice.id, target_paths, depends_on, verify_cmd, and computed_sha256."""
+    node = planned_slice.node
+    root = Path(repo_root).resolve()
+    norm_paths: list[str] = []
+    for raw in node.target_paths:
+        p = Path(raw)
+        if p.is_absolute():
+            resolved = p.resolve()
+            if resolved.is_relative_to(root):
+                norm_paths.append(str(resolved.relative_to(root)).replace("\\", "/"))
+                continue
+        norm_paths.append(raw)
+    return "\n".join(
+        [
+            f"slice_id: {node.id}",
+            f"target_paths: {json.dumps(norm_paths)}",
+            f"depends_on: {json.dumps(node.depends_on)}",
+            f"verify_cmd: {node.verify_cmd}",
+            f"computed_sha256: {planned_slice.computed_sha256}",
+        ]
+    ) + "\n"
