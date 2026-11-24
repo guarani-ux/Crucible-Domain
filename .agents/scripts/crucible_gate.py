@@ -192,80 +192,51 @@ def _extract_target_path(args: dict[str, object], root: Path = ROOT) -> Path | N
     return None
 
 
+def _emit_decision(decision: str, reason: str | None = None) -> int:
+    payload = {"decision": decision} if reason is None else {"decision": decision, "reason": reason}
+    print(json.dumps(payload, ensure_ascii=False))
+    return 0
+
+
 def cmd_pre_tool(root: Path = ROOT) -> int:
     payload = _read_stdin_json()
     tool_call = payload.get("toolCall")
-    if not isinstance(tool_call, dict):
-        print(json.dumps({"decision": "allow"}))
-        return 0
-
-    if tool_call.get("name") not in ("write_file", "edit_file"):
-        print(json.dumps({"decision": "allow"}))
-        return 0
+    if not isinstance(tool_call, dict) or tool_call.get("name") not in ("write_file", "edit_file"):
+        return _emit_decision("allow")
 
     args = tool_call.get("args")
-    if not isinstance(args, dict):
-        print(json.dumps({"decision": "allow"}))
-        return 0
-
-    target = _extract_target_path(args, root)
+    target = _extract_target_path(args, root) if isinstance(args, dict) else None
     if target is None:
-        print(json.dumps({"decision": "allow"}))
-        return 0
+        return _emit_decision("allow")
 
-    root_resolved = root.resolve()
     try:
-        rel_parts = target.relative_to(root_resolved).parts
+        rel_parts = target.relative_to(root.resolve()).parts
     except ValueError:
-        print(json.dumps({"decision": "allow"}))
-        return 0
+        return _emit_decision("allow")
 
-    if not rel_parts:
-        print(json.dumps({"decision": "allow"}))
-        return 0
-
-    top_dir_lower = rel_parts[0].lower()
-    matched_domain = next((d for d in COUNT_DIRS if d.lower() == top_dir_lower), None)
+    matched_domain = next((d for d in COUNT_DIRS if rel_parts and d.lower() == rel_parts[0].lower()), None)
     if matched_domain is None:
-        print(json.dumps({"decision": "allow"}))
-        return 0
+        return _emit_decision("allow")
 
     if matched_domain == "Calgary Public Library":
         for field_key in ("Content", "Replacement"):
             val = args.get(field_key)
             if isinstance(val, str) and ASANA_URL_RE.search(val):
-                print(
-                    json.dumps(
-                        {
-                            "decision": "deny",
-                            "reason": (
-                                "ASANA_BOUNDARY: Refusing to write an internal Asana URL into "
-                                "Calgary Public Library/. Keep Asana strictly read-only and link pointers outside synced files."
-                            ),
-                        },
-                        ensure_ascii=False,
-                    )
+                return _emit_decision(
+                    "deny",
+                    "ASANA_BOUNDARY: Refusing to write an internal Asana URL into "
+                    "Calgary Public Library/. Keep Asana strictly read-only and link pointers outside synced files.",
                 )
-                return 0
 
     if _count_files(root / matched_domain) == 0 and target.name.upper() not in GROUND_TRUTH_FILES:
-        print(
-            json.dumps(
-                {
-                    "decision": "deny",
-                    "reason": (
-                        f"SHIFTING_SAND: '{matched_domain}/' has 0 files. "
-                        "Synthesize GROUND_TRUTH.md from existing local context with explicit "
-                        "[PROPOSED DEFAULT] and [UNKNOWN — OWNER TO CONFIRM] holds before creating deliverables."
-                    ),
-                },
-                ensure_ascii=False,
-            )
+        return _emit_decision(
+            "deny",
+            f"SHIFTING_SAND: '{matched_domain}/' has 0 files. "
+            "Synthesize GROUND_TRUTH.md from existing local context with explicit "
+            "[PROPOSED DEFAULT] and [UNKNOWN — OWNER TO CONFIRM] holds before creating deliverables.",
         )
-        return 0
 
-    print(json.dumps({"decision": "allow"}))
-    return 0
+    return _emit_decision("allow")
 
 
 def _check_self_model_drift(root: Path = ROOT) -> list[str]:
@@ -280,61 +251,58 @@ def _check_self_model_drift(root: Path = ROOT) -> list[str]:
     reasons: list[str] = []
 
     plugins_dir = root / ".agents" / "plugins"
-    if plugins_dir.is_dir():
-        for plugin_dir in sorted(p for p in plugins_dir.iterdir() if p.is_dir()):
-            if not (plugin_dir / "plugin.json").is_file():
-                continue
-            pname = plugin_dir.name.lower()
-            variants = (pname, pname.replace("-", " "))
-            if not any(v in agents_text for v in variants):
-                reasons.append(f"self-model drift: plugin '{plugin_dir.name}' missing from AGENTS.md")
-            if not any(v in atlas_text for v in variants):
-                reasons.append(
-                    f"self-model drift: plugin '{plugin_dir.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
-                )
+    for plugin_dir in sorted(plugins_dir.iterdir()) if plugins_dir.is_dir() else []:
+        if not plugin_dir.is_dir() or not (plugin_dir / "plugin.json").is_file():
+            continue
+        pname = plugin_dir.name.lower()
+        variants = (pname, pname.replace("-", " "))
+        if not any(v in agents_text for v in variants):
+            reasons.append(f"self-model drift: plugin '{plugin_dir.name}' missing from AGENTS.md")
+        if not any(v in atlas_text for v in variants):
+            reasons.append(
+                f"self-model drift: plugin '{plugin_dir.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
+            )
 
     kernel_dir = root / ".agents" / "scripts" / "crucible"
-    if kernel_dir.is_dir():
-        for py_file in sorted(kernel_dir.glob("*.py")):
-            if py_file.name.lower() not in atlas_text:
-                reasons.append(
-                    f"self-model drift: kernel module '{py_file.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
-                )
+    for py_file in sorted(kernel_dir.glob("*.py")) if kernel_dir.is_dir() else []:
+        if py_file.name.lower() not in atlas_text:
+            reasons.append(
+                f"self-model drift: kernel module '{py_file.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
+            )
 
     return reasons
 
 
-def _extract_frontmatter_depends_on(md_path: Path) -> list[str]:
-    """Parse YAML frontmatter `depends_on:` relative paths without external dependencies."""
-    text = md_path.read_text(encoding="utf-8", errors="replace")
-    lines = text.splitlines()
+def _frontmatter_lines(md_path: Path) -> list[str]:
+    lines = md_path.read_text(encoding="utf-8", errors="replace").splitlines()
     if not lines or lines[0].strip() != "---":
         return []
+    out: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        out.append(line)
+    return out
 
+
+def _extract_frontmatter_depends_on(md_path: Path) -> list[str]:
+    """Parse YAML frontmatter `depends_on:` relative paths without external dependencies."""
     deps: list[str] = []
     in_depends = False
-    for line in lines[1:]:
+    for line in _frontmatter_lines(md_path):
         stripped = line.strip()
-        if stripped == "---":
-            break
         if stripped.startswith("depends_on:"):
             inline = stripped.split(":", 1)[1].strip()
             if inline.startswith("[") and inline.endswith("]"):
-                for item in inline[1:-1].split(","):
-                    cleaned = item.strip().strip("'\"")
-                    if cleaned:
-                        deps.append(cleaned)
+                deps.extend(c for item in inline[1:-1].split(",") if (c := item.strip().strip("'\"")))
                 in_depends = False
             else:
                 in_depends = True
-            continue
-        if in_depends:
-            if stripped.startswith("- "):
-                cleaned = stripped[2:].strip().strip("'\"")
-                if cleaned:
-                    deps.append(cleaned)
-            elif stripped and not line.startswith((" ", "\t")):
-                in_depends = False
+        elif in_depends and stripped.startswith("- "):
+            if cleaned := stripped[2:].strip().strip("'\""):
+                deps.append(cleaned)
+        elif in_depends and stripped and not line.startswith((" ", "\t")):
+            in_depends = False
     return deps
 
 
@@ -348,30 +316,49 @@ def _sha256_file(path: Path) -> str:
 
 def _extract_frontmatter_depends_on_sha256(md_path: Path) -> dict[str, str]:
     """Parse optional YAML frontmatter `depends_on_sha256:` mapping of rel_path -> sha256."""
-    text = md_path.read_text(encoding="utf-8", errors="replace")
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return {}
-
     hashes: dict[str, str] = {}
     in_map = False
-    for line in lines[1:]:
+    for line in _frontmatter_lines(md_path):
         stripped = line.strip()
-        if stripped == "---":
-            break
         if stripped.startswith("depends_on_sha256:"):
             in_map = True
-            continue
-        if in_map:
-            if line.startswith((" ", "\t")) and ":" in stripped:
-                key, val = stripped.split(":", 1)
-                k = key.strip().strip("'\"")
-                v = val.strip().strip("'\"").lower()
-                if k and v:
-                    hashes[k] = v
-            elif stripped and not line.startswith((" ", "\t")):
-                in_map = False
+        elif in_map and line.startswith((" ", "\t")) and ":" in stripped:
+            key, val = stripped.split(":", 1)
+            k, v = key.strip().strip("'\""), val.strip().strip("'\"").lower()
+            if k and v:
+                hashes[k] = v
+        elif in_map and stripped and not line.startswith((" ", "\t")):
+            in_map = False
     return hashes
+
+
+def _check_single_dep(
+    root: Path,
+    root_resolved: Path,
+    rel_art: str,
+    art_mtime: float,
+    dep: str,
+    pinned_hashes: dict[str, str],
+    strict: bool,
+    failures: list[str],
+    warnings: list[str],
+) -> None:
+    dep_path = (root / dep).resolve()
+    try:
+        dep_path.relative_to(root_resolved)
+    except ValueError:
+        failures.append(f"broken depends_on in {rel_art}: '{dep}' resolves outside workspace")
+        return
+    if not dep_path.is_file():
+        failures.append(f"broken depends_on in {rel_art}: missing '{dep}'")
+        return
+    if dep in pinned_hashes:
+        if _sha256_file(dep_path) != pinned_hashes[dep]:
+            msg = f"stale artifact {rel_art} (content hash changed for '{dep}')"
+            (failures if strict else warnings).append(msg)
+    elif dep_path.stat().st_mtime > art_mtime:
+        msg = f"stale artifact {rel_art} (older than depends_on '{dep}')"
+        (failures if strict else warnings).append(msg)
 
 
 def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> tuple[list[str], list[str]]:
@@ -393,53 +380,27 @@ def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> 
             rel_art = str(md_path.relative_to(root)).replace("\\", "/")
             art_mtime = md_path.stat().st_mtime
             for dep in all_deps:
-                dep_path = (root / dep).resolve()
-                try:
-                    dep_path.relative_to(root_resolved)
-                except ValueError:
-                    failures.append(f"broken depends_on in {rel_art}: '{dep}' resolves outside workspace")
-                    continue
-                if not dep_path.is_file():
-                    failures.append(f"broken depends_on in {rel_art}: missing '{dep}'")
-                    continue
-                if dep in pinned_hashes:
-                    actual_sha = _sha256_file(dep_path)
-                    if actual_sha != pinned_hashes[dep]:
-                        msg = f"stale artifact {rel_art} (content hash changed for '{dep}')"
-                        if strict:
-                            failures.append(msg)
-                        else:
-                            warnings.append(msg)
-                elif dep_path.stat().st_mtime > art_mtime:
-                    msg = f"stale artifact {rel_art} (older than depends_on '{dep}')"
-                    if strict:
-                        failures.append(msg)
-                    else:
-                        warnings.append(msg)
+                _check_single_dep(root, root_resolved, rel_art, art_mtime, dep, pinned_hashes, strict, failures, warnings)
 
     return failures, warnings
 
 
-def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
-    print(_build_system_map(root))
+def _check_staged_files(root: Path) -> list[str]:
     reasons: list[str] = []
-
-    if not (root / "IDEAS.md").is_file():
-        reasons.append("IDEAS.md missing")
-
     rc, diff_out = _git_output(["-c", "core.quotepath=false", "diff", "--cached", "--name-only"], root)
     if rc != 0:
-        reasons.append("git diff --cached failed")
-    else:
-        staged_files = [line.strip() for line in diff_out.splitlines() if line.strip()]
-        for rel_path in staged_files:
-            norm = rel_path.replace("\\", "/")
-            parts = norm.split("/")
-            if any(part.startswith(".tmp.drive") for part in parts):
-                reasons.append(f"staged drive temp file: {norm}")
-            if norm.startswith("Calgary Public Library/") and _staged_contains_asana(norm, root):
-                reasons.append(f"staged CPL file contains app.asana.com: {norm}")
+        return ["git diff --cached failed"]
+    for rel_path in (ln.strip() for ln in diff_out.splitlines() if ln.strip()):
+        norm = rel_path.replace("\\", "/")
+        if any(part.startswith(".tmp.drive") for part in norm.split("/")):
+            reasons.append(f"staged drive temp file: {norm}")
+        if norm.startswith("Calgary Public Library/") and _staged_contains_asana(norm, root):
+            reasons.append(f"staged CPL file contains app.asana.com: {norm}")
+    return reasons
 
+
+def _check_working_tree_cpl(root: Path) -> list[str]:
+    reasons: list[str] = []
     wt_cpl: set[str] = set()
     for git_args in (
         ["-c", "core.quotepath=false", "diff", "--name-only", "--", "Calgary Public Library"],
@@ -447,62 +408,69 @@ def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
     ):
         rc_wt, out_wt = _git_output(git_args, root)
         if rc_wt == 0:
-            for line in out_wt.splitlines():
-                norm = line.strip().replace("\\", "/")
-                if norm:
-                    wt_cpl.add(norm)
+            wt_cpl.update(ln.strip().replace("\\", "/") for ln in out_wt.splitlines() if ln.strip())
     for norm in sorted(wt_cpl):
         target = root / norm
-        if target.is_file():
-            content = target.read_text(encoding="utf-8", errors="replace")
-            if ASANA_URL_RE.search(content):
-                reasons.append(f"working-tree CPL file contains app.asana.com URL: {norm}")
+        if target.is_file() and ASANA_URL_RE.search(target.read_text(encoding="utf-8", errors="replace")):
+            reasons.append(f"working-tree CPL file contains app.asana.com URL: {norm}")
+    return reasons
 
+
+def _check_python_and_primitives(root: Path) -> list[str]:
+    reasons: list[str] = []
     for py_dir in (root / ".agents" / "scripts", root / ".agents" / "scripts" / "crucible"):
-        if not py_dir.is_dir():
-            continue
-        for py_file in sorted(py_dir.glob("*.py")):
+        for py_file in sorted(py_dir.glob("*.py")) if py_dir.is_dir() else []:
             try:
                 py_compile.compile(str(py_file), doraise=True)
             except (py_compile.PyCompileError, OSError) as exc:
-                rel_py = str(py_file.relative_to(root)).replace("\\", "/")
-                reasons.append(f"python syntax error in {rel_py}: {exc}")
+                reasons.append(f"python syntax error in {str(py_file.relative_to(root)).replace('\\', '/')}: {exc}")
 
     if (root / "Knowledge" / "Crucible_Primitives.json").is_file():
-        ci = _resolve_index_module()
         prim_findings: list[object] = []
         try:
-            ci.validate_primitives_registry(root, prim_findings)
+            _resolve_index_module().validate_primitives_registry(root, prim_findings)
         except AttributeError as exc:
             reasons.append(f"Knowledge/Crucible_Primitives.json: invalid JSON root structure ({exc})")
         for finding in prim_findings:
             if getattr(finding, "severity", "") == "FAIL":
                 reasons.append(f"{finding.subject}: {finding.detail}")
+    return reasons
 
+
+def _check_test_quality(root: Path) -> list[str]:
+    reasons: list[str] = []
     try:
         scripts_dir = str(Path(__file__).resolve().parent)
         if scripts_dir not in sys.path:
             sys.path.insert(0, scripts_dir)
         import test_quality_gate
-
         tests_dir = root / ".agents" / "scripts" / "tests"
         if tests_dir.is_dir():
             for tqf in test_quality_gate.audit_paths([tests_dir]):
                 reasons.append(f"{tqf.rule_id} in {Path(tqf.file).name}:{tqf.line}: {tqf.message}")
     except ImportError:
         pass
+    return reasons
 
+
+def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
+    print(_build_system_map(root))
+    reasons: list[str] = []
+    if not (root / "IDEAS.md").is_file():
+        reasons.append("IDEAS.md missing")
+    reasons.extend(_check_staged_files(root))
+    reasons.extend(_check_working_tree_cpl(root))
+    reasons.extend(_check_python_and_primitives(root))
+    reasons.extend(_check_test_quality(root))
     reasons.extend(_check_self_model_drift(root))
     dep_failures, dep_warnings = _check_artifact_dependencies(root, strict=strict)
     reasons.extend(dep_failures)
 
     for warn in dep_warnings:
         print(f"WARN: {warn}")
-
     if reasons:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
-
     print(
         "PASS: IDEAS.md present; Python syntax, primitives schema, self-model drift, "
         "artifact dependencies, staged files, and test-quality checks clean."
@@ -588,6 +556,87 @@ def _emit_campaign_errors(errors: list[str], label: str, as_json: bool) -> int:
     return 1
 
 
+def _campaign_compile(cir, target_path: Path, as_json: bool) -> int:
+    try:
+        spec = cir.load_campaign_spec(target_path)
+        ordered = cir.compile_campaign(spec)
+    except cir.CampaignCompileError as exc:
+        return _emit_campaign_errors(exc.errors, "campaign compile failed", as_json)
+    except OSError as exc:
+        return _emit_campaign_errors([f"cannot read campaign spec '{target_path}': {exc}"], "campaign compile failed", as_json)
+
+    if as_json:
+        payload = {
+            "ok": True,
+            "name": spec.name,
+            "repo_root": str(Path(spec.repo_root).resolve()),
+            "max_rounds": spec.max_rounds,
+            "slice_count": len(ordered),
+            "ordered_slices": [
+                {"id": n.id, "target_paths": list(n.target_paths), "depends_on": list(n.depends_on), "verify_cmd": n.verify_cmd}
+                for n in ordered
+            ],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        order_str = " -> ".join(n.id for n in ordered) if ordered else "(none)"
+        print(f"PASS: campaign '{spec.name}' compiled ({len(ordered)} slices): {order_str}")
+    return 0
+
+
+def _campaign_plan(cir, root: Path, target_path: Path, cache_path: Path | None, as_json: bool) -> int:
+    resolved_cache = _resolve_cli_path(root, cache_path) if cache_path is not None else None
+    try:
+        compiled = cir.optimize_campaign(cir.load_campaign_spec(target_path), resolved_cache)
+    except cir.CampaignCompileError as exc:
+        return _emit_campaign_errors(exc.errors, "campaign plan failed", as_json)
+    except (OSError, ValueError) as exc:
+        return _emit_campaign_errors([f"campaign plan error: {exc}"], "campaign plan failed", as_json)
+
+    waves, active, skipped = compiled.execution_waves, compiled.active_slices, compiled.skipped_slices
+    if as_json:
+        payload = {
+            "ok": True,
+            "name": compiled.name,
+            "repo_root": str(compiled.repo_root),
+            "execution_waves": [[_planned_slice_to_dict(ps) for ps in w] for w in waves],
+            "active_slices": [_planned_slice_to_dict(ps) for ps in active],
+            "skipped_slices": [_planned_slice_to_dict(ps) for ps in skipped],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"CAMPAIGN PLAN: {compiled.name} | run={len(active)} | skip_cached={len(skipped)} | waves={len(waves)}")
+        for idx, wave in enumerate(waves, start=1):
+            print(f"Wave {idx}:")
+            for ps in wave:
+                print(f"  [RUN] {ps.node.id} (sha256={ps.computed_sha256[:12]} targets=[{', '.join(ps.node.target_paths) or '-'}]) - {ps.reason}")
+        for ps in skipped:
+            print(f"  [SKIP_CACHED] {ps.node.id} (sha256={ps.computed_sha256[:12]}) - {ps.reason}")
+    return 0
+
+
+def _campaign_ledger(cir, target_path: Path, last: int, as_json: bool) -> int:
+    if isinstance(last, bool) or last < 0:
+        msg = f"--last must be >= 0, got {last!r}"
+        print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+        return 2
+    try:
+        entries = cir.load_ratchet_ledger(target_path)
+    except (OSError, ValueError) as exc:
+        msg = f"cannot read ratchet ledger '{target_path}': {exc}"
+        print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False) if as_json else f"BLOCKED: {msg}")
+        return 1
+
+    tail = entries[-last:] if last > 0 else []
+    if as_json:
+        print(json.dumps({"ok": True, "ledger": str(target_path), "total": len(entries), "showing": len(tail), "entries": [asdict(e) for e in tail]}, indent=2, ensure_ascii=False))
+    else:
+        print(f"LEDGER: {target_path} (showing {len(tail)} of {len(entries)} entries)")
+        for e in tail:
+            print(f"  round={e.round_id} | {e.slice_id} | {e.status} | {e.seconds:.2f}s | commit={e.commit_sha or '-'} | {e.timestamp}")
+    return 0
+
+
 def cmd_campaign(
     root: Path,
     query: list[str] | str,
@@ -602,130 +651,17 @@ def cmd_campaign(
         "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | ledger <ledger.tsv> [--last N]}"
     )
     if len(parts) != 2 or parts[0] not in ("compile", "plan", "ledger"):
-        if as_json:
-            print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False))
-        else:
-            print(usage_msg, file=sys.stderr)
+        print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
         return 2
 
     action, target_raw = parts[0], parts[1]
     cir = _resolve_campaign_ir_module()
     target_path = _resolve_cli_path(root, target_raw)
-
     if action == "compile":
-        try:
-            spec = cir.load_campaign_spec(target_path)
-            ordered = cir.compile_campaign(spec)
-        except cir.CampaignCompileError as exc:
-            return _emit_campaign_errors(exc.errors, "campaign compile failed", as_json)
-        except OSError as exc:
-            return _emit_campaign_errors([f"cannot read campaign spec '{target_path}': {exc}"], "campaign compile failed", as_json)
-
-        if as_json:
-            payload = {
-                "ok": True,
-                "name": spec.name,
-                "repo_root": str(Path(spec.repo_root).resolve()),
-                "max_rounds": spec.max_rounds,
-                "slice_count": len(ordered),
-                "ordered_slices": [
-                    {
-                        "id": node.id,
-                        "target_paths": list(node.target_paths),
-                        "depends_on": list(node.depends_on),
-                        "verify_cmd": node.verify_cmd,
-                    }
-                    for node in ordered
-                ],
-            }
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            order_str = " -> ".join(node.id for node in ordered) if ordered else "(none)"
-            print(f"PASS: campaign '{spec.name}' compiled ({len(ordered)} slices): {order_str}")
-        return 0
-
+        return _campaign_compile(cir, target_path, as_json)
     if action == "plan":
-        resolved_cache = _resolve_cli_path(root, cache_path) if cache_path is not None else None
-        try:
-            spec = cir.load_campaign_spec(target_path)
-            compiled = cir.optimize_campaign(spec, resolved_cache)
-        except cir.CampaignCompileError as exc:
-            return _emit_campaign_errors(exc.errors, "campaign plan failed", as_json)
-        except (OSError, ValueError) as exc:
-            return _emit_campaign_errors([f"campaign plan error: {exc}"], "campaign plan failed", as_json)
-
-        waves = compiled.execution_waves
-        active = compiled.active_slices
-        skipped = compiled.skipped_slices
-        if as_json:
-            payload = {
-                "ok": True,
-                "name": compiled.name,
-                "repo_root": str(compiled.repo_root),
-                "execution_waves": [[_planned_slice_to_dict(ps) for ps in wave] for wave in waves],
-                "active_slices": [_planned_slice_to_dict(ps) for ps in active],
-                "skipped_slices": [_planned_slice_to_dict(ps) for ps in skipped],
-            }
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print(
-                f"CAMPAIGN PLAN: {compiled.name} | run={len(active)} | "
-                f"skip_cached={len(skipped)} | waves={len(waves)}"
-            )
-            for wave_idx, wave in enumerate(waves, start=1):
-                print(f"Wave {wave_idx}:")
-                for ps in wave:
-                    targets = ", ".join(ps.node.target_paths) or "-"
-                    print(
-                        f"  [RUN] {ps.node.id} (sha256={ps.computed_sha256[:12]} targets=[{targets}]) - {ps.reason}"
-                    )
-            if skipped:
-                print("Cached:")
-                for ps in skipped:
-                    print(
-                        f"  [SKIP_CACHED] {ps.node.id} (sha256={ps.computed_sha256[:12]}) - {ps.reason}"
-                    )
-        return 0
-
-    if isinstance(last, bool) or last < 0:
-        msg = f"--last must be >= 0, got {last!r}"
-        if as_json:
-            print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False))
-        else:
-            print(msg, file=sys.stderr)
-        return 2
-
-    try:
-        entries = cir.load_ratchet_ledger(target_path)
-    except (OSError, ValueError) as exc:
-        msg = f"cannot read ratchet ledger '{target_path}': {exc}"
-        if as_json:
-            print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False))
-        else:
-            print(f"BLOCKED: {msg}")
-        return 1
-
-    tail = entries[-last:] if last > 0 else []
-    if as_json:
-        payload = {
-            "ok": True,
-            "ledger": str(target_path),
-            "total": len(entries),
-            "showing": len(tail),
-            "entries": [asdict(entry) for entry in tail],
-        }
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-    else:
-        print(f"LEDGER: {target_path} (showing {len(tail)} of {len(entries)} entries)")
-        if not tail:
-            print("  (no entries)")
-        for entry in tail:
-            commit_str = entry.commit_sha or "-"
-            print(
-                f"  round={entry.round_id} | {entry.slice_id} | {entry.status} | "
-                f"{entry.seconds:.2f}s | commit={commit_str} | {entry.timestamp}"
-            )
-    return 0
+        return _campaign_plan(cir, root, target_path, cache_path, as_json)
+    return _campaign_ledger(cir, target_path, last, as_json)
 
 
 def main(argv: list[str] | None = None) -> int:
