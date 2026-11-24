@@ -275,6 +275,20 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertIn("BLOCKED:", bad_proc.stdout)
             self.assertIn("IDEAS.md missing", bad_proc.stdout)
 
+    def test_session_start_includes_execution_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp))
+            proc = _run_gate(repo, "session-start")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            data = json.loads(proc.stdout)
+            msg = data["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("slice-worker", msg)
+            self.assertIn("verify_all.ps1", msg)
+            self.assertIn(
+                "Execution: workers=slice-worker (Model=flash) | tx=tx_patch.py | verify=scripts/verify_all.ps1 (16-core parallel)",
+                msg,
+            )
+            self.assertIn("Next Slice: see Personal Work/CS_Opportunity_Map.md (Slice #7+)", msg)
 
 
 if __name__ == "__main__":

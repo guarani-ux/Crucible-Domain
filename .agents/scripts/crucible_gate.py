@@ -148,7 +148,13 @@ def _build_system_map(root: Path = ROOT) -> str:
 
 
 def cmd_session_start(root: Path = ROOT) -> int:
-    system_map = _build_system_map(root)
+    system_map = "\n".join(
+        [
+            _build_system_map(root),
+            "Execution: workers=slice-worker (Model=flash) | tx=tx_patch.py | verify=scripts/verify_all.ps1 (16-core parallel)",
+            "Next Slice: see Personal Work/CS_Opportunity_Map.md (Slice #7+)",
+        ]
+    )
     payload = {
         "injectSteps": [
             {
