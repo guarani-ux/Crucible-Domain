@@ -535,11 +535,11 @@ def cmd_route(
     return 0
 
 
-def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, skip_exec: bool = False) -> int:
+def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, skip_exec: bool = False, verbose: bool = False) -> int:
     ci = _resolve_index_module()
     global_dir = None if no_global else ci.DEFAULT_GLOBAL_CONFIG_DIR
     report = ci.run_doctor(root, global_config_dir=global_dir, execute_hooks=not skip_exec)
-    print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_doctor_text(report))
+    print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False) if as_json else ci._format_doctor_text(report, verbose=verbose))
     return 0 if report.ok else 1
 
 
@@ -562,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--strict", action="store_true", help="Treat stale depends_on artifacts as blocking failures in 'check'.")
+    parser.add_argument("--verbose", action="store_true", help="Show all passing checks in 'doctor'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -572,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "route":
         return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
     if args.subcommand == "doctor":
-        return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
+        return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec, verbose=args.verbose)
     return cmd_check(root, strict=args.strict)
 
 

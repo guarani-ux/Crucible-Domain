@@ -435,7 +435,7 @@ def run_doctor(
     return DoctorReport(root=str(root), findings=findings, metrics=metrics)
 
 
-def _format_doctor_text(report: DoctorReport) -> str:
+def _format_doctor_text(report: DoctorReport, *, verbose: bool = False) -> str:
     m = report.metrics
     lines = [
         f"Crucible Doctor ({report.root})",
@@ -453,6 +453,8 @@ def _format_doctor_text(report: DoctorReport) -> str:
         "",
     ]
     for f in report.findings:
+        if not verbose and f.severity == "PASS":
+            continue
         lines.append(f"[{f.severity}] {f.category} · {f.subject}: {f.detail}")
         if f.remediation:
             lines.append(f"       fix -> {f.remediation}")
