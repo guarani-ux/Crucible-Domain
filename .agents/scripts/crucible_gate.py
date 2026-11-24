@@ -797,6 +797,26 @@ def cmd_ml_train(root: Path, *, as_json: bool = False) -> int:
     return 0
 
 
+def cmd_kernel(root: Path, query: list[str], *, as_json: bool = False) -> int:
+    script_dir = str(Path(__file__).resolve().parent)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    import crucible_kernel
+
+    outcome = " ".join(query).strip()
+    res = crucible_kernel.run_kernel(root, outcome=outcome)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0 if res["status"] == "VERIFIED_DONE" else 1
+    print(
+        f"Crucible Kernel ({res['elapsed_ms']}ms): status={res['status']} | V={res['potential_v']} "
+        f"({res['convergence']}) | dirty_closure={len(res['dirty_closure'])} | counterexamples={len(res['counterexamples'])}"
+    )
+    for cx in res["counterexamples"][:5]:
+        print(f"  COUNTEREXAMPLE: {cx}")
+    return 0 if res["status"] == "VERIFIED_DONE" else 1
+
+
 def cmd_ml_daemon(root: Path, query: list[str], *, as_json: bool = False) -> int:
     script_dir = str(Path(__file__).resolve().parent)
     if script_dir not in sys.path:
@@ -829,7 +849,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon", "kernel"),
         help="Gate action to execute.",
     )
     parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route', action+target for 'campaign', or paths for 'ml-rank'/'ml-review'.")
@@ -867,6 +887,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ml_preflight(root, args.query, verify_cmd=args.verify_cmd, as_json=args.json)
     if args.subcommand == "ml-daemon":
         return cmd_ml_daemon(root, args.query, as_json=args.json)
+    if args.subcommand == "kernel":
+        return cmd_kernel(root, args.query, as_json=args.json)
     if args.subcommand == "pre-commit":
         return cmd_pre_commit(root, strict=args.strict)
     return cmd_check(root, strict=args.strict)
