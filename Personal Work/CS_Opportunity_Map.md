@@ -47,3 +47,28 @@ These five primitives are battle-tested in compilers, build systems, and distrib
 5. **Capability-Based Security (`Least-Privilege Object Capabilities`)**
    * **Mechanism:** Instead of letting every spoke see the entire `C:\` drive, pass an explicit **scoped capability token** (`allowed_read_roots`, `allowed_write_root`, `read_only=True`) in `mcp_config.json` / `prepare()` and enforce path containment at the spoke boundary.
    * **What it unlocks individually:** Enforces domain isolation (`Calgary Public Library/` vs. `Personal Work/`, Asana read-only) at the OS/process boundary rather than trusting prompts.
+
+---
+
+## 3. Compound Synergies (What Happens When They Work Together)
+
+Individually, each CS element solves one local bug. **Combined**, they turn Crucible Domain from a "well-organized agent workspace" into a **deterministic, incremental AI compiler for real-world work**:
+
+```mermaid
+flowchart LR
+    INTENT["Human Intent (High-Level)"] --> LLM["Stochastic LLM Compiler"]
+    LLM --> FSM["Formal State Machine\n(Valid Transitions Only)"]
+    FSM --> CAP["Capability-Scoped\nMCP Spokes"]
+    CAP --> CACHE["Content-Addressable\nMemoization (SHA-256)"]
+    CACHE --> DAG["DAG Dependency Graph\n(depends_on)"]
+    DAG --> REPLAY["Event-Sourced Replay\n+ Property Fuzzing"]
+    REPLAY --> GIT["Rewindable Git Checkpoint\n(crucible-loop)"]
+```
+
+### Three Emergent Capabilities You Cannot Get Any Other Way
+1. **Incremental, Zero-Waste AI Build Pipeline (`DAG` + `Content-Addressable Memoization` + `MCP Spokes`):**
+   * Just like `Bazel` or `make` only recompiles the `.c` file that changed, changing one paragraph in `Calgary Public Library/GROUND_TRUTH.md` hashes down the DAG and **re-runs only the exact downstream script or brief whose input hash changed**, returning cached verified receipts for everything else in `1ms`.
+2. **Self-Hardening Agent System (`Event Sourcing` + `Property-Based Fuzzing` + `AST Gates`):**
+   * Every real Hub→Spoke call gets logged as a replayable event. Whenever you upgrade `writers-room` or `story-lane`, you replay your real historical work log + 200 fuzzed edge cases automatically. The system gets **more reliable every time you use it**, not more fragile.
+3. **Zero-Trust Multi-Domain Execution (`Microkernel` + `Formal State Machines` + `Capability-Based Security`):**
+   * You can safely run autonomous 12-round `crucible-loop` sessions across both `Personal Work/` and `Calgary Public Library/` because **illegal state transitions** (shipping unapproved cuts) and **cross-domain leaks** (CPL data touching Personal Work) are blocked mathematically at the spoke boundary.
