@@ -83,6 +83,8 @@ class _MLRequestHandler(socketserver.StreamRequestHandler):
                         hot_state=state,
                     ),
                 }
+            elif cmd == "context":
+                resp = {"ok": True, **ram_ml_engine.compile_session_context(srv.root, hot_state=state)}
             elif cmd == "reload":
                 srv.hot_state = ram_ml_engine.build_hot_state(srv.root)
                 resp = {"ok": True, "reloaded": True, "built_ms": srv.hot_state["built_ms"]}

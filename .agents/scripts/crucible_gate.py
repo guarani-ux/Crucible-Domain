@@ -144,13 +144,38 @@ def _build_system_map(root: Path = ROOT) -> str:
     )
 
 
+def _fast_session_context_line(root: Path) -> str:
+    """Zero-sklearn (<50ms) Context Compiler for session-start; upgrades to hot daemon (<15ms) if running."""
+    state_file = root / ".agents" / ".ml_daemon.json"
+    if state_file.is_file():
+        try:
+            import socket
+            info = json.loads(state_file.read_text(encoding="utf-8"))
+            with socket.create_connection(("127.0.0.1", int(info["port"])), timeout=0.15) as sock:
+                sock.sendall(b'{"cmd":"context"}\n')
+                raw = sock.recv(65536).decode("utf-8", errors="replace").strip()
+                data = json.loads(raw)
+                if data.get("ok") and data.get("summary_line"):
+                    return str(data["summary_line"])
+        except Exception:
+            pass
+    proc = subprocess.run(["git", "-C", str(root), "status", "--porcelain"], capture_output=True, text=True, check=False)
+    dirty = [ln[3:].strip().replace("\\", "/") for ln in proc.stdout.splitlines() if len(ln) >= 4] if proc.returncode == 0 else []
+    if not dirty:
+        return "Context Compiler (clean): active=general | ready for new assignment"
+    blob = " ".join(dirty).lower()
+    domain = "writers_room" if "writers" in blob else ("story_lane" if "story" in blob else ("crucible_engine" if "crucible_gate" in blob or "verify_all" in blob else "general"))
+    focus = ",".join(Path(f).name for f in dirty[:3])
+    return f"Context Compiler (fast): domain={domain} | focus={focus} | run ml-preflight or ml-daemon start for full ML"
+
+
 def cmd_session_start(root: Path = ROOT) -> int:
-    system_map = "\n".join(
-        [
-            _build_system_map(root),
-            "Spokes: writers-room, story-lane, crucible-observatory | Verify: scripts/verify_all.ps1",
-        ]
-    )
+    lines = [
+        _build_system_map(root),
+        "Spokes: writers-room, story-lane, crucible-observatory | Verify: scripts/verify_all.ps1",
+        _fast_session_context_line(root),
+    ]
+    system_map = "\n".join(lines)
     payload = {
         "injectSteps": [
             {
@@ -451,6 +476,24 @@ def _check_test_quality(root: Path) -> list[str]:
     except ImportError:
         pass
     return reasons
+
+
+def cmd_pre_commit(root: Path = ROOT, *, strict: bool = False) -> int:
+    effective_strict = strict
+    try:
+        eng = _load_ram_ml_engine()
+        risk = eng.assess_commit_risk(root)
+        if risk["staged_count"] > 0:
+            effective_strict = strict or bool(risk["enforce_strict"])
+            print(
+                f"Adaptive Pre-Commit ({risk['elapsed_ms']}ms): staged={risk['staged_count']} | "
+                f"P(break)={risk['risk_prob']} tier={risk['tier']} strict={effective_strict}"
+            )
+            for adv in risk["advisories"]:
+                print(f"  ADVISORY: {adv}")
+    except Exception:
+        pass
+    return cmd_check(root, strict=effective_strict)
 
 
 def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
@@ -824,6 +867,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ml_preflight(root, args.query, verify_cmd=args.verify_cmd, as_json=args.json)
     if args.subcommand == "ml-daemon":
         return cmd_ml_daemon(root, args.query, as_json=args.json)
+    if args.subcommand == "pre-commit":
+        return cmd_pre_commit(root, strict=args.strict)
     return cmd_check(root, strict=args.strict)
 
 

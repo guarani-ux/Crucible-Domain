@@ -939,3 +939,137 @@ def preflight_outcome_gate(
             f"3. Run final verification: {verify_cmd.strip() or 'pwsh -File scripts/verify_all.ps1'}.",
         ],
     }
+
+
+def _git_staged_files(root: Path) -> list[str]:
+    """Return repo-relative paths currently staged in git index."""
+    proc = subprocess.run(
+        ["git", "-C", str(root), "diff", "--cached", "--name-only"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if proc.returncode != 0:
+        return []
+    return sorted({ln.strip().replace("\\", "/").removeprefix("./") for ln in proc.stdout.splitlines() if ln.strip()})
+
+
+def compile_session_context(root: Path, hot_state: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Distill AST symbols + ML history + IR test-ranking into one high-signal session-start directive."""
+    t0 = time.perf_counter()
+    root = root.resolve()
+    changes, source = _git_changed_files(root)
+    if not changes:
+        return {
+            "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+            "active_domain": "general",
+            "change_source": source,
+            "focus_files": [],
+            "changed_symbols": [],
+            "top_tests": [],
+            "top_blocker": None,
+            "summary_line": "Context Compiler (clean): active=general | ready for new assignment",
+        }
+
+    domain_votes = Counter(_classify_domain({"changed_files": [c]}) for c in changes)
+    active_domain = domain_votes.most_common(1)[0][0]
+    rank_res = rank_tests_for_changes(root, changed_files=changes, hot_state=hot_state)
+    rev_res = review_changes_in_ram(root, changed_files=changes, hot_state=hot_state)
+
+    top_tests = [Path(r["test_path"]).name for r in rank_res["ranked_tests"] if r["tier"] == "impacted"][:3]
+    syms = sorted({s for lst in (rank_res.get("changed_symbols") or {}).values() for s in lst})[:4]
+    top_blocker = None
+    for item in rev_res["reviewed_files"]:
+        for sig in item.get("signals") or []:
+            if sig.startswith(("past_blocker(", "missing_co_change_partner(")):
+                top_blocker = f"{Path(item['rel_path']).name}: {sig}"
+                break
+        if top_blocker:
+            break
+
+    parts = [f"Context Compiler ({source}): domain={active_domain}"]
+    if syms:
+        parts.append(f"syms={','.join(syms)}")
+    if top_tests:
+        parts.append(f"tests={','.join(top_tests)}")
+    if top_blocker:
+        parts.append(f"watch=[{top_blocker}]")
+
+    return {
+        "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+        "active_domain": active_domain,
+        "change_source": source,
+        "focus_files": changes[:5],
+        "changed_symbols": syms,
+        "top_tests": top_tests,
+        "top_blocker": top_blocker,
+        "summary_line": " | ".join(parts),
+    }
+
+
+def assess_commit_risk(
+    root: Path,
+    staged_files: list[str] | None = None,
+    hot_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compute calibrated commit regression risk P(break) over staged files to steer pre-commit depth."""
+    t0 = time.perf_counter()
+    root = root.resolve()
+    staged = staged_files if staged_files is not None else _git_staged_files(root)
+    if not staged:
+        return {
+            "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+            "staged_count": 0,
+            "risk_prob": 0.0,
+            "tier": "LOW",
+            "enforce_strict": False,
+            "impacted_tests": [],
+            "advisories": [],
+        }
+
+    rev_res = review_changes_in_ram(root, changed_files=staged, hot_state=hot_state)
+    rank_res = rank_tests_for_changes(root, changed_files=staged, hot_state=hot_state)
+
+    max_prio = max((r["review_priority"] for r in rev_res["reviewed_files"]), default=0.1)
+    has_py = any(f.endswith(".py") or f.endswith(".ps1") for f in staged)
+    missing_partners = [
+        f"{r['rel_path']} -> {p['partner']} ({p['co_changes']}x)"
+        for r in rev_res["reviewed_files"]
+        for p in r.get("missing_co_change_partners") or []
+    ]
+    impacted_tests = [r["test_path"] for r in rank_res["ranked_tests"] if r["tier"] == "impacted"][:4]
+
+    risk_prob = min(
+        0.99,
+        round(
+            0.55 * max_prio
+            + (0.15 if has_py else 0.0)
+            + (0.15 if missing_partners else 0.0)
+            + min(0.14, 0.03 * len(impacted_tests)),
+            3,
+        ),
+    )
+    if risk_prob >= 0.55:
+        tier = "HIGH"
+    elif risk_prob >= 0.25:
+        tier = "MEDIUM"
+    else:
+        tier = "LOW"
+
+    advisories: list[str] = []
+    if missing_partners:
+        advisories.append(f"Missing co-change partner(s): {'; '.join(missing_partners[:2])}")
+    if impacted_tests and tier in ("MEDIUM", "HIGH"):
+        advisories.append(f"Priority tests: {', '.join(Path(t).name for t in impacted_tests)}")
+
+    return {
+        "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
+        "staged_count": len(staged),
+        "risk_prob": risk_prob,
+        "tier": tier,
+        "enforce_strict": tier == "HIGH",
+        "impacted_tests": impacted_tests,
+        "advisories": advisories,
+    }

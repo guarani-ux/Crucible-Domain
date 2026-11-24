@@ -150,3 +150,20 @@ def test_held_out_cv_and_changed_symbols_and_hot_daemon() -> None:
         assert bench["median_ms"] < 50.0, bench
     finally:
         ram_ml_daemon.stop_daemon(HUB_ROOT)
+
+
+def test_context_compiler_and_adaptive_commit_risk() -> None:
+    ctx = ram_ml_engine.compile_session_context(HUB_ROOT)
+    assert "Context Compiler" in ctx["summary_line"]
+    assert ctx["active_domain"] in ("crucible_engine", "writers_room", "story_lane", "general")
+
+    # Low-risk non-code doc change -> LOW tier, strict not escalated
+    low = ram_ml_engine.assess_commit_risk(HUB_ROOT, staged_files=["README.md"])
+    assert low["tier"] == "LOW"
+    assert low["enforce_strict"] is False
+
+    # High-risk core gate change without paired test -> HIGH tier, escalates strict=True
+    high = ram_ml_engine.assess_commit_risk(HUB_ROOT, staged_files=[".agents/scripts/crucible_gate.py"])
+    assert high["tier"] == "HIGH"
+    assert high["enforce_strict"] is True
+    assert high["risk_prob"] >= 0.55
