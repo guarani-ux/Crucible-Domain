@@ -5,7 +5,8 @@
       "args": ["-m", "storylane_spoke", "mcp"],
       "cwd": "C:/crucible-spokes/story-lane",
       "env": {
-        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain"
+        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain",
+        "CRUCIBLE_ALLOWED_ROOTS": "C:/crucible-domain;C:/crucible-spokes/story-lane"
       }
     }
   }

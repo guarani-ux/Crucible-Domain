@@ -38,7 +38,10 @@ Register the spoke inside `C:\crucible-domain\.agents\plugins\<spoke>\` with thr
          "command": "python",
          "args": ["-m", "<pkg>", "mcp"],
          "cwd": "C:/crucible-spokes/<spoke>",
-         "env": { "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain" }
+         "env": {
+           "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain",
+           "CRUCIBLE_ALLOWED_ROOTS": "C:/crucible-domain;C:/crucible-spokes/<spoke>"
+         }
        }
      }
    }
@@ -51,4 +54,5 @@ Register the spoke inside `C:\crucible-domain\.agents\plugins\<spoke>\` with thr
 - **Single Control Plane:** `Crucible Domain` frames assignments, resolves local ground truth, and judges recipient fit. Spokes never spawn a competing orchestration loop.
 - **Selection != Craft:** Spokes recognize forms first and attach at most one form-pinned Crucible procedure (`role: "method"`, `use: "craft"`), abstaining when unmapped.
 - **Authority != Craft:** Craft guidance never grants project facts, asset clearance, or cut approval.
+- **Capability-Scoped Filesystem Sandbox:** When `CRUCIBLE_ALLOWED_ROOTS` (`os.pathsep`/`;`-delimited directory roots) is set, spokes must resolve all read/write paths and reject any input file or `output_dir` outside those roots before probing or mutating disk.
 - **Two-Sided Proof:** Every spoke must pass both its own independent unit + stdio MCP roundtrip tests and one live Hub -> Spoke recomposition call.
