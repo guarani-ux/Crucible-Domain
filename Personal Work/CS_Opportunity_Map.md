@@ -4,7 +4,7 @@ depends_on:
   - Graphs/00_System_Atlas_and_Neon_Handoff.md
   - Knowledge/Knowledge_Register.md
 depends_on_sha256:
-  Graphs/00_System_Atlas_and_Neon_Handoff.md: c6ef59bf5d057249ec2fcd7e4b6577797bbeee7a3158355441c3bcab75cbd949
+  Graphs/00_System_Atlas_and_Neon_Handoff.md: 38b4ad52ad3ef6214d8ae9e487517ce49c86d0f9234e29f9c89a291bc5086000
 ---
 
 # Crucible Domain — Computer Science & Engineering Architecture Manual

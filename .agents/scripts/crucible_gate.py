@@ -1264,10 +1264,162 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | audit <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "steer":
+        lc = _resolve_crucible_submodule("lever_control")
+        do_apply = len(parts) >= 2 and parts[1].lower() in ("apply", "--apply")
+        res = lc.build_steering_packet(root, auto_apply=do_apply)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(res["compact_steering_brief"])
+            for lv in res["recommended_levers"]:
+                print(f"  -> Lever [{lv['lever_id']}] ({lv['hits']}x): {lv['rule']}")
+            if res["applied_levers"]:
+                print(f"  APPLIED {len(res['applied_levers'])} lever(s) into .agents/ml_learned_policies.json")
+        return 0
+
+    if action == "pull":
+        if len(parts) < 2:
+            msg = "usage: crucible_gate.py bench pull <lever_id> [form_id] [--json]"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        lc = _resolve_crucible_submodule("lever_control")
+        lever_id = parts[1]
+        form_id = parts[2] if len(parts) >= 3 else "all"
+        try:
+            res = lc.pull_lever(root, lever_id, form_id=form_id)
+        except ValueError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=2) if as_json else str(exc), file=sys.stdout if as_json else sys.stderr)
+            return 2
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(f"PULLED LEVER [{res['lever_id']}] -> forms={len(res['updated_forms'])} | rule: {res['policy_rule']}")
+        return 0
+
+    if action == "train":
+        mls = _resolve_crucible_submodule("doc_ml_scorer")
+        res = mls.train_whitebox_model(root, save=True)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            status = "PASS" if res["ok"] else "WARN"
+            print(
+                f"Offline 40-Feature White-Box ML Train ({status}): "
+                f"samples={res['train_samples']} (human={res['human_label_count']}) | "
+                f"holdout_acc={res['holdout_accuracy']:.1%} | F1={res['holdout_f1']:.3f} in {res['elapsed_ms']:.1f}ms"
+            )
+            print(f"  Top + drivers: {res['top_positive_weights']}")
+            print(f"  Top - drivers: {res['top_negative_weights']}")
+            print(f"  Model saved:   {res['model_path']}")
+        return 0 if res["ok"] else 1
+
+    if action == "score":
+        if len(parts) < 3:
+            msg = "usage: crucible_gate.py bench score <file_path> <form_id> [--json]"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        mls = _resolve_crucible_submodule("doc_ml_scorer")
+        target_file = _resolve_cli_path(root, parts[1])
+        form_id = parts[2]
+        if not target_file.is_file():
+            msg = f"File not found: {target_file}"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 1
+        text = target_file.read_text(encoding="utf-8", errors="replace")
+        res = mls.score_document_ml(text, form_id, repo_root=root)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"Offline ML Score ({res['verdict']}): form={form_id} | P(buy-in)={res['buy_in_probability']:.1%} | "
+                f"flow={res['flow_score']:.2f} | board={res['board_score']:.2f} | blocking_roles={res['blocking_roles']}"
+            )
+            if res["top_negative_drivers"]:
+                neg = ", ".join(f"{d['feature']}({d['contribution']:+.2f})" for d in res["top_negative_drivers"][:4])
+                print(f"  Top negative drivers: {neg}")
+            if res["top_positive_drivers"]:
+                pos = ", ".join(f"{d['feature']}({d['contribution']:+.2f})" for d in res["top_positive_drivers"][:4])
+                print(f"  Top positive drivers: {pos}")
+            if res["recommended_levers"]:
+                print(f"  Recommended Levers:   {res['recommended_levers']}")
+        return 0 if res["ok"] else 1
+
+    if action == "label":
+        if len(parts) < 4:
+            msg = "usage: crucible_gate.py bench label <file_path> <form_id> pass|fail [--json]"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        mls = _resolve_crucible_submodule("doc_ml_scorer")
+        target_file = _resolve_cli_path(root, parts[1])
+        form_id = parts[2]
+        verdict = parts[3]
+        note = " ".join(parts[4:]) if len(parts) > 4 else ""
+        try:
+            row = mls.append_human_label(root, target_file, form_id, verdict, note=note)
+        except ValueError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=2) if as_json else str(exc), file=sys.stdout if as_json else sys.stderr)
+            return 2
+        if as_json:
+            print(json.dumps({"ok": True, "label": row}, indent=2, ensure_ascii=False))
+        else:
+            print(f"Recorded human label: {row['verdict'].upper()} for {row['file']} ({row['form_id']}) -> run 'bench train' to retrain.")
+        return 0
+
+    if action == "fuzz":
+        dfe = _resolve_crucible_submodule("doc_flow_engine")
+        res = dfe.run_offline_fuzz_suite(rounds=max(1, rounds))
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            status = "PASS" if res["ok"] else "BLOCKED"
+            print(
+                f"Crucible Offline Flow & 6-Role Board Fuzzer ({status}): "
+                f"evals={res['total_evaluations']} in {res['elapsed_ms']:.1f}ms ({res['evals_per_sec']:.0f}/sec) | "
+                f"golden={res['golden_passed']}/{res['golden_total']} (board_ready={res['golden_board_ready']}/{res['golden_total']}) | "
+                f"mutants_killed={res['mutants_killed']}/{res['mutants_total']} ({res['kill_rate']:.1%})"
+            )
+            print(f"  6-Role Blocks Caught: {res['role_blocks_by_role']}")
+            if res["golden_failures"]:
+                print(f"  Golden failures: {res['golden_failures']}")
+            if res["surviving_mutants"]:
+                print(f"  Surviving mutants: {res['surviving_mutants']}")
+        return 0 if res["ok"] else 1
+
+    if action == "audit":
+        if len(parts) < 3:
+            msg = "usage: crucible_gate.py bench audit <file_path> <form_id> [--json]"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        dfe = _resolve_crucible_submodule("doc_flow_engine")
+        target_file = _resolve_cli_path(root, parts[1])
+        form_id = parts[2]
+        if not target_file.is_file():
+            msg = f"File not found: {target_file}"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 1
+        text = target_file.read_text(encoding="utf-8", errors="replace")
+        flow_res = dfe.evaluate_document_flow(text, form_id)
+        board_res = dfe.evaluate_stakeholder_board(text, form_id, flow_eval=flow_res, repo_root=root)
+        payload = {"ok": flow_res.passed and board_res.buy_in_ready, "file": str(target_file), "flow": flow_res.to_dict(), "board": board_res.to_dict()}
+        if as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            status = "BUY-IN READY" if payload["ok"] else "BLOCKED"
+            print(f"Offline Flow & 6-Role Audit ({status}): form={form_id} | flow={flow_res.flow_score:.2f} | board={board_res.board_score:.2f} | blocking_roles={board_res.blocking_roles}")
+            for rr in board_res.role_reviews:
+                tag = f"{rr.verdict:<7} ({rr.relevance})"
+                blk = f" | blockers={rr.blockers}" if rr.blockers else ""
+                print(f"  [{tag}] {rr.role_title:<34} score={rr.score:.2f}{blk}")
+            if board_res.recommended_levers or flow_res.recommended_levers:
+                levers = list(dict.fromkeys(flow_res.recommended_levers + board_res.recommended_levers))
+                print(f"  Recommended Levers: {levers}")
+        return 0 if payload["ok"] else 1
 
     if action == "stop":
         stop_p = wb.request_bench_stop(root)

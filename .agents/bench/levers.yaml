@@ -1,0 +1,95 @@
+# Discrete Control Lever Registry (Layer 3)
+# Each lever is a bounded, deterministic intervention that an operator or steering-wheel LLM can pull.
+version: "1.0"
+levers:
+  - id: hold_owner_policy:require_named_owner
+    category: custody
+    target_roles: [media_production_manager, marketing_and_engagement_director, communications_director, ceo]
+    params:
+      min_owner_coverage: 0.75
+    policy_rule: "Every [UNKNOWN — OWNER TO CONFIRM], TBD, or Open Hold line MUST name an explicit accountable owner/role outside the bracketed tag (e.g., '— Owner: Producer')."
+
+  - id: section_order_lock:decision_first
+    category: flow
+    target_roles: [ceo, marketing_and_engagement_director]
+    params:
+      max_decision_position: 0.25
+    policy_rule: "Place the concrete Decision Request / Recommendation in the top 25% (first 3 lines) before background context."
+
+  - id: section_order_lock:signal_before_hypothesis
+    category: flow
+    target_roles: [communications_strategist]
+    params:
+      require_signal_first: true
+    policy_rule: "Present dated, cited Observed Signal / Evidence strictly BEFORE any Hypothesis, creative bet, or proposal."
+
+  - id: section_order_lock
+    category: flow
+    target_roles: [marketing_and_engagement_director, ceo]
+    params:
+      strict_order: true
+    policy_rule: "Enforce canonical section flow for the form: Decision/Premise -> Grounded Evidence -> Structured Table/Action -> Owned Holds."
+
+  - id: citation_grounding_mode:strict
+    category: evidence
+    target_roles: [communications_strategist]
+    params:
+      min_citations: 1
+    policy_rule: "Cite at least one exact local ground-truth file or procedure ID (e.g., Calgary Public Library/GROUND_TRUTH.md, MW-04) to back factual claims."
+
+  - id: wpm_budget_per_beat:150
+    category: craft
+    target_roles: [media_production_manager]
+    params:
+      max_avg_wpm: 150
+      max_beat_wpm: 165
+    policy_rule: "Keep spoken A/V narration <=150 WPM average and <=165 WPM on every individual beat; trim filler words so a human host can breathe."
+
+  - id: av_counterpoint_cap:0.35
+    category: craft
+    target_roles: [media_production_manager]
+    params:
+      max_av_overlap: 0.35
+    policy_rule: "Enforce audio-visual counterpoint: Video column must show physical camera action/detail that Audio does NOT repeat (lexical overlap <=0.35)."
+
+  - id: mandate_boundary_guard
+    category: charter
+    target_roles: [communications_director, ceo]
+    params:
+      strict_cpl_mandates: true
+    policy_rule: "Name only official 2027-2030 mandates (Collections, Experiences, Expertise, Spaces, Technology); never label internal lenses (Grow, Books & Reading, Community) as official mandates."
+
+  - id: strategic_plan_currency_guard
+    category: charter
+    target_roles: [communications_director, ceo]
+    params:
+      active_plan: "2027-2030"
+    policy_rule: "Align strictly to the current 2027-2030 strategic plan ('A Better Tomorrow Through Stories'); never cite the prior 2023-2026 plan as active."
+
+  - id: authority_hold_guard
+    category: governance
+    target_roles: [communications_director, ceo]
+    params:
+      block_unverified_release: true
+    policy_rule: "Never claim 'approved for release', 'published live', or 'Asana updated' without explicit G06 release authorization."
+
+  - id: service_promise_alignment
+    category: charter
+    target_roles: [ceo, marketing_manager]
+    params:
+      require_service_promise: true
+    policy_rule: "Connect strategic mandates to concrete patron service promises (free library card access, accessible spaces/tools, immediate patron action)."
+
+  - id: vision_2040_kpi_guard
+    category: charter
+    target_roles: [marketing_manager, ceo]
+    params:
+      forbid_vision_as_video_kpi: true
+    policy_rule: "Treat Vision 2040 ('Three in four Calgarians choose the Library') as an institutional north star—never as a single-video KPI."
+
+  - id: slop_stripper_pass
+    category: craft
+    target_roles: [communications_strategist, communications_director]
+    params:
+      max_slop_hits: 0
+    policy_rule: "Strip corporate clichés and print-prose filler ('in today's fast-paced', 'delve into', 'synergy', 'game-changer', 'transformative journey')."

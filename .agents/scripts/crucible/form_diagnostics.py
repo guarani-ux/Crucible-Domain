@@ -199,6 +199,10 @@ class FormDiagnosticReport:
     element_scores: dict[str, float] | None = None
     weakest_element: str = ""
     mastery_tip: str = ""
+    flow_score: float = 1.0
+    board_score: float = 1.0
+    blocking_roles: list[str] | None = None
+    recommended_levers: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -608,6 +612,22 @@ def diagnose_form_deliverable(
         diag_parts.append(f"word count {words} outside [25, {profile.max_words_target}]")
     diagnosis = f"{form_id}: " + ("; ".join(diag_parts) if diag_parts else "matches professional baseline")
 
+    from .doc_flow_engine import evaluate_document_flow, evaluate_stakeholder_board
+
+    flow_eval = evaluate_document_flow(
+        text,
+        form_id,
+        strict_cpl_mandates=(strict_cpl_mandates or form_id == "leadership_report"),
+    )
+    board_eval = evaluate_stakeholder_board(
+        text,
+        form_id,
+        flow_eval=flow_eval,
+        strict_cpl_mandates=(strict_cpl_mandates or form_id == "leadership_report"),
+        repo_root=repo_root,
+    )
+    merged_levers = list(dict.fromkeys(flow_eval.recommended_levers + board_eval.recommended_levers))
+
     return FormDiagnosticReport(
         form_id=form_id,
         overall_score=overall,
@@ -617,8 +637,18 @@ def diagnose_form_deliverable(
         professional_parity=professional_parity,
         weakest_aspect=weakest_aspect,
         diagnosis=diagnosis,
-        measured_features={"words": words, **dev_feats, "missing_cues": missing_cues},
+        measured_features={
+            "words": words,
+            **dev_feats,
+            "missing_cues": missing_cues,
+            "flow_violations": flow_eval.violations,
+            "board_buy_in_ready": board_eval.buy_in_ready,
+        },
         element_scores=element_scores,
         weakest_element=weakest_element,
         mastery_tip=mastery_tip,
+        flow_score=flow_eval.flow_score,
+        board_score=board_eval.board_score,
+        blocking_roles=board_eval.blocking_roles,
+        recommended_levers=merged_levers,
     )

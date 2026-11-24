@@ -1,0 +1,35 @@
+# Portable Organization Strategic Charter for Offline Flow & 6-Role Buy-In Engine
+# Swap this file for any organization to calibrate mandates, mission, vision, values, commitments, and service promises.
+org_name: Calgary Public Library
+strategic_plan_name: "A Better Tomorrow Through Stories (2027-2030)"
+mission: "Connect Calgarians to stories, expertise, spaces, and technology that strengthen curiosity, collaboration, and belonging."
+vision_north_star: "Three in four Calgarians choose the Library (Vision 2040 — institutional north star, never a single-video KPI)."
+official_mandates:
+  - Collections
+  - Experiences
+  - Expertise
+  - Spaces
+  - Technology
+values:
+  - Curiosity
+  - Collaboration
+  - Equity and Belonging
+commitments:
+  - Intellectual Freedom
+  - Truth and Reconciliation
+  - Intentional Innovation
+service_promises:
+  - free
+  - library card
+  - patron
+  - accessible
+  - belonging
+  - curiosity
+  - innovation
+  - reconciliation
+  - intellectual freedom
+  - collaboration
+non_mandate_internal_lenses:
+  - Grow
+  - "Books & Reading"
+  - Community
