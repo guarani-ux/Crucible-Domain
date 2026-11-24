@@ -16,6 +16,18 @@ from .models import (
 )
 
 
+CAPABILITY_PRECEDENCE: dict[str, int] = {
+    "entry_doc": 0,
+    "procedure": 1,
+    "role": 2,
+    "skill": 3,
+    "primitive": 4,
+    "knowledge": 5,
+    "project": 6,
+    "exhibit": 7,
+}
+
+
 def _tokenize(text: str) -> list[str]:
     return [tok for tok in TOKEN_RE.findall(text.lower()) if tok not in STOPWORDS and len(tok) > 1]
 
@@ -86,7 +98,13 @@ def _score_entries(
                 )
             )
 
-    scored.sort(key=lambda m: (-m.score, m.entry.kind != "procedure", m.entry.id))
+    scored.sort(
+        key=lambda m: (
+            -round(m.score, 6),
+            CAPABILITY_PRECEDENCE.get(m.entry.kind, 99),
+            m.entry.id,
+        )
+    )
     return scored
 
 

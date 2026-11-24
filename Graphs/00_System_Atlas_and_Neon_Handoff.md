@@ -22,8 +22,9 @@
 | **WOS Standard** | [`Project/Work Operating System/Work_Operating_System_Graph_Catalog.md`](../Project/Work%20Operating%20System/Work_Operating_System_Graph_Catalog.md) | Canonical 7-graph specification (`P-WOS`) | 63L · Live |
 | **Harness Self-Model** | [`Project/Inner Gravity/README.md`](../Project/Inner%20Gravity/README.md) · [`05_Session_4188f88a_Causal_Trace_and_Gaps.md`](../Project/Inner%20Gravity/05_Session_4188f88a_Causal_Trace_and_Gaps.md) | Harness entry point, `4188f88a` causal trace, and observatory (`collect_observatory.py`) | 109L + 124L · Live |
 | **Blueprint & Historical CPL** | [`system_blueprint_v2.yaml`](../Archive/system_blueprint_v2/system_blueprint_v2.yaml) · [`System_Blueprint_v2_Visual_Guide.md`](../Archive/system_blueprint_v2/System_Blueprint_v2_Visual_Guide.md) · [`cpl_pilot_maps.md`](../Archive/overnight_mvp/cpl_pilot_maps.md) | Universal Production Blueprint v2 contract + 11 historical CPL/production reference files archived in `Archive/overnight_mvp/` and `Archive/system_blueprint_v2/` | 163L + 134L + 11 `overnight_mvp/` files |
-| **Gate Runner** | [`.agents/scripts/crucible_gate.py`](../.agents/scripts/crucible_gate.py) | `session-start`, `pre-tool`, `check`, `route`, `forge`, `doctor`, `melt-diff`, `melt-scan`, `export-map`, `learn`, `risk` | Live (Contract Stop Gate retired) |
-| **Modular Index Package** | [`.agents/scripts/crucible/__init__.py`](../.agents/scripts/crucible/__init__.py) · [`crucible_index.py`](../.agents/scripts/crucible_index.py) | Modular package (`models.py`, `indexer.py`, `router.py`, `forge.py`, `doctor.py`, `sieve.py`, `exporter.py`, `ledger.py`) behind thin `crucible_index.py` shim | Modularized (`de90370`+) |
+| **Gate Runner** | [`.agents/scripts/crucible_gate.py`](../.agents/scripts/crucible_gate.py) | Hot-path Hub gate: `session-start`, `pre-tool`, `check` (with `--strict` staleness + plugin/kernel drift checks), `route`, `doctor` | Live (`952a5ab`+) |
+| **5-Piece Hub Kernel** | [`.agents/scripts/crucible/__init__.py`](../.agents/scripts/crucible/__init__.py) · [`crucible_index.py`](../.agents/scripts/crucible_index.py) | 5-piece RAM kernel (`__init__.py`, `models.py`, `indexer.py`, `router.py`, `doctor.py`) with `CAPABILITY_PRECEDENCE` (`entry_doc > procedure > role > skill > primitive > knowledge > project > exhibit`) | Live (`952a5ab`+) |
+| **Workspace Plugins & MCP Spokes** | [`.agents/plugins/`](../.agents/plugins/) | Active plugins: `inner-gravity` (harness observation + `ig-*` skills), `writers-room` (3-tool editorial MCP spoke), `crucible-observatory` (3-tool offline forge/sieve/ledger/export MCP spoke) | Live (`f67fcc5`+) |
 | **Test & Quality Gates** | [`.agents/scripts/test_quality_gate.py`](../.agents/scripts/test_quality_gate.py) · [`test_crucible_gate.py`](../.agents/scripts/tests/test_crucible_gate.py) · [`test_crucible_index.py`](../.agents/scripts/tests/test_crucible_index.py) | Mechanical AST test quality gate (`TQ-01..TQ-05`), mutation kills (`mutation_gate.py`), and unit test suite | Live |
 | **Capability Map (JSON)** | [`Graphs/capability_map.json`](./capability_map.json) (via `crucible_gate.py export-map`) | Deterministic static JSON inventory of indexed IDs, paths, kinds, and summaries | Generated |
 | **Hooks & RW-04 Boundary** | [`.agents/hooks.json`](../.agents/hooks.json) · [`.agents/acceptance.lock.json`](../.agents/acceptance.lock.json) | Workspace hooks (`SessionStart`, `PreToolUse`) + synced acceptance lockfile; global `hook_v4.py` `RW-04` protects `AGENTS.md`, `GEMINI.md`, `.agents/hooks.json`, `.agents/acceptance.lock.json` | `RW-04` Protected |
@@ -50,19 +51,19 @@ flowchart TD
         BLUE["Inner Gravity Blueprint v2 + 11 overnight_mvp/ files"]
     end
 
-    subgraph RUNTIME["Modular Pure-Python Local Runtime (No DB / No Daemon)"]
+    subgraph RUNTIME["5-Piece Hub Kernel & Workspace Plugins (No DB / No Daemon)"]
         HOOKS[".agents/hooks.json (RW-04)"]
-        GATE["crucible_gate.py (+ export-map & hardened check)"]
-        SHIM["crucible_index.py (102L shim)"]
-        PKG[".agents/scripts/crucible/\n__init__, models, indexer, router,\nforge, doctor, sieve, exporter"]
-        TQ["test_quality_gate.py (TQ-01..TQ-05)\n+ 29+ pytest tests"]
-        IG_PLUG[".agents/plugins/inner-gravity (observe.py + ig-* skills)"]
+        GATE["crucible_gate.py (check --strict, drift, depends_on)"]
+        SHIM["crucible_index.py (shim)"]
+        PKG[".agents/scripts/crucible/\n__init__, models, indexer,\nrouter, doctor"]
+        TQ["test_quality_gate.py (TQ-01..TQ-05)\n+ mutation_gate.py + pytest"]
+        IG_PLUG[".agents/plugins/\ninner-gravity, writers-room,\ncrucible-observatory"]
     end
 
     subgraph OUTPUTS["Domain Output Roots"]
         GRAPHS["Graphs/ (GROUND_TRUTH.md, 00..03, capability_map.json)"]
-        CPL["Calgary Public Library/ (0 files · INTAKE REQUIRED)"]
-        PERS["Personal Work/ (0 files · INTAKE REQUIRED)"]
+        CPL["Calgary Public Library/ (GROUND_TRUTH.md + pitch & pilot)"]
+        PERS["Personal Work/ (GROUND_TRUTH.md · PW-01..03)"]
     end
 
     HOOKS -->|"Triggers SessionStart / PreToolUse"| GATE

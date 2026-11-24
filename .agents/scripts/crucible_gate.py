@@ -264,7 +264,113 @@ def cmd_pre_tool(root: Path = ROOT) -> int:
     return 0
 
 
-def cmd_check(root: Path = ROOT) -> int:
+def _check_self_model_drift(root: Path = ROOT) -> list[str]:
+    """Verify active plugins and 5-piece crucible/ kernel modules match AGENTS.md and 00_System_Atlas."""
+    agents_path = root / "AGENTS.md"
+    atlas_path = root / "Graphs" / "00_System_Atlas_and_Neon_Handoff.md"
+    if not agents_path.is_file() or not atlas_path.is_file():
+        return []
+
+    agents_text = agents_path.read_text(encoding="utf-8", errors="replace").lower()
+    atlas_text = atlas_path.read_text(encoding="utf-8", errors="replace").lower()
+    reasons: list[str] = []
+
+    plugins_dir = root / ".agents" / "plugins"
+    if plugins_dir.is_dir():
+        for plugin_dir in sorted(p for p in plugins_dir.iterdir() if p.is_dir()):
+            if not (plugin_dir / "plugin.json").is_file():
+                continue
+            pname = plugin_dir.name.lower()
+            variants = (pname, pname.replace("-", " "))
+            if not any(v in agents_text for v in variants):
+                reasons.append(f"self-model drift: plugin '{plugin_dir.name}' missing from AGENTS.md")
+            if not any(v in atlas_text for v in variants):
+                reasons.append(
+                    f"self-model drift: plugin '{plugin_dir.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
+                )
+
+    kernel_dir = root / ".agents" / "scripts" / "crucible"
+    if kernel_dir.is_dir():
+        for py_file in sorted(kernel_dir.glob("*.py")):
+            if py_file.name.lower() not in atlas_text:
+                reasons.append(
+                    f"self-model drift: kernel module '{py_file.name}' missing from Graphs/00_System_Atlas_and_Neon_Handoff.md"
+                )
+
+    return reasons
+
+
+def _extract_frontmatter_depends_on(md_path: Path) -> list[str]:
+    """Parse YAML frontmatter `depends_on:` relative paths without external dependencies."""
+    text = md_path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return []
+
+    deps: list[str] = []
+    in_depends = False
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith("depends_on:"):
+            inline = stripped.split(":", 1)[1].strip()
+            if inline.startswith("[") and inline.endswith("]"):
+                for item in inline[1:-1].split(","):
+                    cleaned = item.strip().strip("'\"")
+                    if cleaned:
+                        deps.append(cleaned)
+                in_depends = False
+            else:
+                in_depends = True
+            continue
+        if in_depends:
+            if stripped.startswith("- "):
+                cleaned = stripped[2:].strip().strip("'\"")
+                if cleaned:
+                    deps.append(cleaned)
+            elif stripped and not line.startswith((" ", "\t")):
+                in_depends = False
+    return deps
+
+
+def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> tuple[list[str], list[str]]:
+    """Check Markdown frontmatter depends_on targets for missing files (FAIL) and staleness (WARN / --strict FAIL)."""
+    failures: list[str] = []
+    warnings: list[str] = []
+    root_resolved = root.resolve()
+
+    for folder_name in COUNT_DIRS:
+        folder = root / folder_name
+        if not folder.is_dir():
+            continue
+        for md_path in sorted(folder.rglob("*.md")):
+            deps = _extract_frontmatter_depends_on(md_path)
+            if not deps:
+                continue
+            rel_art = str(md_path.relative_to(root)).replace("\\", "/")
+            art_mtime = md_path.stat().st_mtime
+            for dep in deps:
+                dep_path = (root / dep).resolve()
+                try:
+                    dep_path.relative_to(root_resolved)
+                except ValueError:
+                    failures.append(f"broken depends_on in {rel_art}: '{dep}' resolves outside workspace")
+                    continue
+                if not dep_path.is_file():
+                    failures.append(f"broken depends_on in {rel_art}: missing '{dep}'")
+                    continue
+                if dep_path.stat().st_mtime > art_mtime:
+                    msg = f"stale artifact {rel_art} (older than depends_on '{dep}')"
+                    if strict:
+                        failures.append(msg)
+                    else:
+                        warnings.append(msg)
+
+    return failures, warnings
+
+
+def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
     print(_build_system_map(root))
     reasons: list[str] = []
 
@@ -336,11 +442,21 @@ def cmd_check(root: Path = ROOT) -> int:
     except ImportError:
         pass
 
+    reasons.extend(_check_self_model_drift(root))
+    dep_failures, dep_warnings = _check_artifact_dependencies(root, strict=strict)
+    reasons.extend(dep_failures)
+
+    for warn in dep_warnings:
+        print(f"WARN: {warn}")
+
     if reasons:
         print(f"BLOCKED: {'; '.join(reasons)}")
         return 1
 
-    print("PASS: IDEAS.md present; Python syntax, primitives schema, staged files, and test-quality checks clean.")
+    print(
+        "PASS: IDEAS.md present; Python syntax, primitives schema, self-model drift, "
+        "artifact dependencies, staged files, and test-quality checks clean."
+    )
     return 0
 
 
@@ -398,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route' or 'doctor'.")
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
+    parser.add_argument("--strict", action="store_true", help="Treat stale depends_on artifacts as blocking failures in 'check'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -409,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec)
-    return cmd_check(root)
+    return cmd_check(root, strict=args.strict)
 
 
 if __name__ == "__main__":
