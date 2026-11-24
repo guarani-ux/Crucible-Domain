@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -82,6 +82,7 @@ class WorkloadProject:
     public_checks: dict[str, Any] = field(default_factory=dict)
     blind_holdouts: dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
+    use_cases: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -123,6 +124,9 @@ class ProjectRunReceipt:
     element_scores: dict[str, float] = field(default_factory=dict)
     difficulty_level: int = 1
     escalated_to: int | None = None
+    use_case_id: str = ""
+    skills: list[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -230,6 +234,30 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
             if mode in ("hybrid", "agy_live") and not str(item.get("intent", "")).strip():
                 errors.append(f"{mode} project '{pid}' must declare a non-empty 'intent'")
 
+            use_cases: list[dict[str, Any]] = []
+            raw_ucs = item.get("use_cases") or []
+            if not isinstance(raw_ucs, list):
+                errors.append(f"project '{pid}' use_cases must be a list")
+                raw_ucs = []
+            seen_uc: set[str] = set()
+            for uidx, uc_item in enumerate(raw_ucs):
+                if not isinstance(uc_item, dict) or not str(uc_item.get("id", "")).strip() or not str(uc_item.get("intent", "")).strip():
+                    errors.append(f"project '{pid}' use_cases[{uidx}] needs non-empty 'id' and 'intent'")
+                    continue
+                uc_key = str(uc_item["id"]).strip()
+                if uc_key in seen_uc:
+                    errors.append(f"project '{pid}' duplicate use_case id '{uc_key}'")
+                seen_uc.add(uc_key)
+                use_cases.append(
+                    {
+                        "id": uc_key,
+                        "intent": str(uc_item["intent"]).strip(),
+                        "target_audience": str(uc_item.get("target_audience", "")).strip(),
+                        "skills": [str(s) for s in (uc_item.get("skills") or [])],
+                        "tools": [str(s) for s in (uc_item.get("tools") or [])],
+                    }
+                )
+
             projects.append(
                 WorkloadProject(
                     id=pid,
@@ -245,6 +273,7 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
                     public_checks=dict(item.get("public_checks") or {}),
                     blind_holdouts=dict(item.get("blind_holdouts") or {}),
                     enabled=bool(item.get("enabled", True)),
+                    use_cases=use_cases,
                 )
             )
 
@@ -475,6 +504,8 @@ def _build_agy_worker_prompt(
     prior_diagnosis: str = "",
     learned_rules: list[str] | None = None,
     escalation_challenge: str = "",
+    skills: list[str] | None = None,
+    tools: list[str] | None = None,
 ) -> str:
     """Build worker prompt with 5-element form mastery spec, learned rules, escalation, and prior diagnosis."""
     eff_form = form_id or _infer_project_form(project)
@@ -494,6 +525,10 @@ def _build_agy_worker_prompt(
         f"  - Stakeholder Connection: {profile.stakeholder_spec}",
         f"Assignment: {project.intent}",
     ]
+    if skills:
+        lines.append("Professional skills this use case requires: " + "; ".join(skills))
+    if tools:
+        lines.append("Tools/sources to ground the work in (read-only): " + "; ".join(tools))
     if craft_instruction:
         lines.append(f"Selected Craft Priority: {craft_instruction}")
     if learned_rules:
@@ -801,6 +836,26 @@ def run_workload_bench(
 
                     arm_id = str(arm_choice.get("arm_id", profile.craft_arms[0]))
                     arm_instruction = str(arm_choice.get("instruction", ""))
+
+                    uc: dict[str, Any] = {}
+                    eff_proj = proj
+                    if proj.use_cases:
+                        with state_lock:
+                            tgt = (
+                                rml.load_learned_policies(root, learned_policies_path)["targets"].get(proj.id, {})
+                                if rml is not None
+                                else {}
+                            )
+                        runs_done = int(tgt.get("runs", round_idx - 1))
+                        uc = proj.use_cases[runs_done % len(proj.use_cases)]
+                        eff_proj = replace(
+                            proj,
+                            intent=str(uc.get("intent") or proj.intent),
+                            target_audience=str(uc.get("target_audience") or proj.target_audience),
+                        )
+                    uc_skills = [str(s) for s in (uc.get("skills") or [])]
+                    uc_tools = [str(s) for s in (uc.get("tools") or [])]
+                    uc_id = str(uc.get("id", ""))
                     cur_level = int(mastery_ctx.get("difficulty_level", 1))
                     escalation_txt = build_escalation_challenge(
                         form_id,
@@ -809,7 +864,7 @@ def run_workload_bench(
                     )
 
                     _safe_progress(
-                        f"  [r{round_idx}] START {proj.id} ({form_id} L{cur_level} | arm={arm_id} | mode={proj.mode}) ..."
+                        f"  [r{round_idx}] START {proj.id} ({form_id} L{cur_level} | use_case={uc_id or '-'} | arm={arm_id} | mode={proj.mode}) ..."
                     )
 
                     retries_used = 0
@@ -842,12 +897,14 @@ def run_workload_bench(
                             effort = "high" if (attempt > 0 or cur_level >= 3) else ("medium" if cur_level == 2 else "low")
                             prompt = (
                                 _build_agy_worker_prompt(
-                                    proj,
+                                    eff_proj,
                                     form_id=form_id,
                                     craft_instruction=arm_instruction,
                                     prior_diagnosis=persisted_diag,
                                     learned_rules=list(mastery_ctx.get("learned_rules", [])),
                                     escalation_challenge=escalation_txt,
+                                    skills=uc_skills,
+                                    tools=uc_tools,
                                 )
                                 + feedback_suffix
                             )
@@ -977,6 +1034,9 @@ def run_workload_bench(
                         element_scores=element_scores,
                         difficulty_level=cur_level,
                         escalated_to=escalated_to,
+                        use_case_id=uc_id,
+                        skills=uc_skills,
+                        tools=uc_tools,
                     )
 
                 with state_lock:
@@ -1156,9 +1216,12 @@ def summarize_bench_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
     form_scores: dict[str, list[float]] = {}
     aspect_fails: Counter[str] = Counter()
     element_fails: Counter[str] = Counter()
+    uc_scores: dict[str, list[float]] = {}
     for r in scored_rows:
         fid = str(r.get("form_id") or "unknown")
         form_scores.setdefault(fid, []).append(float(r["diagnostic_score"]))
+        if r.get("use_case_id"):
+            uc_scores.setdefault(f"{fid}/{r['use_case_id']}", []).append(float(r["diagnostic_score"]))
         if r.get("weakest_aspect"):
             aspect_fails[str(r["weakest_aspect"])] += 1
         if r.get("weakest_element"):
@@ -1194,6 +1257,7 @@ def summarize_bench_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
         "pass_rate": round(passed / len(active), 4),
         "avg_form_score": avg_diag,
         "avg_score_by_form": avg_by_form,
+        "avg_score_by_use_case": {k: round(sum(v) / len(v), 3) for k, v in sorted(uc_scores.items())},
         "weakest_form": weakest_form,
         "weakest_elements": dict(element_fails),
         "holdout_catch_count": holdout_catches,

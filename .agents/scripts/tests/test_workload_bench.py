@@ -530,3 +530,55 @@ def test_parallel_workers_trains_multiple_forms_concurrently_without_race(tmp_pa
     assert res["executed_count"] == 2
     assert elapsed < 0.29  # 2x 0.15s ran in parallel
     assert len((tmp_path / "tel.jsonl").read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_use_cases_rotate_per_round_and_carry_skills_and_tools(tmp_path: Path) -> None:
+    base = {
+        "version": "1.0",
+        "defaults": {
+            "staging_dir": "runs",
+            "telemetry_file": "tel.jsonl",
+            "ml_history_file": "ml.jsonl",
+            "bandit_state_file": "bandit.json",
+            "learned_policies_file": "learned.json",
+            "timeout_seconds": 15,
+            "max_retries": 0,
+        },
+        "projects": [
+            {
+                "id": "p-uc",
+                "domain": "cpl_research",
+                "mode": "agy_live",
+                "form": "call_sheet",
+                "intent": "fallback intent",
+                "deliverable": "c.md",
+                "public_checks": {"required_sections": ["Window"]},
+                "use_cases": [
+                    {"id": "uc-one", "intent": "ONE_INTENT single branch shoot", "target_audience": "Crew", "skills": ["fallback planning"], "tools": ["MP-04"]},
+                    {"id": "uc-two", "intent": "TWO_INTENT two-location day", "target_audience": "Producer", "skills": ["multi-site logistics"], "tools": ["MP-06"]},
+                ],
+            }
+        ],
+    }
+    manifest = load_workload_manifest(base)
+    prompts: list[str] = []
+
+    def worker(prompt: str, _root: Path, _timeout_s: float) -> tuple[bool, str]:
+        prompts.append(prompt)
+        return True, "Window 09:00 | Owner: Producer | Sound test | Coverage | Reset by 11:00 | pending\n| Window | Who |\n| --- | --- |\n| 09:00 | Crew |\n"
+
+    res = run_workload_bench(tmp_path, manifest, mode_filter="all", rounds=3, agy_worker_fn=worker)
+    ids = [r["use_case_id"] for r in res["receipts"]]
+    assert ids == ["uc-one", "uc-two", "uc-one"]
+    assert "ONE_INTENT" in prompts[0] and "fallback planning" in prompts[0] and "MP-04" in prompts[0]
+    assert "TWO_INTENT" in prompts[1] and "multi-site logistics" in prompts[1]
+    assert res["receipts"][1]["skills"] == ["multi-site logistics"]
+    summary = summarize_bench_telemetry(tmp_path / "tel.jsonl")
+    assert set(summary["avg_score_by_use_case"]) == {"call_sheet/uc-one", "call_sheet/uc-two"}
+
+    bad = {**base, "projects": [{**base["projects"][0], "use_cases": [{"id": "x"}, {"id": "y", "intent": "ok"}, {"id": "y", "intent": "dup"}]}]}
+    with pytest.raises(WorkloadSpecError) as exc_info:
+        load_workload_manifest(bad)
+    msg = "; ".join(exc_info.value.errors)
+    assert "needs non-empty 'id' and 'intent'" in msg
+    assert "duplicate use_case id 'y'" in msg
