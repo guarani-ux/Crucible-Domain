@@ -5,66 +5,118 @@ depends_on:
   - Knowledge/Knowledge_Register.md
 ---
 
-# Crucible Domain — 10-Pillar CS & CE Stack Blueprint
+# Crucible Domain — Computer Science & Engineering Architecture Manual
 
-> **Purpose:** Map the full Computer Science and Computer Engineering stack governing `Crucible Domain` from neural token inference down to disk I/O and control loops.
-> **Scope:** Sovereign systems engineering (`PW-01`–`PW-03`). Every layer links a physical mechanism in CPU, RAM, disk, ASTs, or solvers to observed agent and build behavior.
+> **Purpose:** Operational Computer Science, Computer Engineering, and Software Engineering manual governing `Crucible Domain` — mapping degree-level computing foundations (CS2023 undergraduate core, Master's specialization tracks, and PhD evidence standards) directly onto our 16-core hardware configuration, in-RAM transaction engine, DAG compiler, and thin-orchestrator sub-agent loop.
+> **Scope:** Sovereign systems engineering (`PW-01`–`PW-03`). Literal CS/CE/SE terminology only: CPU, RAM, disk I/O, OS processes, ASTs, type systems, DAGs, CAS, and state machines.
 
 ---
 
-## 1. Full Computing Stack Dataflow
+## 1. Foundational Engineering Invariants & Full Computing Stack
+
+Every design decision in `Crucible Domain` obeys four cross-level invariants from *Computer Science: From a Degree to a Working Practice*:
+
+1. **A representation is not the world.** A task record, manifest, or frontmatter entry does not prove target state. Inspect bytes, exit codes, and the receiving boundary directly.
+2. **A tool result is not permission.** A SHA-256 digest proves byte identity against a trusted record, not authorization. Scope clearance to actor, action, object, and intended use (`ig-evidence-review`, read-only Asana boundary).
+3. **A solution is not its evidence.** Passing unit tests verify only tested inputs. Pair every positive case with deliberate violations, stale-proof controls, and unrelated negative controls.
+4. **A method is valuable when the next action improves.** Prefer a deterministic schema and exact hash check over probabilistic inference when the check is decidable; measure recipient usability, intervention count, and wall-clock latency.
+
+### Five-Step Verification Cadence
+`Predict expected state` -> `Trace small instance manually` -> `Implement & execute test` -> `Inject realistic fault / stale artifact` -> `Bound assumptions (safety invariant vs. progress condition)`.
+
+### Full Computing Stack Dataflow
 
 ```mermaid
 flowchart LR
-    PROMPT["Prompt & Contract"] --> INF["Information Theory & LLM Inference (Token Budget / KV-Cache)"]
-    INF --> TYPES["PL Type Schemas (JSON Spec / Dataclasses)"]
-    TYPES --> DAG["Compiler DAG (campaign_ir.py)"]
-    DAG --> OS["OS / Sub-Agent Worktrees (slice-worker / stdio IPC)"]
-    OS --> DB["Database ACID / CAS (tx_patch.py / os.replace)"]
-    DB --> HW["Hardware Latency (RAM vs. Disk I/O / ThreadPool)"]
-    HW --> CTRL["Control Ratchet (results.tsv / ErrorCircuitBreaker)"]
+    PROMPT["Contract & Bounded Brief"] --> INF["Information Theory & Neural Inference (KV-Cache / Context Entropy)"]
+    INF --> TYPES["PL Type Schemas (CampaignSpec / SliceNode / JSON)"]
+    TYPES --> DAG["Compiler DAG & Topological Waves (campaign_ir.py)"]
+    DAG --> OS["OS Process & Worktree Isolation (slice-worker / stdio JSON-RPC 2.0)"]
+    OS --> DB["Storage ACID & Optimistic CAS (tx_patch.py / os.replace / results.tsv)"]
+    DB --> HW["16-Core Hardware Execution (verify_all.ps1 / 34.0 GB RAM)"]
+    HW --> CTRL["Formal State Machine & Circuit Breaker (LoopStateMachine / ErrorCircuitBreaker)"]
 ```
 
 ---
 
-## 2. Pillars 1–5: Hardware, OS, Storage, Distributed Systems, Security
+## 2. Core CS Curriculum -> Crucible Physical Mapping
 
-| Pillar & Core Law | Physical Mechanism (CPU/RAM/Disk/Net) | Impact on Prompts, Sub-Agents & Builds |
+Integrates the 17 CS2023 knowledge areas, Master's systems/verification/AI tracks, and PhD empirical evidence patterns into concrete `Crucible Domain` modules:
+
+| CS Discipline & Curriculum Core | Physical Mechanism (CPU / RAM / Disk / AST / Network) | Crucible Domain Implementation & Operational Effect |
 | :--- | :--- | :--- |
-| **1. Hardware & Computer Architecture** *(Memory Hierarchy, I/O Latency Gap)* | L1/RAM operations execute in nanoseconds; NTFS metadata lookups, process forks, and sequential subprocess spawning cost tens to hundreds of milliseconds. | Packing capability indexing (`router.py`) into ~30ms RAM reads and running 4 verification suites concurrently via `ThreadPoolExecutor` in `scripts/verify_all.ps1` cuts suite wall-clock latency to the slowest critical-path process (~15.6s). |
-| **2. Operating Systems** *(Process Isolation, IPC, Copy-on-Write Worktrees)* | Separate OS processes communicate over stdio JSON-RPC 2.0 (`writers-room`, `crucible-observatory`, `story-lane`); isolated Git worktrees and `slice-worker` sub-agents decouple working directories and process heaps. | Keeps Hub routing and policy checks in a thin kernel while isolating third-party parsers, LLM tool sessions, and parallel slice execution from mutating shared working trees. |
-| **3. Storage & Databases** *(ACID Atomicity, Copy-on-Write, Append-Only WAL)* | `tx_patch.py` (`TransactionBuffer`) buffers edits in RAM, validates syntax/AST before disk touch, writes temp files, commits atomically via `os.replace()`, and restores `before_bytes` on failure; `append_ratchet_ledger` appends immutable TSV rows to `results.tsv`. | Eliminates partial multi-file writes on mid-edit crashes, removes serial disk write roundtrips, and preserves a monotonic append-only execution log (`results.tsv`) per round. |
-| **4. Distributed Systems** *(Optimistic Concurrency Control / CAS, Idempotency)* | `campaign_ir.py` (`save_receipt_cache_cas`, `file_sha256`, `_path_lock`) verifies the expected cache SHA-256 before writing and raises `CacheConflictError` on concurrent mismatch; `compute_slice_input_sha256` keys memoized receipts by exact target + dependency hashes. | Prevents parallel workers from silently overwriting each other's cached slice receipts (lost-update anomaly) and enables deterministic idempotent skips across rounds. |
-| **5. Security** *(Object-Capability Model, Least-Privilege Containment)* | `TransactionBuffer._resolve` rejects path traversal outside `root`; `compile_campaign` enforces `allowed_roots` containment (`_is_within_any`); MCP spokes enforce explicit directory capability bounds and read-only external boundaries. | Bounds `slice-worker` and spoke file access mathematically at path resolution rather than relying on natural-language prompt compliance. |
+| **1. Algorithms & Complexity** *(CS2023 `AL`, `MSF`; Master's Track 1)* | Graph reachability, cycle detection, Kahn's topological sort (O(V+E)), levelized wave partitioning, and asymptotic vs. empirical cost separation. | `campaign_ir.py` (`compile_campaign`, `_topological_order`) detects dependency cycles pre-execution and partitions independent slices into parallel `execution_waves`. |
+| **2. Data Structures & Graphs** *(CS2023 `AL`, `DM`; Master's Track 8)* | Adjacency lists, typed edge tables (`-->` blocking vs. `-.->` advisory), content-addressable hash maps, and in-RAM flat indexing (~30ms reads vs. cold disk scans). | `router.py` / `indexer.py` serve capability routing in RAM (~30ms); `receipt_cache.json` keys memoized slice outputs by `compute_slice_input_sha256`; `crucible_gate.py` checks `depends_on_sha256` before `mtime`. |
+| **3. Operating Systems & Concurrency** *(CS2023 `OS`, `AR`, `SF`, `PDC`; Master's Track 2)* | Memory hierarchy gap (nanosecond L1/RAM vs. millisecond NTFS metadata and process forks), Copy-on-Write Git worktrees, thread pools, and crash-recovery idempotency. | `verify_all.ps1` runs 11 subprocesses concurrently via `ThreadPoolExecutor`; `slice-worker` executes in isolated `Workspace="share"` CoW directories so parallel writes cannot race on a shared working tree. |
+| **4. Databases & ACID / CAS** *(CS2023 `DM`, `PDC`; Master's Track 2 & 8)* | In-RAM Copy-on-Write overlay, atomic file swap (`tempfile.mkstemp` + `os.replace()`), `before_bytes` rollback, optimistic Compare-And-Swap, and append-only WAL. | `tx_patch.py` (`TransactionBuffer`) guarantees all-or-nothing multi-file disk commits; `campaign_ir.py` (`save_receipt_cache_cas`, `file_sha256`, `_path_lock`, `merge_receipt_cache`) prevents lost updates via `CacheConflictError`; `append_ratchet_ledger` logs immutable TSV rows to `results.tsv`. |
+| **5. Compilers & AST / IR** *(CS2023 `FPL`; Master's Track 3)* | Static typed Intermediate Representation, schema validation, Python bytecode syntax checking (`compile(..., "exec")`), and AST traversal prior to execution. | `campaign_ir.py` lowers JSON specs into typed `CampaignSpec`, `SliceNode`, `PlannedSlice`, and `CompiledCampaign` dataclasses (`CampaignCompileError`); `tx_patch.py` runs `compile()` and `test_quality_gate.py` AST rules in RAM before touching disk. |
+| **6. Networks & IPC** *(CS2023 `NC`, `PDC`; Master's Track 2)* | Process-isolated stdio JSON-RPC 2.0 message passing across domain spokes; timeout-as-unknown-outcome semantics requiring state reconciliation prior to retry. | Hub coordinates `.agents/plugins/` spokes (`writers-room`, `crucible-observatory`, `story-lane`) over bounded stdio IPC, keeping third-party parsers out of the Hub process heap. |
+| **7. Security & Capabilities** *(CS2023 `SEC`, `SEP`; Master's Track 7)* | Least-privilege object-capability containment, canonical path resolution rejecting directory traversal, and strict separation of untrusted text from capability-bearing code. | `TransactionBuffer._resolve` enforces `is_relative_to(self.root)`; `compile_campaign` enforces `_resolve_allowed_roots` / `_is_within_any`; Asana remains strictly read-only; external/destructive mutations require Tier 1/2 operator gates. |
+| **8. Information Theory & Neural Inference** *(CS2023 `AI`, `HCI`; Master's Track 4 & 5)* | Transformer attention dilution over long contexts ("Lost in the Middle"), KV-cache token budgets, matched-arm evaluation, and holding out by task family. | `build_slice_worker_prompt` strips multi-round history and injects only the bounded slice spec, `target_paths`, and `verify_cmd`, preserving token signal-to-noise and separating model proposals from deterministic gate enforcement. |
+| **9. Formal Methods & Verification** *(CS2023 `MSF`, `FPL`, `SE`; Master's Track 3 & PhD)* | Deterministic Finite State Machines, safety invariants vs. progress conditions, property-based fuzzing, mutation testing, and falsifiable replication traces. | `LoopStateMachine` rejects illegal round transitions (`StateTransitionError`); `test_property_fuzz_crucible_gate.py` fuzzes 220+ frontmatter states; `mutation_gate.py` and `ErrorCircuitBreaker` verify defect detection and halt duplicate failure loops. |
 
 ---
 
-## 3. Pillars 6–10: Information Theory, PL/Types, Compilers, Formal Methods, Control Theory
+## 3. Hardware-Matched Execution Configuration
 
-| Pillar & Core Law | Physical Mechanism (Tokens/ASTs/Graphs/Solvers) | Impact on Prompts, LLM Behavior & Builds |
+Current workstation hardware baseline: **`16` logical CPU cores**, **`34.0 GB` physical RAM**, **`12.4 GB` free RAM**. Every execution primitive is tuned to saturate local I/O and CPU concurrency without exhausting RAM or thrashing NTFS:
+
+| Component | Hardware-Matched Configuration | Physical Rationale & Observed Performance |
 | :--- | :--- | :--- |
-| **6. Information Theory & Neural Inference** *(Shannon Entropy, Context Dilution, KV-Cache Budget)* | Autoregressive transformer attention degrades as irrelevant context tokens accumulate; `build_slice_worker_prompt` injects only the bounded slice spec, target paths, and `verify_cmd`. | Stripping conversation history and multi-slice noise in `slice-worker` keeps attention entropy focused on target symbols, reducing hallucinated edits and token cost per round. |
-| **7. Programming Languages & Type Systems** *(Static Schemas, Algebraic Error Types)* | `campaign_ir.py` (`CampaignSpec`, `SliceNode`, `PlannedSlice`, `_expect_str_list`) enforces typed schemas at load time; `tx_patch.py` validates Python syntax (`compile`) and JSON parsing in RAM before `os.replace()`. | Converts malformed LLM outputs and invalid JSON specs into deterministic pre-execution parse failures (`CampaignCompileError`, `TransactionValidationError`) with zero side effects. |
-| **8. Compilers & Graph Theory** *(Typed DAG IR, Topological Wave Scheduling, AST Gates)* | `compile_campaign` lowers campaign specs into an acyclic dependency graph (`_topological_order` via Kahn's algorithm) grouped into parallel `execution_waves`; `test_quality_gate.py` (`TQ-01..05`) parses test ASTs prior to commit. | Detects dependency cycles before Round 1, exposes parallelizable slice waves to the orchestrator, and blocks tautological assertions at compile/stage time. |
-| **9. Formal Methods & Logic** *(Finite State Machines, Invariants, Property Testing)* | `LoopStateMachine` (`PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE`) rejects out-of-order round transitions with `StateTransitionError`; property-based tests and `mutation_gate.py` assert invariants across randomized inputs. | Prevents an autonomous loop from committing unverified code or skipping cache invalidation by making illegal round transitions unrepresentable in runtime state. |
-| **10. Control Theory & Amdahl's Law** *(Closed-Loop Ratchet, Circuit Breaking, Critical Path)* | `ErrorCircuitBreaker` hashes normalized stderr (`hash_error_output`) and trips on repeated identical failures; `results.tsv` records pass/fail deltas; `verify_all.ps1` parallelizes independent gates. | Halts runaway retry loops deterministically on identical error hashes, ensures round-over-round monotonic progress, and bounds verification latency by the slowest single check rather than their sum. |
+| **`scripts/verify_all.ps1`** | **`11` concurrent workers** via `ThreadPoolExecutor(max_workers=len(STEPS))`: `Hub Gate (--strict)`, `Hub Doctor`, `Story-Lane Pytest`, and **`8` Hub `pytest` file workers** (`.agents/scripts/tests/test_*.py`). | Saturates `11` of `16` logical cores while reserving `5` logical cores for OS scheduling, NTFS metadata locks, and background indexer/antivirus I/O. Cuts full-suite verification wall-clock to **`12.86s`** (`11` checks, 60s per-step timeout). |
+| **`.agents/scripts/crucible/tx_patch.py`** | **`TransactionBuffer` in-RAM Copy-on-Write overlay** (`_overlay: dict[Path, bytes | None]`), executed via `python -` without temporary script files. | Absorbs multi-file reads/edits in the `12.4 GB` free RAM budget, runs `validate()` (`compile()`, `json.loads()`, `test_quality_gate.py`) before any syscall writes, then commits atomically via `tempfile.mkstemp` + `os.replace()` with full `before_bytes` rollback on exception. |
+| **`.agents/scripts/crucible/campaign_ir.py`** | **DAG wave scheduler + SHA-256 content cache** (`compile_campaign`, `optimize_campaign`, `compute_slice_input_sha256`, `save_receipt_cache_cas`). | Partitions slices into disjoint parallel `execution_waves`, hashes exact target + dependency contents to emit `SKIP_CACHED` at `0` LLM tokens on unchanged inputs, and serializes cache updates via `_path_lock` + CAS digest checks (`CacheConflictError`). |
+| **`slice-worker` Sub-Agents** | **`Model="flash"`, `Workspace="share"`**, bounded single-slice prompt (`build_slice_worker_prompt`), strict JSON receipt output. | `Workspace="share"` isolates each parallel worker in a CoW worktree; `Model="flash"` minimizes inference latency and KV-cache footprint for single-slice surgical edits verified by deterministic terminal gates. |
 
 ---
 
-## 4. Causality Matrix (`Symptom -> CS Root Cause -> Physical Code Fix`)
+## 4. How We Test, Slice & Orchestrate Sub-Agents
+
+### A. Property-Based Fuzzing, Negative Controls & Mutation Rigor
+* **Property Fuzzing (`.agents/scripts/tests/test_property_fuzz_crucible_gate.py`):** Uses deterministic stdlib PRNG (`random.Random(20261123)`) to generate `220` randomized frontmatter/SHA-256 cases covering valid block lists, malformed YAML, missing keys, and digest mismatches. Paired with spoke fuzzing (`tests/test_storylane_fuzz_and_replay.py`).
+* **Three-Arm Experimental Control:** Every verification suite and handoff check separates: (1) valid clean baseline, (2) deliberate fault / stale-SHA violation (must be rejected by trusted code, not merely noticed in prose), and (3) unrelated negative control (valid adjacent artifacts must remain unblocked).
+* **Mutation Verification (`.agents/scripts/mutation_gate.py`):** Injects controlled mutations to confirm tests actually fail when invariants break rather than passing vacuously.
+
+### B. Mechanical AST Test Quality Gate (`.agents/scripts/test_quality_gate.py`, `TQ-01`–`TQ-05`)
+Executed automatically in RAM during `TransactionBuffer.validate()` on every staged `test_*.py` / `*_test.py` file and via CLI:
+1. **`TQ-01` (Assertion Presence & Non-Tautology):** Rejects tests with zero assertions or tautologies (`assert True`, `assert x == x`).
+2. **`TQ-02` (No Dead/Skipped Tests):** Rejects unconditional skips (`@unittest.skip`, `@pytest.mark.skip`) and hidden inactive test functions.
+3. **`TQ-03` (Host Portability):** Rejects machine-coupled user home paths (`C:\Users\...`, `/home/...`) and hardcoded local session UUIDs.
+4. **`TQ-04` (No Mocked E2E Boundaries):** Rejects skipped execution flags (`execute_hooks=False`) without live execution tests and blocks mocking out integration/E2E boundaries.
+5. **`TQ-05` (Mandatory Negative Paths):** Requires every test module with `>= 2` tests to assert failure/rejection behavior (`assertRaises`, `FAIL`, `BLOCKED`, `returncode`, etc.).
+
+### C. Deterministic Loop State Machine (`LoopStateMachine`)
+Enforces strict per-round lifecycle ordering in `campaign_ir.py`:
+* **Legal Transitions:** `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` (plus `FAILED` on non-zero verification exit).
+* **Invariant Enforcement:** Any out-of-order transition or stale `staged_sha256` passed to `verify(exit_code, staged_sha256, error_output)` raises `StateTransitionError`, making unverified commits unrepresentable in runtime state.
+
+### D. Error-Hash Circuit Breaker (`ErrorCircuitBreaker`)
+Prevents stochastic retry loops from burning quota on identical failures:
+* **Digest Normalization:** `hash_error_output` normalizes failure stderr into `error_sha256`.
+* **Trip Threshold (`BreakerState`):** Halts slice retries immediately on **2 consecutive identical `error_sha256`** hashes or **3 consecutive failed rounds**, logging `TRIPPED` to `results.tsv` and escalating for root-cause reassessment.
+
+### E. Thin-Orchestrator Delegation (`O(1)` Parent Context)
+1. **Compile & Optimize First:** Run `crucible_gate.py campaign` (`load_campaign_spec` -> `compile_campaign` -> `optimize_campaign`) to validate `CRUCIBLE_ALLOWED_ROOTS`, detect DAG cycles, and skip `SKIP_CACHED` slices before spawning agents.
+2. **Disjoint Wave Fan-Out:** Dispatch each `execution_waves` level via `run_workflow` with `Model="flash"` and `Workspace="share"` on disjoint `target_paths`.
+3. **Structured Receipt Merge Only:** Workers return only the typed JSON receipt (`slice_id`, `commit_sha`, `after_sha256`, `passed`, `summary`); raw file reads, intermediate diffs, and full test logs never enter parent context.
+4. **Monotonic Ratchet Persistence:** Record `KEEP`, `REVERT`, `SKIP_CACHED`, or `TRIPPED` via `append_ratchet_ledger` (`results.tsv`) and persist cache entries atomically via `merge_receipt_cache`.
+
+---
+
+## 5. Causality Matrix (`Symptom -> CS Root Cause -> Physical Code Fix`)
 
 | Observed Symptom | CS Root Cause | Physical Code Fix & Exact Mechanism |
 | :--- | :--- | :--- |
 | **Model drift & context rot across rounds** | Unbounded autoregressive context growth dilutes attention over stale history and unrelated files; unconstrained loop phases allow ad-hoc re-planning mid-edit. | `slice-worker` executes fresh-context single-slice prompts from `campaign_ir.py` (`build_slice_worker_prompt`) under `LoopStateMachine` (`PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE`). |
-| **Slow sub-agents & verification stalls** | Serial disk I/O roundtrips per file edit and sequential subprocess execution (`check` -> `doctor` -> `pytest` -> spoke tests) compound process-fork overhead. | `tx_patch.py` batches edits in RAM via `TransactionBuffer`; `scripts/verify_all.ps1` runs all 4 verification suites concurrently via `ThreadPoolExecutor(max_workers=4)`; `campaign_ir.py` schedules independent slices in parallel `execution_waves`. |
+| **Slow sub-agents & verification stalls** | Serial disk I/O roundtrips per file edit and sequential subprocess execution (`check` -> `doctor` -> `pytest` -> spoke tests) compound process-fork overhead. | `tx_patch.py` batches edits in RAM via `TransactionBuffer`; `scripts/verify_all.ps1` runs all `11` verification checks concurrently via `ThreadPoolExecutor` (`12.86s`); `campaign_ir.py` schedules independent slices in parallel `execution_waves`. |
 | **Partial commits & half-written files on failure** | Non-atomic direct writes leave mutated files on disk if a later file fails validation or process execution aborts mid-batch. | `tx_patch.py` (`TransactionBuffer.commit`) runs `validate()` in RAM, stages temp files with atomic `os.replace()`, and executes full `before_bytes` rollback on any exception. |
 | **Lost cache keys under concurrent slice workers** | Uncoordinated read-modify-write updates to `receipt_cache.json` drop earlier workers' entries when two slices finish concurrently. | `campaign_ir.py` (`save_receipt_cache_cas`, `_path_lock`, `merge_receipt_cache`) verifies the prior cache `file_sha256` before atomic write and raises `CacheConflictError` on mismatch. |
-| **False staleness & wasted re-runs after Git checkout** | Filesystem `mtime` timestamps reset on `git checkout` or `git clone`, causing wall-clock dependency checks to flag unchanged upstream files as modified. | `crucible_gate.py` checks `depends_on_sha256` content digests before falling back to `mtime`, and `campaign_ir.py` (`compute_slice_input_sha256`, `optimize_campaign`) hashes target/dependency contents to skip unchanged slices at 0 tokens. |
-| **Repeated identical error loops** | Stochastic retry without failure-state memory repeats the same failing patch across consecutive iterations. | `campaign_ir.py` (`ErrorCircuitBreaker`, `hash_error_output`) hashes failure diagnostics and trips the breaker (`BreakerState`) once consecutive identical error hashes hit threshold. |
+| **False staleness & wasted re-runs after Git checkout** | Filesystem `mtime` timestamps reset on `git checkout` or `git clone`, causing wall-clock dependency checks to flag unchanged upstream files as modified. | `crucible_gate.py` checks `depends_on_sha256` content digests before falling back to `mtime`, and `campaign_ir.py` (`compute_slice_input_sha256`, `optimize_campaign`) hashes target/dependency contents to skip unchanged slices at `0` tokens. |
+| **Repeated identical error loops** | Stochastic retry without failure-state memory repeats the same failing patch across consecutive iterations. | `campaign_ir.py` (`ErrorCircuitBreaker`, `hash_error_output`) hashes normalized failure diagnostics and trips `BreakerState` once consecutive identical error hashes hit threshold. |
 
 ---
 
-## 5. Verified Vertical Slices (#1–#6) & Open CS Frontiers
+## 6. Verified Vertical Slices (#1–#6) & Open CS Frontiers
 
 ### Verified Vertical Slices (#1–#6)
 
