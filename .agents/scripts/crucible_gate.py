@@ -249,11 +249,35 @@ def _check_mechanical_edit_guard(tool_name: str, args: dict[str, object], target
 def cmd_pre_tool(root: Path = ROOT) -> int:
     payload = _read_stdin_json()
     tool_call = payload.get("toolCall")
-    if not isinstance(tool_call, dict) or tool_call.get("name") not in ("write_file", "edit_file"):
+    if not isinstance(tool_call, dict):
+        return _emit_decision("allow")
+    tool_name = str(tool_call.get("name") or "")
+    args = tool_call.get("args")
+    if not isinstance(args, dict):
+        return _emit_decision("allow")
+    if tool_name == "run_command":
+        cmd = str(args.get("CommandLine") or args.get("command") or "")
+        low = cmd.lower()
+        protected_targets = (".agents/operator_grants.json", ".agents/acceptance.lock.json", ".agents/hooks.json")
+        if any(pt in low for pt in protected_targets) and any(op in low for op in (">", "tee ", "set-content", "out-file", "write", "rm ", "del ", "remove-item", "python ")):
+            return _emit_decision("deny", "AUTHORITY_GUARD: Refusing run_command mutation of protected governance/grant files.")
+        if "calgary public library" in low and "app.asana.com" in low:
+            return _emit_decision("deny", "ASANA_BOUNDARY: Refusing run_command writing app.asana.com into Calgary Public Library/.")
+        destructive_patterns = (
+            r"\bgit\s+push\b",
+            r"\bgit\s+reset\s+--hard\b",
+            r"\brm\s+-rf\b",
+            r"\bremove-item\b.*-recurse",
+            r"\bdrop\s+table\b",
+        )
+        if any(re.search(pat, low) for pat in destructive_patterns):
+            return _emit_decision("deny", "AUTHORITY_GUARD: Destructive/external run_command requires verified operator grant.")
         return _emit_decision("allow")
 
-    args = tool_call.get("args")
-    target = _extract_target_path(args, root) if isinstance(args, dict) else None
+    if tool_name not in ("write_file", "edit_file"):
+        return _emit_decision("allow")
+
+    target = _extract_target_path(args, root)
     if target is None:
         return _emit_decision("allow")
 
@@ -469,12 +493,13 @@ def _check_working_tree_cpl(root: Path) -> list[str]:
 
 
 def _check_python_and_primitives(root: Path) -> list[str]:
+    import ast
     reasons: list[str] = []
     for py_dir in (root / ".agents" / "scripts", root / ".agents" / "scripts" / "crucible"):
         for py_file in sorted(py_dir.glob("*.py")) if py_dir.is_dir() else []:
             try:
-                py_compile.compile(str(py_file), doraise=True)
-            except (py_compile.PyCompileError, OSError) as exc:
+                ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+            except (SyntaxError, OSError, UnicodeDecodeError) as exc:
                 reasons.append(f"python syntax error in {str(py_file.relative_to(root)).replace('\\', '/')}: {exc}")
 
     if (root / "Knowledge" / "Crucible_Primitives.json").is_file():
@@ -533,6 +558,25 @@ def cmd_check(root: Path = ROOT, *, strict: bool = False) -> int:
     reasons.extend(_check_python_and_primitives(root))
     reasons.extend(_check_test_quality(root))
     reasons.extend(_check_self_model_drift(root))
+    lock_path = root / ".agents" / "acceptance.lock.json"
+    if lock_path.is_file():
+        try:
+            lock_data = json.loads(lock_path.read_text(encoding="utf-8"))
+            for req in lock_data.get("required_files") or []:
+                if not (root / str(req)).is_file():
+                    reasons.append(f"acceptance.lock missing required_file: {req}")
+            for py_rel in lock_data.get("python_syntax") or []:
+                py_p = root / str(py_rel)
+                if not py_p.is_file():
+                    reasons.append(f"acceptance.lock missing python_syntax file: {py_rel}")
+                else:
+                    try:
+                        import ast
+                        ast.parse(py_p.read_text(encoding="utf-8"), filename=str(py_p))
+                    except (SyntaxError, OSError, UnicodeDecodeError) as exc:
+                        reasons.append(f"acceptance.lock syntax error in {py_rel}: {exc}")
+        except (OSError, json.JSONDecodeError) as exc:
+            reasons.append(f"invalid .agents/acceptance.lock.json: {exc}")
     dep_failures, dep_warnings = _check_artifact_dependencies(root, strict=strict)
     reasons.extend(dep_failures)
 
@@ -832,17 +876,18 @@ def cmd_kernel(root: Path, query: list[str], *, as_json: bool = False, autofix: 
 
     outcome = " ".join(query).strip()
     res = crucible_kernel.run_kernel(root, outcome=outcome, autofix=autofix)
+    ok_statuses = ("CHECKS_PASSED", "OUTCOME_VERIFIED")
     if as_json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
-        return 0 if res["status"] == "VERIFIED_DONE" else 1
+        return 0 if res["status"] in ok_statuses else 1
     print(
-        f"Crucible Kernel ({res['elapsed_ms']}ms): status={res['status']} | V={res['potential_v']} "
+        f"Crucible Kernel ({res['elapsed_ms']}ms): status={res['status']} | outcome_verified={res.get('outcome_verified')} | V={res['potential_v']} "
         f"({res['convergence']}) | dirty_closure={len(res['dirty_closure'])} | "
         f"autofixed={len(res.get('autofixed') or [])} | counterexamples={len(res['counterexamples'])}"
     )
     for cx in res["counterexamples"][:5]:
         print(f"  COUNTEREXAMPLE: {cx}")
-    return 0 if res["status"] == "VERIFIED_DONE" else 1
+    return 0 if res["status"] in ok_statuses else 1
 
 
 def cmd_ml_daemon(root: Path, query: list[str], *, as_json: bool = False) -> int:

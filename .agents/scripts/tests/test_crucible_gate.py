@@ -285,6 +285,52 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertIn("Spokes: writers-room, story-lane, crucible-observatory", msg)
             self.assertIn("Verify: scripts/verify_all.ps1", msg)
 
+    def test_pre_tool_blocks_destructive_and_grant_tampering_run_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp))
+            deny_push = _run_gate(
+                repo,
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "run_command",
+                        "args": {"CommandLine": "git push origin main"},
+                    }
+                },
+            )
+            self.assertEqual(deny_push.returncode, 0, deny_push.stderr)
+            push_data = json.loads(deny_push.stdout)
+            self.assertEqual(push_data.get("decision"), "deny")
+            self.assertIn("AUTHORITY_GUARD", push_data.get("reason", ""))
+
+            deny_grant = _run_gate(
+                repo,
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "run_command",
+                        "args": {"CommandLine": "echo '{}' > .agents/operator_grants.json"},
+                    }
+                },
+            )
+            self.assertEqual(deny_grant.returncode, 0, deny_grant.stderr)
+            grant_data = json.loads(deny_grant.stdout)
+            self.assertEqual(grant_data.get("decision"), "deny")
+            self.assertIn("AUTHORITY_GUARD", grant_data.get("reason", ""))
+
+            allow_ls = _run_gate(
+                repo,
+                "pre-tool",
+                stdin_payload={
+                    "toolCall": {
+                        "name": "run_command",
+                        "args": {"CommandLine": "git status -s"},
+                    }
+                },
+            )
+            self.assertEqual(allow_ls.returncode, 0, allow_ls.stderr)
+            self.assertEqual(json.loads(allow_ls.stdout), {"decision": "allow"})
+
 
 if __name__ == "__main__":
     unittest.main()

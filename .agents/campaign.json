@@ -1,39 +1,49 @@
 {
-  "name": "slices-8-9-contracts-and-solver",
+  "name": "wave-1-g0-g1-portability-authority-outcomes",
   "repo_root": ".",
   "allowed_roots": [
-    ".agents/scripts/crucible",
-    ".agents/scripts/tests",
-    "Graphs"
+    ".",
+    ".github/workflows",
+    ".agents/scripts",
+    "scripts",
+    "Personal Work"
   ],
   "max_rounds": 4,
   "slices": [
     {
-      "id": "slice-8-contracts",
+      "id": "g0-ci-and-portable-verify",
       "depends_on": [],
       "target_paths": [
-        ".agents/scripts/crucible/contracts.py",
-        ".agents/scripts/tests/test_contracts.py"
+        "requirements.txt",
+        ".github/workflows/crucible-ci.yml",
+        ".agents/scripts/verify_all.py",
+        "scripts/verify_all.ps1",
+        ".agents/scripts/crucible/doctor.py",
+        ".agents/scripts/tests/test_portable_verify.py"
       ],
-      "verify_cmd": "python -m pytest .agents/scripts/tests/test_contracts.py -q"
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_portable_verify.py .agents/scripts/tests/test_crucible_index.py -q"
     },
     {
-      "id": "slice-9-solver",
+      "id": "g1-kernel-authority-and-outcomes",
       "depends_on": [],
       "target_paths": [
-        ".agents/scripts/crucible/solver.py",
-        ".agents/scripts/tests/test_solver.py"
+        ".agents/scripts/crucible_kernel.py",
+        ".agents/scripts/tests/test_crucible_kernel.py"
       ],
-      "verify_cmd": "python -m pytest .agents/scripts/tests/test_solver.py -q"
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_crucible_kernel.py -q"
     },
     {
-      "id": "register-atlas",
+      "id": "g1-gate-authority-and-mutations",
       "depends_on": [
-        "slice-8-contracts",
-        "slice-9-solver"
+        "g0-ci-and-portable-verify",
+        "g1-kernel-authority-and-outcomes"
       ],
       "target_paths": [
-        "Graphs/00_System_Atlas_and_Neon_Handoff.md"
+        ".agents/scripts/crucible_gate.py",
+        ".agents/scripts/mutation_gate.py",
+        ".agents/scripts/tests/test_crucible_gate.py",
+        "Personal Work/CS_Loop_Weakness_Audit.md",
+        "Personal Work/CS_Opportunity_Map.md"
       ],
       "verify_cmd": "pwsh -File scripts/verify_all.ps1"
     }

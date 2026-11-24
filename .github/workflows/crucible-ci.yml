@@ -26,8 +26,10 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install pytest
-        run: python -m pip install --upgrade pip pytest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Run test suite
         run: python -m pytest .agents/scripts/tests -v
@@ -40,6 +42,9 @@ jobs:
 
       - name: Run portable doctor
         run: python .agents/scripts/crucible_gate.py doctor --no-global
+
+      - name: Run portable verify_all
+        run: python .agents/scripts/verify_all.py --ci --skip-mutations
 
       - name: Run mutation kill gate
         run: python .agents/scripts/mutation_gate.py

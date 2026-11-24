@@ -35,7 +35,7 @@ GATE_MUTATIONS: tuple[GateMutation, ...] = (
     GateMutation(
         id="M2_DISABLE_DRIVE_TMP_BLOCK",
         description="Disable .tmp.drive* staged sync-temp file block.",
-        target='if any(part.startswith(".tmp.drive") for part in parts):',
+        target='if any(part.startswith(".tmp.drive") for part in norm.split("/")):',
         replacement="if False:",
     ),
     GateMutation(
@@ -47,8 +47,8 @@ GATE_MUTATIONS: tuple[GateMutation, ...] = (
     GateMutation(
         id="M4_DISABLE_EDIT_FILE_SHIFTING_SAND",
         description="Exclude edit_file from SHIFTING_SAND pre-tool gate.",
-        target='if tool_call.get("name") not in ("write_file", "edit_file"):',
-        replacement='if tool_call.get("name") not in ("write_file",):',
+        target='if tool_name not in ("write_file", "edit_file"):',
+        replacement='if tool_name not in ("write_file",):',
     ),
     GateMutation(
         id="M5_DISABLE_IDEAS_MISSING_CHECK",

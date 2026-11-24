@@ -440,6 +440,150 @@ def _audit_duplicates_and_storage(
     return metrics
 
 
+WINDOWS_DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:[/\\]")
+
+
+def _audit_mcp_configs(
+    root: Path,
+    global_config_dir: Path | None,
+    findings: list[DiagnosticFinding],
+) -> dict[str, Any]:
+    """Audit .agents/plugins/*/mcp_config.json for JSON validity, hardcoded host paths, and cwd reachability."""
+    plugins_dir = root / ".agents" / "plugins"
+    mcp_files = sorted(plugins_dir.glob("*/mcp_config.json")) if plugins_dir.is_dir() else []
+    invalid_configs: list[str] = []
+    hardcoded_paths: list[str] = []
+    missing_cwds: list[str] = []
+
+    for mf in mcp_files:
+        rel = str(mf.relative_to(root)).replace("\\", "/")
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            invalid_configs.append(rel)
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="FAIL",
+                    subject=rel,
+                    detail=f"invalid mcp_config.json: {exc}",
+                    remediation="Fix JSON syntax in plugin mcp_config.json.",
+                )
+            )
+            continue
+
+        if not isinstance(data, dict) or (data.get("mcpServers") is not None and not isinstance(data.get("mcpServers"), dict)):
+            invalid_configs.append(rel)
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="FAIL",
+                    subject=rel,
+                    detail="mcp_config.json must be a JSON object with an object 'mcpServers' map",
+                    remediation="Ensure mcp_config.json defines an object under 'mcpServers'.",
+                )
+            )
+            continue
+
+        servers = data.get("mcpServers") or {}
+        for srv_name, srv_cfg in servers.items():
+            if not isinstance(srv_cfg, dict):
+                invalid_configs.append(f"{rel}::{srv_name}")
+                findings.append(
+                    DiagnosticFinding(
+                        category="mcp_spokes",
+                        severity="FAIL",
+                        subject=f"{rel}::{srv_name}",
+                        detail=f"MCP server entry must be a JSON object, got {type(srv_cfg).__name__}",
+                    )
+                )
+                continue
+
+            cwd_val = srv_cfg.get("cwd")
+            if isinstance(cwd_val, str) and cwd_val.strip():
+                cwd_str = cwd_val.strip()
+                if WINDOWS_DRIVE_PATH_RE.match(cwd_str):
+                    hardcoded_paths.append(f"{rel}::{srv_name}.cwd={cwd_str}")
+                if not Path(cwd_str).is_dir():
+                    missing_cwds.append(f"{rel}::{srv_name}={cwd_str}")
+
+            env_cfg = srv_cfg.get("env")
+            if isinstance(env_cfg, dict):
+                for env_key in ("CRUCIBLE_DOMAIN_ROOT", "CRUCIBLE_ALLOWED_ROOTS", "PYTHONPATH"):
+                    raw_env = env_cfg.get(env_key)
+                    if isinstance(raw_env, str) and raw_env.strip():
+                        for part in raw_env.split(";"):
+                            item = part.strip()
+                            if item and WINDOWS_DRIVE_PATH_RE.match(item):
+                                hardcoded_paths.append(f"{rel}::{srv_name}.env.{env_key}={item}")
+
+    if global_config_dir is None:
+        if hardcoded_paths or missing_cwds:
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="INFO",
+                    subject=".agents/plugins/*/mcp_config.json",
+                    detail=(
+                        f"CD-W14 portable audit: hardcoded_host_paths={len(hardcoded_paths)}, "
+                        f"absent_cwd_dirs={len(missing_cwds)}"
+                        + (f" ({', '.join(missing_cwds[:4])})" if missing_cwds else "")
+                    ),
+                )
+            )
+        elif mcp_files and not invalid_configs:
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="PASS",
+                    subject=".agents/plugins/*/mcp_config.json",
+                    detail=f"{len(mcp_files)} mcp_config.json file(s) portable and valid",
+                )
+            )
+    else:
+        if missing_cwds:
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="WARN",
+                    subject=".agents/plugins/*/mcp_config.json",
+                    detail=(
+                        f"configured spoke cwd directory missing on disk: {', '.join(missing_cwds)} "
+                        f"(hardcoded_host_paths={len(hardcoded_paths)})"
+                    ),
+                    remediation="Point mcp_config.json cwd to an existing spoke directory or run doctor --no-global in CI.",
+                )
+            )
+        elif hardcoded_paths:
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="INFO",
+                    subject=".agents/plugins/*/mcp_config.json",
+                    detail=(
+                        f"CD-W14: {len(hardcoded_paths)} hardcoded drive-letter path(s) in mcp_config.json; "
+                        "all configured cwd directories exist locally"
+                    ),
+                )
+            )
+        elif mcp_files and not invalid_configs:
+            findings.append(
+                DiagnosticFinding(
+                    category="mcp_spokes",
+                    severity="PASS",
+                    subject=".agents/plugins/*/mcp_config.json",
+                    detail=f"{len(mcp_files)} mcp_config.json file(s) valid and reachable",
+                )
+            )
+
+    return {
+        "mcp_configs_scanned": len(mcp_files),
+        "mcp_invalid_configs": invalid_configs,
+        "mcp_hardcoded_host_paths": hardcoded_paths,
+        "mcp_missing_cwds": missing_cwds,
+    }
+
+
 def run_doctor(
     root: Path,
     *,
@@ -454,6 +598,7 @@ def run_doctor(
     hook_metrics = _audit_hooks(root, global_config_dir, execute_hooks, findings)
     link_metrics = _audit_links_and_bindings(root, index, findings)
     storage_metrics = _audit_duplicates_and_storage(root, global_config_dir, findings)
+    mcp_metrics = _audit_mcp_configs(root, global_config_dir, findings)
     primitive_count = validate_primitives_registry(root, findings)
 
     metrics: dict[str, Any] = {
@@ -465,6 +610,7 @@ def run_doctor(
         **hook_metrics,
         **link_metrics,
         **storage_metrics,
+        **mcp_metrics,
     }
     return DoctorReport(root=str(root), findings=findings, metrics=metrics)
 
