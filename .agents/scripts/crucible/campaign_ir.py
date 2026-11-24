@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import os
@@ -67,6 +68,25 @@ class CompiledCampaign:
     @property
     def skipped_slices(self) -> list[PlannedSlice]:
         return [s for s in self.ordered_slices if s.status == "SKIP_CACHED"]
+
+    @property
+    def execution_waves(self) -> list[list[PlannedSlice]]:
+        """Group active slices into parallel DAG execution waves (levelization)."""
+        active = {s.node.id: s for s in self.active_slices}
+        if not active:
+            return []
+        depth: dict[str, int] = {}
+        for ps in self.ordered_slices:
+            sid = ps.node.id
+            if sid not in active:
+                continue
+            dep_depths = [depth[d] for d in ps.node.depends_on if d in depth]
+            depth[sid] = (max(dep_depths) + 1) if dep_depths else 0
+        max_wave = max(depth.values(), default=0)
+        return [
+            [ps for ps in self.active_slices if depth[ps.node.id] == w]
+            for w in range(max_wave + 1)
+        ]
 
 
 def _resolve_allowed_roots(spec: CampaignSpec) -> list[Path]:
@@ -183,9 +203,39 @@ def compute_slice_input_sha256(node: SliceNode, repo_root: Path | str) -> str:
         h.update(dep.encode("utf-8"))
         h.update(b"\x00")
 
+    seen_files: set[Path] = set()
+    queue: list[Path] = []
     for raw_path in sorted(node.target_paths):
         p = Path(raw_path)
         resolved = p.resolve() if p.is_absolute() else (root / p).resolve()
+        if resolved not in seen_files:
+            seen_files.add(resolved)
+            queue.append(resolved)
+
+    # W3: Include local Python imports via ast so shared-module edits invalidate cache
+    idx = 0
+    while idx < len(queue):
+        curr = queue[idx]
+        idx += 1
+        if curr.is_file() and curr.suffix.lower() == ".py":
+            try:
+                tree = ast.parse(curr.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                tree = None
+            if tree is not None:
+                for stmt in ast.walk(tree):
+                    mod_names: list[str] = []
+                    if isinstance(stmt, ast.Import):
+                        mod_names.extend(alias.name for alias in stmt.names)
+                    elif isinstance(stmt, ast.ImportFrom) and stmt.module:
+                        mod_names.append(stmt.module)
+                    for mod in mod_names:
+                        cand = (curr.parent / (mod.replace(".", "/") + ".py")).resolve()
+                        if cand.is_file() and cand.is_relative_to(root) and cand not in seen_files:
+                            seen_files.add(cand)
+                            queue.append(cand)
+
+    for resolved in sorted(seen_files):
         rel = str(resolved.relative_to(root)).replace("\\", "/") if resolved.is_relative_to(root) else str(resolved)
         h.update(rel.encode("utf-8"))
         h.update(b"\x00")

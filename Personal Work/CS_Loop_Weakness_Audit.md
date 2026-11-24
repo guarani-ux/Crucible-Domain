@@ -48,3 +48,12 @@ depends_on:
 1. **Slice A (`W1` + `W2`):** Add multi-file rollback journal to `tx_patch.py` + volatile-token canonicalization to `hash_error_output()` in `campaign_ir.py` (~40L total, immediate reliability jump).
 2. **Slice B (`W3` + `W4`):** Add `ast` local-import hashing + parallel DAG wave emission to `campaign_ir.py`.
 3. **Slice C (`W6`):** Parallelize `scripts/verify_all.ps1` (cut verification wall-clock time by ~60%).
+
+---
+
+## 4. Resolution Log
+- **W1** (Multi-file rollback journal in `tx_patch.py`): **RESOLVED** (`b857c43`)
+- **W2** (Canonical volatile-token error hashing in `campaign_ir.py`): **RESOLVED** (`b857c43`)
+- **W3** (`ast` local-import dependency hashing in `campaign_ir.py`): **RESOLVED** (Round 03/12)
+- **W4** (Parallel DAG `execution_waves` in `campaign_ir.py`): **RESOLVED** (Round 03/12)
+- **W6** (Parallel `scripts/verify_all.ps1`): **RESOLVED** (Round 03/12)

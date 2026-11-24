@@ -175,3 +175,31 @@ def test_hash_error_output_strips_volatile_tokens() -> None:
     e1 = "FAIL at 2026-11-24T00:01:02Z obj=0x7ff123ab pytest-21 in 1.42s"
     e2 = "FAIL at 2026-11-24T00:05:59Z obj=0xdeadbeef pytest-99 in 3.87s"
     assert hash_error_output(e1) == hash_error_output(e2)
+
+
+def test_ast_import_change_invalidates_slice_hash_and_waves(tmp_path: Path) -> None:
+    helper = tmp_path / "helper.py"
+    main_a = tmp_path / "main_a.py"
+    main_b = tmp_path / "main_b.py"
+    helper.write_text("X = 1\n", encoding="utf-8")
+    main_a.write_text("import helper\nY = helper.X\n", encoding="utf-8")
+    main_b.write_text("Z = 2\n", encoding="utf-8")
+
+    spec = CampaignSpec(
+        name="ast-wave",
+        repo_root=str(tmp_path),
+        slices=[
+            SliceNode(id="a", target_paths=["main_a.py"]),
+            SliceNode(id="b", target_paths=["main_b.py"]),
+            SliceNode(id="c", target_paths=["main_b.py"], depends_on=["a", "b"]),
+        ],
+    )
+    first = optimize_campaign(spec, {})
+    waves = [[s.node.id for s in w] for w in first.execution_waves]
+    assert waves == [["a", "b"], ["c"]]
+
+    cache = {s.node.id: s.computed_sha256 for s in first.ordered_slices}
+    helper.write_text("X = 999\n", encoding="utf-8")
+    second = optimize_campaign(spec, cache)
+    assert [s.node.id for s in second.active_slices] == ["a", "c"]
+    assert [s.node.id for s in second.skipped_slices] == ["b"]

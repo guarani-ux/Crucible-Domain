@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Single-command terminal verification floor for Crucible Domain Hub + registered spokes.
+    Parallel single-command terminal verification floor for Crucible Domain Hub + registered spokes.
 #>
 $ErrorActionPreference = "Continue"
 $HubRoot = Split-Path -Parent $PSScriptRoot
@@ -11,36 +11,52 @@ $steps = @(
     @{ Name = "Hub Gate (--strict)"; Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "check", "--strict") },
     @{ Name = "Hub Doctor";          Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "doctor") },
     @{ Name = "Hub Pytest";          Cwd = $HubRoot; Cmd = @("pytest", ".agents/scripts/tests", "-q") },
-    @{ Name = "Story-Lane Spoke Pytest"; Cwd = $SpokeRoot; Cmd = @("python", "-m", "pytest", "tests/test_storylane_spoke_mcp.py", "tests/test_storylane_fuzz_and_replay.py", "-q") }
+    @{ Name = "Story-Lane Pytest";   Cwd = $SpokeRoot; Cmd = @("python", "-m", "pytest", "-q") }
 )
 
+$jobs = @()
+foreach ($s in $steps) {
+    $job = Start-Job -ScriptBlock {
+        param($Name, $Cwd, $Cmd)
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        Push-Location $Cwd
+        $exe = $Cmd[0]
+        $argsList = $Cmd[1..($Cmd.Length - 1)]
+        $out = & $exe @argsList 2>&1
+        $ec = $LASTEXITCODE
+        Pop-Location
+        $sw.Stop()
+        [PSCustomObject]@{
+            Name    = $Name
+            Exit    = $ec
+            Output  = $out
+            Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+        }
+    } -ArgumentList $s.Name, $s.Cwd, $s.Cmd
+    $jobs += $job
+}
+
+$null = Wait-Job -Job $jobs
 $results = @()
 $failed = 0
 
-foreach ($s in $steps) {
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    Push-Location $s.Cwd
-    $exe = $s.Cmd[0]
-    $argsList = $s.Cmd[1..($s.Cmd.Length - 1)]
-    $out = & $exe @argsList 2>&1
-    $ec = $LASTEXITCODE
-    Pop-Location
-    $sw.Stop()
-
-    $status = if ($ec -eq 0) { "PASS" } else { "FAIL" }
-    if ($ec -ne 0) {
+foreach ($j in $jobs) {
+    $res = Receive-Job -Job $j
+    Remove-Job -Job $j -Force
+    $status = if ($res.Exit -eq 0) { "PASS" } else { "FAIL" }
+    if ($res.Exit -ne 0) {
         $failed++
-        Write-Host "`n--- FAILED: $($s.Name) (exit $ec) ---" -ForegroundColor Red
-        $out | ForEach-Object { Write-Host $_ }
+        Write-Host "`n--- FAILED: $($res.Name) (exit $($res.Exit)) ---" -ForegroundColor Red
+        $res.Output | ForEach-Object { Write-Host $_ }
     }
     $results += [PSCustomObject]@{
-        Check   = $s.Name
+        Check   = $res.Name
         Status  = $status
-        Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+        Seconds = $res.Seconds
     }
 }
 
-Write-Host "`n=== Crucible Terminal Verification Summary ===" -ForegroundColor Cyan
+Write-Host "`n=== Crucible Terminal Verification Summary (Parallel) ===" -ForegroundColor Cyan
 $results | Format-Table -AutoSize
 if ($failed -gt 0) {
     Write-Host "RESULT: $failed check(s) FAILED" -ForegroundColor Red
