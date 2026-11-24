@@ -1257,6 +1257,7 @@ def cmd_bench(
     until_exit: bool = False,
     max_minutes: float = 0.0,
     workers: int | None = None,
+    no_judge: bool = False,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1265,10 +1266,51 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | audit <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "judge":
+        if len(parts) < 3:
+            msg = "usage: crucible_gate.py bench judge <file_path> <form_id> [--json]"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        jp = _resolve_crucible_submodule("judgment_panel")
+        target_file = _resolve_cli_path(root, parts[1])
+        form_id = parts[2]
+        if not target_file.is_file():
+            msg = f"File not found: {target_file}"
+            print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+            return 1
+        text = target_file.read_text(encoding="utf-8", errors="replace")
+        jv = jp.run_adversarial_judgment(
+            text,
+            form_id,
+            repo_root=root,
+            worker_fn=wb._default_agy_worker,
+            timeout_s=90.0,
+            persist_lesson=True,
+        )
+        if as_json:
+            print(json.dumps(jv.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print(f"Gate 2 Adversarial Judgment ({jv.verdict}): form={form_id} | judgment_score={jv.judgment_score:.2f}")
+            if jv.weakest_quote:
+                print(f"  Weakest quote:  \"{jv.weakest_quote}\"")
+            if jv.top_executive_objection:
+                print(f"  #1 Objection:   {jv.top_executive_objection}")
+            if jv.required_cut:
+                print(f"  Required cut:   {jv.required_cut}")
+            if jv.org_voice_flags:
+                print(f"  Org/Voice flags:{jv.org_voice_flags}")
+            if jv.actionable_fix:
+                print(f"  Actionable fix: {jv.actionable_fix}")
+            if jv.reusable_judgment_lesson:
+                print(f"  Saved lesson:   {jv.reusable_judgment_lesson}")
+            if jv.raw_error:
+                print(f"  Error:          {jv.raw_error}")
+        return 0 if jv.ok else 1
 
     if action == "trial":
         lc = _resolve_crucible_submodule("lever_control")
@@ -1503,6 +1545,7 @@ def cmd_bench(
         print("Crucible Workload Bench: starting continuous loop (press Ctrl+C or run 'crucible_gate.py bench stop' in another terminal to exit cleanly)...", flush=True)
 
     eff_workers = workers if (workers is not None and workers >= 1) else (3 if bench_mode in ("all", "agy_live") else 1)
+    enable_judge = (not no_judge) and (bench_mode in ("all", "agy_live"))
     res = wb.run_workload_bench(
         root,
         manifest,
@@ -1515,6 +1558,7 @@ def cmd_bench(
         until_exit=until_exit,
         max_minutes=max_minutes,
         workers=eff_workers,
+        enable_judgment_gate=enable_judge,
         progress_fn=stream_progress,
     )
     if as_json:
@@ -1586,6 +1630,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-minutes", type=float, default=0.0, help="Optional safety time limit (minutes) for continuous 'bench run'.")
     parser.add_argument("--workers", type=int, default=None, help="Parallel live workers per round in 'bench run' (default: 3 for live modes, 1 for offline).")
     parser.add_argument("--form", type=str, default=None, help="Filter 'bench run' to a single document type (e.g. production_brief, av_script, leadership_report).")
+    parser.add_argument("--no-judge", action="store_true", help="Skip Gate 2 independent adversarial judgment panel in 'bench run'.")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1620,6 +1665,7 @@ def main(argv: list[str] | None = None) -> int:
             until_exit=args.until_exit,
             max_minutes=args.max_minutes,
             workers=args.workers,
+            no_judge=args.no_judge,
             project_ids=args.project,
             as_json=args.json,
         )

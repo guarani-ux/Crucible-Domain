@@ -278,4 +278,143 @@ def test_non_redundant_trial_loop_tracks_rubric_and_drr(tmp_path: Path) -> None:
     assert r2["stopped_reason"] in ("diminishing_returns_reached", "rounds_completed", "frontier_exhausted")
 
 
+def test_gate2_adversarial_judgment_panel_enforces_signoff_and_persists_lessons(tmp_path: Path) -> None:
+    import json
+    import shutil
+    from crucible.judgment_panel import (
+        build_adversarial_judge_prompt,
+        load_judgment_lessons,
+        load_judgment_rubrics,
+        parse_judge_response,
+    )
+    from crucible.workload_bench import load_workload_manifest, run_workload_bench
+
+    rubrics = load_judgment_rubrics(ROOT)
+    assert len(rubrics["cross_cutting_org_and_brand_voice"]) == 5
+    assert set(rubrics["forms"].keys()) == {
+        "production_brief",
+        "av_script",
+        "leadership_report",
+        "research_note",
+        "treatment",
+        "call_sheet",
+        "shot_list",
+        "content_calendar",
+    }
+
+    prompt = build_adversarial_judge_prompt(
+        GOLDEN_SPECIMENS["production_brief"]["text"], "production_brief", repo_root=ROOT
+    )
+    assert "equity_belonging_dignity" in prompt
+    assert "reconciliation_cultural_posture" in prompt
+    assert "decision_clarity_and_opportunity_cost" in prompt
+
+    # Strict parser rejects malformed JSON and downgrades lenient SIGN_OFF when org_voice_flags exist
+    bad_parse = parse_judge_response("not json at all")
+    assert bad_parse.verdict == "UNAVAILABLE"
+    assert bad_parse.ok is False
+
+    lenient_downgrade = parse_judge_response(
+        json.dumps(
+            {
+                "verdict": "SIGN_OFF",
+                "judgment_score": 0.90,
+                "org_voice_flags": ["patronizing charity framing"],
+                "top_executive_objection": "Tone undermines patron agency",
+            }
+        )
+    )
+    assert lenient_downgrade.verdict == "REVISE"
+    assert lenient_downgrade.ok is False
+
+    # End-to-end bench run: attempt 1 passes Gate 1 -> Gate 2 returns REVISE + lesson -> attempt 2 gets lesson & passes Gate 2 SIGN_OFF
+    bench_dir = tmp_path / ".agents" / "bench"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / ".agents" / "bench" / "judgment_rubrics.yaml", bench_dir / "judgment_rubrics.yaml")
+    shutil.copy(ROOT / ".agents" / "bench" / "org_charter.yaml", bench_dir / "org_charter.yaml")
+    shutil.copy(ROOT / ".agents" / "bench" / "levers.yaml", bench_dir / "levers.yaml")
+
+    manifest = load_workload_manifest(
+        {
+            "version": "1.0",
+            "defaults": {
+                "staging_dir": "runs",
+                "telemetry_file": "tel.jsonl",
+                "ml_history_file": "ml.jsonl",
+                "bandit_state_file": "bandit.json",
+                "learned_policies_file": "learned.json",
+                "timeout_seconds": 15,
+                "max_retries": 1,
+            },
+            "projects": [
+                {
+                    "id": "p-brief-g2",
+                    "domain": "cpl_research",
+                    "mode": "agy_live",
+                    "form": "production_brief",
+                    "intent": "Draft a decision-first production brief.",
+                    "deliverable": "brief.md",
+                    "public_checks": {"required_sections": ["Decision", "Deliverables", "Open Holds"]},
+                }
+            ],
+        }
+    )
+
+    writer_prompts: list[str] = []
+    judge_calls = 0
+
+    def fake_writer(p: str, _root: Path, _to: float) -> tuple[bool, str]:
+        writer_prompts.append(p)
+        return True, GOLDEN_SPECIMENS["production_brief"]["text"]
+
+    def fake_judge(_p: str, _root: Path, _to: float, effort: str = "medium") -> tuple[bool, str]:
+        nonlocal judge_calls
+        judge_calls += 1
+        if judge_calls == 1:
+            return True, json.dumps(
+                {
+                    "verdict": "REVISE",
+                    "judgment_score": 0.68,
+                    "weakest_quote": "Approve Episode 1 YouTube pre-flight scope",
+                    "top_executive_objection": "Missing opportunity-cost comparison against simpler options.",
+                    "required_cut": "Remove redundant background sentence.",
+                    "actionable_fix": "State why Episode 1 beats a lower-cost branch flyer.",
+                    "reusable_judgment_lesson": "Always state the opportunity cost vs doing nothing in the first 3 lines of a production brief.",
+                    "org_voice_flags": [],
+                    "criteria_scores": {"decision_clarity_and_opportunity_cost": 0.55},
+                }
+            )
+        return True, json.dumps(
+            {
+                "verdict": "SIGN_OFF",
+                "judgment_score": 0.91,
+                "weakest_quote": "",
+                "top_executive_objection": "",
+                "required_cut": "none",
+                "actionable_fix": "",
+                "reusable_judgment_lesson": "Keep opportunity cost crisp and patron agency front and center.",
+                "org_voice_flags": [],
+                "criteria_scores": {"decision_clarity_and_opportunity_cost": 0.92},
+            }
+        )
+
+    res = run_workload_bench(
+        tmp_path,
+        manifest,
+        mode_filter="all",
+        form_filter="production_brief",
+        rounds=1,
+        enable_judgment_gate=True,
+        agy_worker_fn=fake_writer,
+        judge_worker_fn=fake_judge,
+    )
+    assert res["ok"] is True
+    assert judge_calls == 2
+    assert len(writer_prompts) == 2
+    assert "opportunity-cost comparison" in writer_prompts[1]
+    lessons = load_judgment_lessons(tmp_path, "production_brief")
+    assert any("opportunity cost" in ls.lower() for ls in lessons)
+
+
+
 

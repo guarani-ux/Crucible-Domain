@@ -503,11 +503,12 @@ def _build_agy_worker_prompt(
     craft_instruction: str = "",
     prior_diagnosis: str = "",
     learned_rules: list[str] | None = None,
+    judgment_lessons: list[str] | None = None,
     escalation_challenge: str = "",
     skills: list[str] | None = None,
     tools: list[str] | None = None,
 ) -> str:
-    """Build worker prompt with 5-element form mastery spec, learned rules, escalation, and prior diagnosis."""
+    """Build worker prompt with 5-element form mastery spec, 6 buying roles, org/brand voice, judgment lessons, and learned rules."""
     eff_form = form_id or _infer_project_form(project)
     profile = FORM_PROFILES.get(eff_form, FORM_PROFILES["production_brief"])
     audience = project.target_audience or profile.audience
@@ -524,6 +525,12 @@ def _build_agy_worker_prompt(
         "  4. Marketing & Engagement Director: bounded scope/resources, every hold assigned to a named owner, clean document flow.",
         "  5. Communications Director: strict 2027-2030 mandate hygiene (Collections, Experiences, Expertise, Spaces, Technology — never label internal editorial lenses as official mandates; never cite prior 2023-2026 plan as active; zero unauthorized G06/Asana claims).",
         "  6. CEO: Decision/Recommendation in the top 25% of the doc, 2027-2030 strategic plan + patron service-promise alignment, accountable owners.",
+        "Organizational, Political & Brand Voice Judgment Standard:",
+        "  - Equity, Belonging & Dignity: frame public resources as open community invitations with patron agency, never patronizing or charity framing.",
+        "  - Reconciliation & Intellectual Freedom: hold explicitly (HOLD-04) on any cultural/community permission; stay non-partisan and non-extractive.",
+        "  - Accessibility & Plain Language: clear, welcoming language for multilingual/diverse-ability audiences; build captions/muted survival in from the start.",
+        "  - Political & Role Stewardship: respect Service Owner (CD-01), Digital Marketing, and CMS boundaries; zero unauthorized capacity/budget promises.",
+        "  - Authentic Brand Voice: warm, curious, grounded, and capable—never corporate hype or stiff municipal legalese.",
         "Mastery Elements for this Document Domain:",
         f"  - Style: {profile.style_spec}",
         f"  - Audience: {profile.audience_spec}",
@@ -542,6 +549,10 @@ def _build_agy_worker_prompt(
         lines.append("Active Pulled Levers & Proven Craft Rules from Prior Rounds (MUST FOLLOW):")
         for rule in learned_rules[:5]:
             lines.append(f"  * {rule}")
+    if judgment_lessons:
+        lines.append("Independent Adversarial Judgment Lessons from Prior Buying-Room Critiques (MUST APPLY):")
+        for lesson in judgment_lessons[:4]:
+            lines.append(f"  * {lesson}")
     if escalation_challenge:
         lines.append(escalation_challenge)
     if prior_diagnosis:
@@ -690,8 +701,10 @@ def run_workload_bench(
     until_exit: bool = False,
     max_minutes: float = 0.0,
     workers: int = 1,
+    enable_judgment_gate: bool = False,
     progress_fn: Callable[[str], None] | None = None,
     agy_worker_fn: Callable[[str, Path, float], tuple[bool, str]] | None = None,
+    judge_worker_fn: Callable[..., tuple[bool, str]] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     """Execute YAML workloads for N rounds or --until-exit with 6-role board enforcement, auto-levers, and ML mastery."""
@@ -919,6 +932,9 @@ def run_workload_bench(
                                 except Exception:
                                     pass
                             merged_rules = list(dict.fromkeys(form_lever_rules + list(mastery_ctx.get("learned_rules", []))))
+                            from .judgment_panel import load_judgment_lessons
+
+                            j_lessons = load_judgment_lessons(root, form_id)
                             prompt = (
                                 _build_agy_worker_prompt(
                                     eff_proj,
@@ -926,6 +942,7 @@ def run_workload_bench(
                                     craft_instruction=arm_instruction,
                                     prior_diagnosis=persisted_diag,
                                     learned_rules=merged_rules,
+                                    judgment_lessons=j_lessons,
                                     escalation_challenge=escalation_txt,
                                     skills=uc_skills,
                                     tools=uc_tools,
@@ -1015,6 +1032,51 @@ def run_workload_bench(
                             err_detail = (
                                 f"form score {diag_score:.3f} < min_form_score={float(min_form_score):.2f} ({diagnosis})"
                             )
+
+                        # Gate 2: Independent Adversarial Judgment Panel (runs ONLY after Gate 1 passes)
+                        if pub_ok and hold_ok and proj.mode == "agy_live" and enable_judgment_gate:
+                            from .judgment_panel import run_adversarial_judgment
+
+                            j_worker = judge_worker_fn or worker
+                            _safe_progress(f"    -> Gate 2 adversarial judgment panel ({form_id})...")
+                            jv = run_adversarial_judgment(
+                                candidate_text,
+                                form_id,
+                                repo_root=root,
+                                worker_fn=j_worker,
+                                timeout_s=min(90.0, float(manifest.defaults.timeout_seconds)),
+                                use_case_intent=eff_proj.intent,
+                                persist_lesson=True,
+                            )
+                            if jv.verdict == "UNAVAILABLE":
+                                low_jerr = jv.raw_error.lower()
+                                if "resource_exhausted" in low_jerr or "code 429" in low_jerr or "quota reached" in low_jerr:
+                                    pub_ok = False
+                                    fail_cat = "quota_exhausted"
+                                    err_detail = jv.raw_error
+                                    quota_hit.set()
+                                    break
+                                pub_ok = False
+                                fail_cat = "judgment_panel_unavailable"
+                                err_detail = jv.raw_error
+                            elif not jv.ok:
+                                pub_ok = False
+                                fail_cat = f"judgment_panel_{jv.verdict.lower()}"
+                                err_detail = (
+                                    f"Gate 2 {jv.verdict} (j_score={jv.judgment_score:.2f}): "
+                                    f"objection='{jv.top_executive_objection[:120]}' | cut='{jv.required_cut[:80]}' | fix='{jv.actionable_fix[:120]}'"
+                                )
+                                diagnosis = f"{diagnosis} | GATE2={jv.verdict}({jv.judgment_score:.2f}): {jv.top_executive_objection[:100]}"
+                            else:
+                                diag_score = round(
+                                    0.30 * diag.overall_score
+                                    + 0.20 * diag.flow_score
+                                    + 0.20 * diag.board_score
+                                    + 0.30 * jv.judgment_score,
+                                    3,
+                                )
+                                diagnosis = f"{diagnosis} | GATE2=SIGN_OFF({jv.judgment_score:.2f})"
+
                         verify_ms += (time.perf_counter() - t_ver) * 1000.0
                         if pub_ok and hold_ok:
                             break

@@ -1,0 +1,119 @@
+# Gate 2: Independent Adversarial Judgment Rubrics (All 8 Forms + Cross-Cutting Org/Political/Brand Voice)
+# Evaluated ONLY after a draft clears Gate 1 (Flow AST + 6-Role Board + 2027-2030 Strategic Charter + Holdouts).
+version: "1.0"
+
+cross_cutting_org_and_brand_voice:
+  - id: equity_belonging_dignity
+    title: Equity, Belonging & Patron Dignity
+    criterion: "Depicts patrons with agency, warmth, and respect—never patronizing, savior-framing, or assuming one default household/ability. Frames public resources as open community invitations, not charity."
+  - id: reconciliation_cultural_posture
+    title: Truth & Reconciliation, Cultural Permission & Intellectual Freedom
+    criterion: "Holds explicitly for cultural/community permissions (HOLD-04) whenever Indigenous or community-specific stories/spaces are touched; avoids performative or extractive framing; preserves non-partisan Intellectual Freedom."
+  - id: accessibility_plain_language
+    title: Accessibility & Plain-Language Inclusivity
+    criterion: "Uses genuinely plain, welcoming language accessible to multilingual/newcomer/diverse-ability readers; builds captions, muted survival, and physical accessibility in from the start rather than bolting them on."
+  - id: institutional_political_stewardship
+    title: Institutional Political Awareness & Shared Stewardship
+    criterion: "Respects internal boundaries (Service Owners CD-01, Digital Marketing scheduling, Content Management CMS, shared YouTube stewardship) and protects Directors/CEO/Board from reputational, capacity, or unauthorized public-funding overcommitments."
+  - id: authentic_brand_voice
+    title: Authentic Institutional Brand Voice
+    criterion: "Sounds warm, curious, grounded, and capable—never Silicon Valley hype ('disrupt', 'synergy'), never stiff municipal legalese, and never performative buzzword-stuffing of strategic plan labels."
+
+forms:
+  production_brief:
+    buying_room: [CEO, Marketing & Engagement Director, Communications Director, Media Production Manager]
+    ai_trap: "Looks neatly formatted with all sections present, but leaves the core trade-off vague or hides real branch/crew dependencies behind polite boilerplate."
+    criteria:
+      - id: decision_clarity_and_opportunity_cost
+        criterion: "Is the exact yes/no decision unmistakable in 10 seconds, and does it explain why this effort beats doing nothing or a cheaper alternative?"
+      - id: scope_to_resource_realism
+        criterion: "Do promised deliverables match realistic crew, branch, and schedule capacity without hidden scope creep?"
+      - id: strategic_patron_line_of_sight
+        criterion: "Does the 2027-2030 mandate connect organically to one concrete patron action rather than feeling bolted on?"
+      - id: cold_receiver_readiness
+        criterion: "Could the Media Production Manager start pre-production immediately without sending 3 clarifying emails?"
+
+  av_script:
+    buying_room: [Media Production Manager, Marketing Manager, Communications Strategist, Communications Director]
+    ai_trap: "Passes <=150 WPM and low word overlap, yet reads stiffly aloud like a press release and pairs lines with generic B-roll ('patron smiling at screen')."
+    criteria:
+      - id: hook_and_retention_architecture
+        criterion: "Does Beat 1 create immediate visual/curiosity tension? For 3m/5m scripts, does every 60-90s beat reset attention and earn its payoff?"
+      - id: spoken_ear_authenticity
+        criterion: "Read aloud (mouth-shape test), does it sound like a real person talking warmly to one viewer rather than print prose chopped into short lines?"
+      - id: true_visual_audio_counterpoint
+        criterion: "Does the Video column reveal physical action, detail, or emotion that Audio deliberately leaves unsaid?"
+      - id: physical_shootability_and_muted_survival
+        criterion: "Can a small crew actually capture every shot cleanly in a working library, and does the story still land on mute with captions?"
+
+  leadership_report:
+    buying_room: [CEO, Communications Director, Marketing & Engagement Director]
+    ai_trap: "Sounds like an enthusiastic marketing sales pitch instead of a sober, balanced executive recommendation."
+    criteria:
+      - id: executive_altitude_proportionality
+        criterion: "Zero operational weeds; frames institutional risk, strategic upside, and resource commitment at CEO/Director altitude."
+      - id: intellectual_honesty_counterarguments
+        criterion: "Explicitly names the strongest reason NOT to proceed (or what could fail) and bounds claims strictly to observed evidence."
+      - id: mission_service_promise_resonance
+        criterion: "Connects pilot work to real public value and patron service promises without misusing Vision 2040 as a single-video KPI."
+      - id: subtractive_economy
+        criterion: "Every paragraph moves the decision forward; zero throat-clearing or padded recaps."
+
+  research_note:
+    buying_room: [Communications Strategist, Marketing Manager, Marketing & Engagement Director]
+    ai_trap: "Confirms the prompt with obvious truisms ('short hooks help views') dressed up in academic headings."
+    criteria:
+      - id: causal_evidentiary_rigor
+        criterion: "Does the hypothesis actually follow from the cited evidence, or is there an unsupported leap?"
+      - id: honest_transfer_limits
+        criterion: "Clearly names what will NOT transfer from peer systems or prior data to Calgary Public Library's specific constraints."
+      - id: falsifiable_next_test
+        criterion: "Is the proposed next test cheap, concrete, and genuinely capable of proving the hypothesis wrong?"
+      - id: non_obvious_insight_density
+        criterion: "Tells the team something decision-relevant they did not already know."
+
+  treatment:
+    buying_room: [Media Production Manager, Marketing & Engagement Director, Communications Strategist]
+    ai_trap: "Adjective soup ('intimate, inspiring, dynamic') with no concrete visual scenes or genuine narrative turn."
+    criteria:
+      - id: distinctive_repeatable_premise
+        criterion: "Is the creative angle genuinely distinctive and repeatable across episodes (not a one-off gimmick)?"
+      - id: concrete_visual_sonic_world
+        criterion: "Can the reader see and hear specific scenes, textures, and pacing rather than abstract adjectives?"
+      - id: narrative_tension_and_payoff
+        criterion: "Does the story actually turn (setup -> complication/discovery -> payoff), or is it just a promotional brochure?"
+      - id: intent_vs_reality_honesty
+        criterion: "Cleanly separates creative aspiration from unconfirmed people, locations, and cultural/legal clearances."
+
+  call_sheet:
+    buying_room: [Media Production Manager, Marketing Manager]
+    ai_trap: "Looks like a neat table, yet allocates zero real minutes for load-in/lighting/audio resets or omits practical branch access/parking details."
+    criteria:
+      - id: clock_and_transit_feasibility
+        criterion: "Do call times, load-in, lighting/audio setup, moves, and wrap times work in real physical minutes?"
+      - id: zero_friction_field_usability
+        criterion: "Can crew and talent locate parking, branch entry, escalation contact, and their exact call time in 5 seconds on a phone?"
+      - id: shoot_day_contingency_realism
+        criterion: "Addresses realistic library shoot failure modes (public noise, patron foot traffic, missing release, gear backup)."
+
+  shot_list:
+    buying_room: [Media Production Manager]
+    ai_trap: "Lists pretty isolated shots that cannot be cut together into a coherent edit or have no triage order when time runs short."
+    criteria:
+      - id: editorial_cutability
+        criterion: "Do the shots actually cut together into an edit (establishing -> action -> reaction -> detail/cutaway) with clean audio coverage?"
+      - id: priority_triage_under_pressure
+        criterion: "If the shoot loses 30 minutes, does Essential/Supporting priority ordering still deliver a complete story?"
+      - id: camera_operator_specificity
+        criterion: "Gives exact framing, movement, and visual beat rather than vague placeholders ('get B-roll of space')."
+
+  content_calendar:
+    buying_room: [Marketing Manager, Marketing & Engagement Director, Communications Director]
+    ai_trap: "Recycles identical copy across YouTube, Instagram, and Newsletter with impossible same-day cut/review/caption/publish turnaround."
+    criteria:
+      - id: true_platform_native_adaptation
+        criterion: "Are YouTube, Instagram, and Newsletter genuinely written for how each audience consumes (browse vs. muted scroll vs. inbox)?"
+      - id: realistic_sequencing_and_chg01
+        criterion: "Do review, captioning, and cutdown lead times reflect real operational cadence and properly halt downstream posts on recut?"
+      - id: verifiable_patron_funnel
+        criterion: "Every post drives one concrete, verifiable patron action rather than dead-end awareness."
