@@ -331,6 +331,90 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertEqual(allow_ls.returncode, 0, allow_ls.stderr)
             self.assertEqual(json.loads(allow_ls.stdout), {"decision": "allow"})
 
+    def test_campaign_run_records_completed_slice_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp))
+            (repo / "target.txt").write_text("hello\n", encoding="utf-8")
+            (repo / "verify_ok.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+            py_exe = sys.executable if " " not in sys.executable else "python"
+            spec = {
+                "name": "demo-pass",
+                "repo_root": str(repo),
+                "max_rounds": 3,
+                "slices": [
+                    {
+                        "id": "s1",
+                        "target_paths": ["target.txt"],
+                        "depends_on": [],
+                        "verify_cmd": f"{py_exe} verify_ok.py",
+                    }
+                ],
+            }
+            (repo / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+
+            proc = _run_gate(repo, "campaign", "run", "spec.json", "--cache", "cp.json", "--json")
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            data = json.loads(proc.stdout)
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["slice_id"], "s1")
+            self.assertEqual(data["exit_code"], 0)
+            self.assertEqual(data["status"], "PASS")
+            self.assertEqual(data["rounds_used"], 1)
+            self.assertEqual(data["max_rounds"], 3)
+            self.assertEqual(len(data["input_sha256"]), 64)
+
+            cp_data = json.loads((repo / "cp.json").read_text(encoding="utf-8"))
+            self.assertEqual(cp_data["campaign_name"], "demo-pass")
+            self.assertEqual(cp_data["completed_slices"], {"s1": data["input_sha256"]})
+            self.assertEqual(cp_data["failed_slices"], {})
+            self.assertEqual(cp_data["rounds_used"], 1)
+
+    def test_campaign_run_failure_records_failed_slice_and_halts_at_max_rounds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp))
+            (repo / "target.txt").write_text("hello\n", encoding="utf-8")
+            (repo / "verify_fail.py").write_text(
+                "import sys\nsys.stderr.write('boom\\n')\nsys.exit(3)\n",
+                encoding="utf-8",
+            )
+            py_exe = sys.executable if " " not in sys.executable else "python"
+            spec = {
+                "name": "demo-fail",
+                "repo_root": str(repo),
+                "max_rounds": 1,
+                "slices": [
+                    {
+                        "id": "s1",
+                        "target_paths": ["target.txt"],
+                        "depends_on": [],
+                        "verify_cmd": f"{py_exe} verify_fail.py",
+                    }
+                ],
+            }
+            (repo / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+
+            proc = _run_gate(repo, "campaign", "run", "spec.json", "--cache", "cp.json", "--json")
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            data = json.loads(proc.stdout)
+            self.assertFalse(data["ok"])
+            self.assertEqual(data["slice_id"], "s1")
+            self.assertEqual(data["exit_code"], 3)
+            self.assertEqual(data["status"], "ROLLED_BACK")
+            self.assertEqual(data["rounds_used"], 1)
+            self.assertEqual(data["max_rounds"], 1)
+
+            cp_data = json.loads((repo / "cp.json").read_text(encoding="utf-8"))
+            self.assertEqual(cp_data["completed_slices"], {})
+            self.assertIn("s1", cp_data["failed_slices"])
+            self.assertEqual(cp_data["rounds_used"], 1)
+
+            proc2 = _run_gate(repo, "campaign", "run", "spec.json", "--cache", "cp.json", "--json")
+            self.assertEqual(proc2.returncode, 1, proc2.stdout + proc2.stderr)
+            data2 = json.loads(proc2.stdout)
+            self.assertFalse(data2["ok"])
+            self.assertEqual(data2["status"], "HALT_MAX_ROUNDS")
+            self.assertEqual(data2["rounds_used"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
