@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import py_compile
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import asdict
@@ -729,6 +731,108 @@ def _campaign_plan(cir, root: Path, target_path: Path, cache_path: Path | None, 
     return 0
 
 
+def _campaign_run(cir, root: Path, target_path: Path, cache_path: Path | None, as_json: bool) -> int:
+    resolved_cache = _resolve_cli_path(root, cache_path) if cache_path is not None else None
+    try:
+        spec = cir.load_campaign_spec(target_path)
+        ordered = cir.compile_campaign(spec)
+    except cir.CampaignCompileError as exc:
+        return _emit_campaign_errors(exc.errors, "campaign run failed", as_json)
+    except (OSError, ValueError) as exc:
+        return _emit_campaign_errors([f"campaign run error: {exc}"], "campaign run failed", as_json)
+
+    try:
+        cp = cir.load_campaign_checkpoint(resolved_cache) if resolved_cache is not None else None
+    except (OSError, ValueError) as exc:
+        return _emit_campaign_errors([f"campaign checkpoint error: {exc}"], "campaign run failed", as_json)
+
+    if cp is None:
+        cp = cir.CampaignCheckpoint(
+            campaign_name=spec.name,
+            completed_slices={},
+            failed_slices={},
+            rounds_used=0,
+            max_rounds=spec.max_rounds,
+        )
+
+    repo_root = Path(spec.repo_root).resolve()
+    node = next((n for n in ordered if n.id not in cp.completed_slices), None)
+    if node is None:
+        if resolved_cache is not None:
+            cir.save_campaign_checkpoint(resolved_cache, cp)
+        payload = {
+            "ok": True,
+            "slice_id": None,
+            "input_sha256": None,
+            "exit_code": 0,
+            "status": "ALREADY_COMPLETED",
+            "rounds_used": cp.rounds_used,
+            "max_rounds": cp.max_rounds,
+        }
+        if as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"PASS: campaign '{spec.name}' already completed ({cp.rounds_used}/{cp.max_rounds} rounds)")
+        return 0
+
+    exit_code_box: dict[str, int | None] = {"code": None}
+
+    def _verify() -> tuple[bool, str]:
+        argv = shlex.split(node.verify_cmd, posix=(os.name != "nt"))
+        if not argv:
+            exit_code_box["code"] = 1
+            return (False, "empty verify_cmd")
+        proc = subprocess.run(
+            argv,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+        )
+        exit_code_box["code"] = proc.returncode
+        detail = (proc.stdout + proc.stderr).strip() or f"exit_code={proc.returncode}"
+        return (proc.returncode == 0, detail)
+
+    input_sha256 = cir.compute_slice_input_sha256(node, repo_root)
+    ok, detail = cir.execute_slice_transaction(
+        repo_root,
+        node,
+        apply_fn=lambda: None,
+        verify_fn=_verify,
+        checkpoint=cp,
+    )
+    if ok:
+        input_sha256 = cp.completed_slices.get(node.id, input_sha256)
+        status = "PASS"
+    elif detail.startswith("HALT_MAX_ROUNDS"):
+        status = "HALT_MAX_ROUNDS"
+    else:
+        status = "ROLLED_BACK"
+
+    if resolved_cache is not None:
+        cir.save_campaign_checkpoint(resolved_cache, cp)
+
+    payload = {
+        "ok": ok,
+        "slice_id": node.id,
+        "input_sha256": input_sha256,
+        "exit_code": exit_code_box["code"],
+        "status": status,
+        "rounds_used": cp.rounds_used,
+        "max_rounds": cp.max_rounds,
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    elif ok:
+        print(f"PASS: slice '{node.id}' ({status}, rounds={cp.rounds_used}/{cp.max_rounds}, sha256={input_sha256[:12]})")
+    else:
+        print(f"BLOCKED: slice '{node.id}' ({status}, rounds={cp.rounds_used}/{cp.max_rounds}): {detail}")
+    return 0 if ok else 1
+
+
 def _campaign_ledger(cir, target_path: Path, last: int, as_json: bool) -> int:
     if isinstance(last, bool) or last < 0:
         msg = f"--last must be >= 0, got {last!r}"
@@ -762,9 +866,9 @@ def cmd_campaign(
     parts = query.split() if isinstance(query, str) else list(query)
     usage_msg = (
         "usage: crucible_gate.py campaign "
-        "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | ledger <ledger.tsv> [--last N]}"
+        "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | run <spec.json> [--cache <checkpoint.json>] | ledger <ledger.tsv> [--last N]}"
     )
-    if len(parts) != 2 or parts[0] not in ("compile", "plan", "ledger"):
+    if len(parts) != 2 or parts[0] not in ("compile", "plan", "run", "ledger"):
         print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
         return 2
 
@@ -775,6 +879,8 @@ def cmd_campaign(
         return _campaign_compile(cir, target_path, as_json)
     if action == "plan":
         return _campaign_plan(cir, root, target_path, cache_path, as_json)
+    if action == "run":
+        return _campaign_run(cir, root, target_path, cache_path, as_json)
     return _campaign_ledger(cir, target_path, last, as_json)
 
 
