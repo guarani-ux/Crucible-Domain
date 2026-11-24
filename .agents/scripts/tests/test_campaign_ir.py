@@ -685,3 +685,49 @@ def test_cli_campaign_ledger_last_n_and_rejects_corrupt(tmp_path: Path) -> None:
     assert "s4" in tail_txt.stdout
     assert "s5" in tail_txt.stdout
     assert "s1" not in tail_txt.stdout
+
+
+def test_campaign_telemetry_emit_and_summarize(tmp_path: Path) -> None:
+    from crucible.campaign_ir import (
+        CampaignTelemetryEvent,
+        emit_telemetry_event,
+        summarize_telemetry,
+    )
+
+    tpath = tmp_path / "telemetry.jsonl"
+    # Negative control: missing file returns clean zeroed summary
+    empty_summary = summarize_telemetry(tpath)
+    assert empty_summary["total_events"] == 0
+    assert empty_summary["slowest_slice"] is None
+
+    emit_telemetry_event(
+        tpath,
+        CampaignTelemetryEvent(
+            slice_id="s1", phase="VERIFY", status="KEEP", duration_ms=120.5, wave_idx=0, cache_hit=False
+        ),
+    )
+    emit_telemetry_event(
+        tpath,
+        CampaignTelemetryEvent(
+            slice_id="s2", phase="CACHE", status="SKIP_CACHED", duration_ms=1.2, wave_idx=0, cache_hit=True
+        ),
+    )
+    emit_telemetry_event(
+        tpath,
+        CampaignTelemetryEvent(
+            slice_id="s3",
+            phase="VERIFY",
+            status="REVERT",
+            duration_ms=450.0,
+            wave_idx=1,
+            cache_hit=False,
+            error_sha256="deadbeef",
+        ),
+    )
+
+    summary = summarize_telemetry(tpath)
+    assert summary["total_events"] == 3
+    assert summary["total_ms"] == 571.7
+    assert summary["cache_hit_rate"] == 0.3333
+    assert summary["slowest_slice"] == "s3"
+    assert summary["failure_counts_by_error_sha256"] == {"deadbeef": 1}

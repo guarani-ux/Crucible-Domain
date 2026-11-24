@@ -800,3 +800,79 @@ def build_slice_worker_prompt(planned_slice: PlannedSlice, repo_root: Path | str
             f"computed_sha256: {planned_slice.computed_sha256}",
         ]
     ) + "\n"
+
+
+@dataclass(frozen=True)
+class CampaignTelemetryEvent:
+    """Schema-versioned, append-only telemetry record for campaign execution."""
+
+    slice_id: str
+    phase: str
+    status: str
+    duration_ms: float = 0.0
+    wave_idx: int = 0
+    cache_hit: bool = False
+    error_sha256: str = ""
+    schema_version: str = "1.0"
+
+
+def emit_telemetry_event(telemetry_path: Path | str, event: CampaignTelemetryEvent) -> None:
+    """Append a single JSONL telemetry event without mutating prior records."""
+    path = Path(telemetry_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "schema_version": event.schema_version,
+        "wave_idx": event.wave_idx,
+        "slice_id": event.slice_id,
+        "phase": event.phase,
+        "status": event.status,
+        "duration_ms": round(event.duration_ms, 3),
+        "cache_hit": event.cache_hit,
+        "error_sha256": event.error_sha256,
+    }
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def summarize_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
+    """Aggregate campaign JSONL telemetry to surface bottlenecks, cache hits, and error clusters."""
+    path = Path(telemetry_path)
+    if not path.exists():
+        return {
+            "total_events": 0,
+            "total_ms": 0.0,
+            "cache_hit_rate": 0.0,
+            "slowest_slice": None,
+            "failure_counts_by_error_sha256": {},
+        }
+
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+
+    if not events:
+        return {
+            "total_events": 0,
+            "total_ms": 0.0,
+            "cache_hit_rate": 0.0,
+            "slowest_slice": None,
+            "failure_counts_by_error_sha256": {},
+        }
+
+    total_ms = sum(float(e.get("duration_ms", 0.0)) for e in events)
+    cache_hits = sum(1 for e in events if e.get("cache_hit"))
+    slowest = max(events, key=lambda e: float(e.get("duration_ms", 0.0)))
+    failures: dict[str, int] = {}
+    for e in events:
+        err = str(e.get("error_sha256", "") or "")
+        if err:
+            failures[err] = failures.get(err, 0) + 1
+
+    return {
+        "total_events": len(events),
+        "total_ms": round(total_ms, 3),
+        "cache_hit_rate": round(cache_hits / len(events), 4),
+        "slowest_slice": slowest.get("slice_id"),
+        "failure_counts_by_error_sha256": failures,
+    }
