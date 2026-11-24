@@ -350,6 +350,76 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
             self.assertEqual(len(link_fails), 1)
             self.assertIn("missing_target.md", link_fails[0].detail)
 
+    def test_bm25_graph_walk_and_structural_filtering(self) -> None:
+        from crucible.models import CapabilityEntry, CapabilityIndex
+
+        e_a = CapabilityEntry(
+            id="CAP-A",
+            kind="procedure",
+            title="Alpha Calibration",
+            path="a.md",
+            line=1,
+            domain="personal",
+            reachability="local",
+            use_when="calibrate alpha",
+            summary="Primary entry",
+            related_ids=("CAP-B",),
+        )
+        e_b = CapabilityEntry(
+            id="CAP-B",
+            kind="knowledge",
+            title="Beta Reference",
+            path="b.md",
+            line=1,
+            domain="cpl",
+            reachability="local",
+            use_when="reference",
+            summary="Linked 1-hop",
+            related_ids=("CAP-C", "CAP-A"),
+        )
+        e_c = CapabilityEntry(
+            id="CAP-C",
+            kind="skill",
+            title="Gamma Tool",
+            path="c.md",
+            line=1,
+            domain="cpl",
+            reachability="local",
+            use_when="tool",
+            summary="Linked 2-hop",
+            related_ids=("CAP-A",),
+        )
+        idx = CapabilityIndex(
+            root=REPO_ROOT,
+            entries={"CAP-A": e_a, "CAP-B": e_b, "CAP-C": e_c},
+            alias_map={"cap-a": "CAP-A", "cap-b": "CAP-B", "cap-c": "CAP-C"},
+            chatgpt_bindings={},
+            skill_frontmatter_bytes={},
+            build_ms=0.1,
+        )
+
+        # 2-hop graph walk reaches CAP-B and CAP-C despite cyclic CAP-A <-> CAP-B <-> CAP-C
+        res_2hop = crucible_index.route_query(idx, "alpha calibration", max_hops=2, graph_decay=0.5)
+        self.assertFalse(res_2hop.abstained)
+        ids_2hop = [m.entry.id for m in res_2hop.matches]
+        self.assertEqual(ids_2hop[0], "CAP-A")
+        self.assertIn("CAP-B", ids_2hop)
+        self.assertIn("CAP-C", ids_2hop)
+        via_c = next(m.matched_via for m in res_2hop.matches if m.entry.id == "CAP-C")
+        self.assertEqual(via_c, "graph_walk:2hop_from:CAP-A")
+
+        # Structural filter by domain="cpl" and kind="skill" isolates CAP-C
+        res_filtered = crucible_index.route_query(
+            idx, "alpha calibration", max_hops=2, domain="cpl", kind="skill"
+        )
+        self.assertFalse(res_filtered.abstained)
+        self.assertEqual([m.entry.id for m in res_filtered.matches], ["CAP-C"])
+
+        # Negative control: non-matching domain abstains
+        res_empty = crucible_index.route_query(idx, "alpha calibration", domain="nonexistent")
+        self.assertTrue(res_empty.abstained)
+        self.assertEqual(res_empty.match_mode, "abstained")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -108,6 +108,73 @@ def _score_entries(
     return scored
 
 
+def _expand_graph_walk(
+    index: CapabilityIndex,
+    seeds: list[RouteMatch],
+    *,
+    max_hops: int = 1,
+    graph_decay: float = 0.35,
+    seed_limit: int = 3,
+) -> list[RouteMatch]:
+    """Bounded k-hop BFS over CapabilityEntry.related_ids with score attenuation."""
+    if max_hops <= 0 or not seeds:
+        return list(seeds)
+
+    best_by_id: dict[str, RouteMatch] = {m.entry.id: m for m in seeds}
+    frontier: list[tuple[str, float, str]] = [
+        (m.entry.id, m.score, m.entry.id) for m in seeds[:seed_limit]
+    ]
+    visited: set[str] = {m.entry.id for m in seeds[:seed_limit]}
+
+    for hop in range(1, max_hops + 1):
+        next_frontier: list[tuple[str, float, str]] = []
+        for node_id, parent_score, root_id in frontier:
+            node = index.entries.get(node_id)
+            if node is None:
+                continue
+            prop_score = parent_score * graph_decay
+            for rel_id in node.related_ids:
+                rel_entry = index.entries.get(rel_id)
+                if rel_entry is None:
+                    continue
+                existing = best_by_id.get(rel_id)
+                if existing is None or prop_score > existing.score:
+                    best_by_id[rel_id] = RouteMatch(
+                        entry=rel_entry,
+                        score=prop_score,
+                        matched_via=f"graph_walk:{hop}hop_from:{root_id}",
+                    )
+                if rel_id not in visited:
+                    visited.add(rel_id)
+                    next_frontier.append((rel_id, prop_score, root_id))
+        frontier = next_frontier
+        if not frontier:
+            break
+
+    merged = list(best_by_id.values())
+    merged.sort(
+        key=lambda m: (
+            -round(m.score, 6),
+            CAPABILITY_PRECEDENCE.get(m.entry.kind, 99),
+            m.entry.id,
+        )
+    )
+    return merged
+
+
+def _matches_filters(
+    entry: Any,
+    *,
+    domain: str | None = None,
+    kind: str | None = None,
+) -> bool:
+    if domain and entry.domain.lower() != domain.lower():
+        return False
+    if kind and entry.kind.lower() != kind.lower():
+        return False
+    return True
+
+
 def route_query(
     index: CapabilityIndex,
     query: str,
@@ -115,6 +182,10 @@ def route_query(
     top_k: int = 5,
     min_score: float = 1.5,
     ledger: dict[str, Any] | None = None,
+    domain: str | None = None,
+    kind: str | None = None,
+    max_hops: int = 1,
+    graph_decay: float = 0.35,
 ) -> RouteResult:
     """Resolve an ID, ChatGPT skill_id, or natural-language task in RAM with selective abstention."""
     raw = query.strip()
@@ -169,6 +240,10 @@ def route_query(
         )
 
     scored = _score_entries(index, q_tokens, min_score=min_score, include_deep_fields=False, ledger=ledger)
+    if scored and max_hops > 0:
+        scored = _expand_graph_walk(index, scored, max_hops=max_hops, graph_decay=graph_decay)
+    if domain or kind:
+        scored = [m for m in scored if _matches_filters(m.entry, domain=domain, kind=kind)]
     top_matches = scored[:top_k]
     if not top_matches:
         return RouteResult(
