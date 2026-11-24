@@ -294,3 +294,49 @@ def test_kernel_separates_checks_passed_from_outcome_verified(tmp_path: Path) ->
     assert res_verified["outcome_verified"] is True
     assert res_verified["verify_ran"] is True
     assert res_verified["verify_exit_code"] == 0
+
+
+def test_incremental_dag_propagates_ci_and_dependency_edges(tmp_path: Path) -> None:
+    dag = ck.IncrementalDAG(HUB_ROOT)
+    req_downstream = dag.dirty_closure(["requirements.txt"])
+    assert ".github/workflows/crucible-ci.yml" in req_downstream
+    assert ".agents/scripts/tests/test_portable_verify.py" in req_downstream
+
+    verify_downstream = dag.dirty_closure([".agents/scripts/verify_all.py"])
+    assert "scripts/verify_all.ps1" in verify_downstream
+    assert ".github/workflows/crucible-ci.yml" in verify_downstream
+
+    # Negative check: missing downstream files in an empty root must not be fabricated as dirty
+    empty_dag = ck.IncrementalDAG(tmp_path)
+    assert ".github/workflows/crucible-ci.yml" not in empty_dag.dirty_closure(["requirements.txt"])
+
+
+def test_classify_intake_intent_clear_and_ambiguous() -> None:
+    clear_cases = [
+        ("Run pytest and verify dirty_closure in crucible_kernel DAG", "crucible_engine"),
+        ("Draft a documentary treatment outline in writers-room", "writers_room"),
+        ("Select soundbites with valid timecode from transcript for story-lane", "story_lane"),
+        ("Prepare meeting-prep agenda and pre-read for stakeholder committee", "meeting_prep"),
+        ("Run observatory melt-diff and outcome ledger benchmark", "observatory"),
+    ]
+    for prompt, expected_domain in clear_cases:
+        res = ck.classify_intake_intent(prompt)
+        assert res["ambiguous"] is False
+        assert res["domain"] == expected_domain
+        assert res["confidence"] >= 0.8
+        assert len(res["matched_signals"]) >= 2
+
+    # Negative / ambiguous checks: empty, vague, and tied multi-domain prompts must abstain
+    for vague in ("", "   ", "help me with this task please"):
+        res_empty = ck.classify_intake_intent(vague)
+        assert res_empty["ambiguous"] is True
+        assert res_empty["domain"] in ("ambiguous", "general")
+        assert res_empty["confidence"] == 0.0
+        assert res_empty["matched_signals"] == []
+
+    res_tied = ck.classify_intake_intent("Create a writers-room draft and a story-lane transcript")
+    assert res_tied["ambiguous"] is True
+    assert res_tied["domain"] in ("ambiguous", "general")
+    assert res_tied["confidence"] == 0.0
+    assert "writers_room" in res_tied["matched_signals"]
+    assert "story_lane" in res_tied["matched_signals"]
