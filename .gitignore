@@ -10,5 +10,6 @@ Thumbs.db
 .agents/ml_history.jsonl
 .agents/ml_curated.jsonl
 .agents/.ml_daemon.json
+.agents/ml_bandit_state.json
 .agents/bench_runs/
 .agents/bench_telemetry.jsonl

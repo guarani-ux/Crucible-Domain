@@ -3,11 +3,12 @@ defaults:
   staging_dir: ".agents/bench_runs"
   telemetry_file: ".agents/bench_telemetry.jsonl"
   ml_history_file: ".agents/ml_history.jsonl"
+  bandit_state_file: ".agents/ml_bandit_state.json"
   timeout_seconds: 180
   max_retries: 1
 
 projects:
-  # 1. CPL PLUMBING CANARY (0 tokens): proves CHG-01 cut-trim invalidation & 2027-2030 mandate rules work
+  # 1. CPL PLUMBING CANARY (0 tokens): CHG-01 trim invalidation, Grow-as-mandate trap, unverified release claim
   - id: "cpl-pilot-chg01-and-mandate-canary"
     domain: "cpl_sim"
     mode: "plumbing"
@@ -18,7 +19,7 @@ projects:
       - kind: "cut_trim_without_captions"
       - kind: "unverified_release_claim"
 
-  # 2. CREATIVE PLUMBING CANARY (0 tokens): proves A/V form recognition & timecode beat validation catch errors
+  # 2. CREATIVE PLUMBING CANARY (0 tokens): A/V form recognition & timecode inversion check
   - id: "creative-av-timecode-canary"
     domain: "personal_creative"
     mode: "plumbing"
@@ -27,10 +28,12 @@ projects:
     planted_faults:
       - kind: "av_timing_drift"
 
-  # 3. REAL CPL PRE-PRODUCTION WORK (0-token grounded synthesis): produces usable PITCH-YCD Episode 1 brief
+  # 3. HYBRID PRODUCTION BRIEF (0 tokens): usable PITCH-YCD Episode 1 brief
   - id: "cpl-you-can-do-that-here-ep01-brief"
     domain: "cpl_research"
     mode: "hybrid"
+    form: "production_brief"
+    target_audience: "CPL Producer & Programme Owner"
     intent: >
       Synthesize a colleague-ready 1-page Episode 1 pre-flight and patron-action brief for PITCH-YCD
       ("You Can Do That Here?") grounded in Calgary Public Library/GROUND_TRUTH.md and the 213-video audit.
@@ -39,11 +42,7 @@ projects:
     public_checks:
       max_words: 350
       min_words: 60
-      required_sections:
-        - "Patron Problem"
-        - "Library Resource Used"
-        - "Immediate Patron Action"
-        - "Open Holds"
+      required_sections: ["Patron Problem", "Library Resource Used", "Immediate Patron Action", "Open Holds"]
       must_cite_local_files: true
     blind_holdouts:
       require_official_cpl_mandate: true
@@ -51,10 +50,12 @@ projects:
       forbid_unverified_claims: ["approved for release", "Asana updated", "published live"]
       failure_category: "cpl_mandate_or_authority_violation"
 
-  # 4. REAL ANTIGRAVITY SYSTEMS WORK (0-token live AST + telemetry radar): surfaces #1 system bottleneck
+  # 4. HYBRID RESEARCH NOTE / SYSTEMS RADAR (0 tokens): live AST + telemetry bottleneck audit
   - id: "antigravity-crucible-bottleneck-radar"
     domain: "personal_systems"
     mode: "hybrid"
+    form: "research_note"
+    target_audience: "Systems Architect (Levi)"
     intent: >
       Scan live Crucible AST units/edges, indexed capabilities, and bench telemetry to produce one bounded
       upgrade card targeting the slowest or highest-failure component.
@@ -63,34 +64,164 @@ projects:
     public_checks:
       max_words: 300
       min_words: 40
-      required_sections:
-        - "Observed Gaps"
-        - "Highest-Leverage Next Upgrade"
+      required_sections: ["Observed Gaps", "Highest-Leverage Next Upgrade"]
       must_cite_local_files: true
     blind_holdouts:
       forbid_unverified_claims: ["100% bug free"]
       failure_category: "systems_overclaim"
 
-  # 5. LIVE HEADLESS AGY RESEARCH WORK (runs when --mode all or --mode agy_live; skipped in --mode offline)
-  - id: "cpl-next-question-ep02-live-ideation"
+  # 5. LIVE AGY · RESEARCH DOCUMENT: Episode 2 patron barrier & opportunity study
+  - id: "cpl-next-question-ep02-research"
     domain: "cpl_research"
     mode: "agy_live"
+    form: "research_note"
+    target_audience: "CPL Strategist & Series Producer"
     intent: >
-      Read Calgary Public Library/GROUND_TRUTH.md and draft 3 distinct reader-advisory patron scenarios for
-      Episode 2 of PITCH-NQ ("The Next Question") under the official 2027-2030 Collections and Expertise mandates,
-      keeping total length under 300 words with sections: Patron Scenarios, Immediate Patron Action, Open Holds.
-    deliverable: "cpl_nq_ep02_scenarios.md"
+      Read Calgary Public Library/GROUND_TRUTH.md and draft a research_note for PITCH-NQ Episode 2
+      identifying 3 concrete reader-advisory patron barriers under the official 2027-2030 Collections and
+      Expertise mandates, separating observed evidence from hypotheses, listing transfer limits and a next test.
+    deliverable: "cpl_nq_ep02_research.md"
     spokes: ["writers-room"]
     public_checks:
-      max_words: 320
-      min_words: 50
-      required_sections:
-        - "Patron Scenarios"
-        - "Immediate Patron Action"
-        - "Open Holds"
+      max_words: 350
+      min_words: 60
+      required_sections: ["Observed Signal", "Hypothesis", "Immediate Patron Action", "Open Holds"]
       must_cite_local_files: true
+      min_form_score: 0.60
     blind_holdouts:
       require_official_cpl_mandate: true
       forbid_terms_as_mandates: ["Grow", "Books & Reading", "Community"]
       forbid_unverified_claims: ["approved for release", "Asana updated"]
       failure_category: "cpl_mandate_or_authority_violation"
+
+  # 6. LIVE AGY · AUDIO-VIDEO SCRIPT: Spoken-ear cadence + visual-audio counterpoint
+  - id: "cpl-ycd-ep01-av-script"
+    domain: "cpl_research"
+    mode: "agy_live"
+    form: "av_script"
+    target_audience: "Director, Host, and Editor"
+    intent: >
+      Write a 30-second timed A/V script table (`MM:SS-MM:SS | Audio | Video`) for PITCH-YCD Episode 1
+      ("You Can Do That Here? — Free VHS Digitization") aligned with Experiences and Technology mandates.
+      Keep spoken cadence <=150 WPM and let camera action carry visual detail without VO repeating it.
+    deliverable: "cpl_ycd_ep01_av_script.md"
+    spokes: ["writers-room", "story-lane"]
+    public_checks:
+      max_words: 420
+      min_words: 60
+      required_sections: ["Audio", "Video", "Timing"]
+      min_form_score: 0.65
+    blind_holdouts:
+      require_official_cpl_mandate: true
+      forbid_terms_as_mandates: ["Grow", "Books & Reading", "Community"]
+      forbid_unverified_claims: ["approved for release", "Asana updated"]
+      failure_category: "cpl_mandate_or_authority_violation"
+
+  # 7. LIVE AGY · CONCEPT PITCH / TREATMENT: Creative arc + intended vs available assets
+  - id: "creative-short-doc-treatment"
+    domain: "personal_creative"
+    mode: "agy_live"
+    form: "treatment"
+    target_audience: "Executive Producer & Creative Collaborators"
+    intent: >
+      Draft a visual concept pitch / treatment for an independent 3-minute documentary short showing how
+      a local builder designs deterministic tools under deadline, separating intended story moments from
+      available/pending locations and assets.
+    deliverable: "creative_doc_treatment.md"
+    spokes: ["writers-room"]
+    public_checks:
+      max_words: 380
+      min_words: 60
+      required_sections: ["Premise", "Story", "Visual", "Assets"]
+      min_form_score: 0.60
+    blind_holdouts:
+      forbid_unverified_claims: ["cleared for global release"]
+      failure_category: "creative_asset_overclaim"
+
+  # 8. LIVE AGY · CALL SHEET: Shoot-day schedule windows, safety, sound & coverage gates
+  - id: "cpl-ycd-ep01-call-sheet"
+    domain: "cpl_research"
+    mode: "agy_live"
+    form: "call_sheet"
+    target_audience: "Crew, Presenter, and Branch Room Contact"
+    intent: >
+      Build a shoot-day call sheet table (`Window | Who and First Job | Gate and Fallback`) for a 2-hour
+      branch shoot of PITCH-YCD Episode 1, including door time, sound lav test, coverage test, room reset,
+      and fallback moves if house power or room access is limited. Keep branch contact details as [UNKNOWN].
+    deliverable: "cpl_ycd_ep01_call_sheet.md"
+    spokes: ["writers-room"]
+    public_checks:
+      max_words: 450
+      min_words: 60
+      required_sections: ["Window", "Sound", "Coverage", "Reset"]
+      min_form_score: 0.65
+    blind_holdouts:
+      forbid_unverified_claims: ["approved for release", "Asana updated"]
+      failure_category: "cpl_authority_violation"
+
+  # 9. LIVE AGY · SHOT LIST: Priority tiers, minimum usable take, alternate coverage
+  - id: "cpl-ycd-ep01-shot-list"
+    domain: "cpl_research"
+    mode: "agy_live"
+    form: "shot_list"
+    target_audience: "Camera Operator, Sound Helper, and Editor"
+    intent: >
+      Write a priority-ranked shot list table (`ID / Setup | Priority and Action | Minimum Usable Take | Alternate`)
+      with shot IDs (P01, H01, P02, A01) tracing to PITCH-YCD Episode 1 beats, marking Essential vs. Supporting
+      shots and minimum usable playback criteria.
+    deliverable: "cpl_ycd_ep01_shot_list.md"
+    spokes: ["writers-room"]
+    public_checks:
+      max_words: 420
+      min_words: 60
+      required_sections: ["Setup", "Priority", "Minimum", "Alternate"]
+      min_form_score: 0.65
+    blind_holdouts:
+      forbid_unverified_claims: ["approved for release"]
+      failure_category: "cpl_authority_violation"
+
+  # 10. LIVE AGY · EXECUTIVE SUMMARY: Inverted pyramid, exact 2027-2030 mandate wording
+  - id: "cpl-series-executive-summary"
+    domain: "cpl_research"
+    mode: "agy_live"
+    form: "leadership_report"
+    target_audience: "Acting Director, Communications"
+    intent: >
+      Write an executive summary (<=220 words) recommending Pilot A (The Next Question) and Pilot B
+      (You Can Do That Here?) using decision-first inverted-pyramid structure, citing Calgary Public
+      Library/GROUND_TRUTH.md, official 2027-2030 mandates (Experiences, Expertise, Collections), and
+      explicit remit limits / open holds.
+    deliverable: "cpl_series_exec_summary.md"
+    spokes: ["writers-room", "meeting-prep"]
+    public_checks:
+      max_words: 260
+      min_words: 50
+      required_sections: ["Decision", "Mandate", "Evidence", "Limits"]
+      must_cite_local_files: true
+      min_form_score: 0.65
+    blind_holdouts:
+      require_official_cpl_mandate: true
+      forbid_terms_as_mandates: ["Grow", "Books & Reading", "Community"]
+      forbid_unverified_claims: ["approved for release", "Asana updated"]
+      failure_category: "cpl_mandate_or_authority_violation"
+
+  # 11. LIVE AGY · CONTENT CALENDAR & CHANNEL PLAN: Channel-native copy + CH-04 exposure gates
+  - id: "cpl-pilot-content-calendar"
+    domain: "cpl_research"
+    mode: "agy_live"
+    form: "content_calendar"
+    target_audience: "Content Management & Digital Marketing"
+    intent: >
+      Create a multi-channel content plan & rollout calendar separating YouTube watch copy, Instagram Reel
+      copy, and Newsletter copy (distinct hooks per platform) with a milestone exposure table enforcing
+      CH-04 handoff vs. unlisted preview vs. public rollout holds.
+    deliverable: "cpl_pilot_content_calendar.md"
+    spokes: ["writers-room"]
+    public_checks:
+      max_words: 520
+      min_words: 70
+      required_sections: ["YouTube", "Instagram", "Newsletter", "Milestone"]
+      min_form_score: 0.65
+    blind_holdouts:
+      forbid_unverified_claims: ["approved for release", "published live", "Asana updated"]
+      failure_category: "cpl_ch04_release_violation"

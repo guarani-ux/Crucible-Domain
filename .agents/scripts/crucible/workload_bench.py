@@ -23,6 +23,11 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from crucible import story_engine as se
+from crucible.form_diagnostics import (
+    FORM_PROFILES,
+    diagnose_form_deliverable,
+    resolve_form_id,
+)
 from crucible.indexer import build_index
 from crucible.replay_loop import discover_gaps
 from crucible.router import route_query
@@ -52,6 +57,7 @@ class WorkloadDefaults:
     staging_dir: str = ".agents/bench_runs"
     telemetry_file: str = ".agents/bench_telemetry.jsonl"
     ml_history_file: str = ".agents/ml_history.jsonl"
+    bandit_state_file: str = ".agents/ml_bandit_state.json"
     timeout_seconds: float = 180.0
     max_retries: int = 1
 
@@ -61,6 +67,8 @@ class WorkloadProject:
     id: str
     domain: str
     mode: str
+    form: str = ""
+    target_audience: str = ""
     intent: str = ""
     emulates: str = ""
     deliverable: str = ""
@@ -100,6 +108,12 @@ class ProjectRunReceipt:
     deliverable_path: str = ""
     failure_category: str = ""
     error_summary: str = ""
+    form_id: str = ""
+    craft_arm: str = ""
+    diagnostic_score: float = 0.0
+    weakest_aspect: str = ""
+    diagnosis: str = ""
+    frontier_saturated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -160,6 +174,7 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
         staging_dir=str(raw_def.get("staging_dir", ".agents/bench_runs")),
         telemetry_file=str(raw_def.get("telemetry_file", ".agents/bench_telemetry.jsonl")),
         ml_history_file=str(raw_def.get("ml_history_file", ".agents/ml_history.jsonl")),
+        bandit_state_file=str(raw_def.get("bandit_state_file", ".agents/ml_bandit_state.json")),
         timeout_seconds=float(timeout_s),
         max_retries=int(max_retries),
     )
@@ -209,6 +224,8 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
                     id=pid,
                     domain=domain,
                     mode=mode,
+                    form=str(item.get("form", "")).strip(),
+                    target_audience=str(item.get("target_audience", "")).strip(),
                     intent=str(item.get("intent", "")).strip(),
                     emulates=str(item.get("emulates", "")).strip(),
                     deliverable=deliverable or f"{pid}.md",
@@ -429,14 +446,39 @@ def _synthesize_hybrid_deliverable(
     )
 
 
-def _build_agy_worker_prompt(project: WorkloadProject) -> str:
-    """Build worker prompt containing ONLY intent and public_checks (blind_holdouts strictly stripped)."""
+def _infer_project_form(project: WorkloadProject) -> str:
+    if project.form:
+        return resolve_form_id(project.form)
+    if project.domain == "personal_creative":
+        return "av_script"
+    if project.domain in ("cpl_research", "personal_systems"):
+        return "research_note"
+    return "production_brief"
+
+
+def _build_agy_worker_prompt(
+    project: WorkloadProject,
+    *,
+    form_id: str = "",
+    craft_instruction: str = "",
+    prior_diagnosis: str = "",
+) -> str:
+    """Build worker prompt with form, audience, bandit craft arm, and prior diagnosis (blind_holdouts stripped)."""
+    eff_form = form_id or _infer_project_form(project)
+    profile = FORM_PROFILES.get(eff_form, FORM_PROFILES["production_brief"])
+    audience = project.target_audience or profile.audience
     lines = [
         "Produce ONLY the requested Markdown deliverable content (no conversational preamble).",
         "Treat repository files as read-only context; do not modify workspace files or external services.",
         f"Domain: {project.domain}",
+        f"Document Form: {profile.display_name} ({eff_form})",
+        f"Target Audience & Receiver: {audience}",
         f"Assignment: {project.intent}",
     ]
+    if craft_instruction:
+        lines.append(f"Selected Craft Priority: {craft_instruction}")
+    if prior_diagnosis:
+        lines.append(f"Prior Round Weakness to Improve: {prior_diagnosis}")
     if project.public_checks:
         lines.append(f"Public acceptance checks: {json.dumps(project.public_checks, ensure_ascii=False)}")
     return "\n".join(lines) + "\n"
@@ -489,10 +531,11 @@ def run_workload_bench(
     project_ids: list[str] | None = None,
     rounds: int = 1,
     interval_sec: float = 0.0,
+    adaptive: bool = False,
     agy_worker_fn: Callable[[str, Path, float], tuple[bool, str]] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    """Execute selected YAML workloads for N rounds, isolating deliverables and recording telemetry + ML feedback."""
+    """Execute selected YAML workloads for N rounds with optional UCB1 bandit & diminishing-returns rotation."""
     if rounds < 1:
         raise ValueError("rounds must be >= 1")
     if mode_filter not in ("all", "offline", "plumbing", "hybrid", "agy_live"):
@@ -502,15 +545,45 @@ def run_workload_bench(
     staging_base = (root / manifest.defaults.staging_dir).resolve()
     telemetry_path = (root / manifest.defaults.telemetry_file).resolve()
     ml_history_path = (root / manifest.defaults.ml_history_file).resolve()
+    bandit_state_path = (root / manifest.defaults.bandit_state_file).resolve()
     worker = agy_worker_fn or _default_agy_worker
     selected_ids = set(project_ids) if project_ids else None
 
     all_receipts: list[ProjectRunReceipt] = []
+    prior_diagnosis_by_proj: dict[str, str] = {}
+    frontier_rotations: list[dict[str, Any]] = []
     run_id = _run_stamp() + "-" + hashlib.sha256(f"{time.time_ns()}".encode()).hexdigest()[:6]
 
     for round_idx in range(1, rounds + 1):
         round_dir = staging_base / f"{run_id}_r{round_idx:02d}"
         round_dir.mkdir(parents=True, exist_ok=True)
+
+        adaptive_target_id: str | None = None
+        if adaptive and rml is not None:
+            eligible_non_plumbing = [
+                p.id
+                for p in manifest.projects
+                if p.enabled
+                and (selected_ids is None or p.id in selected_ids)
+                and p.mode != "plumbing"
+                and not (mode_filter == "offline" and p.mode == "agy_live")
+                and (mode_filter not in ("hybrid", "agy_live") or p.mode == mode_filter)
+            ]
+            if eligible_non_plumbing:
+                f_choice = rml.select_next_frontier_target(
+                    root,
+                    eligible_non_plumbing,
+                    state_path=bandit_state_path,
+                )
+                adaptive_target_id = f_choice.get("selected_id")
+                frontier_rotations.append(
+                    {
+                        "round_idx": round_idx,
+                        "selected_id": adaptive_target_id,
+                        "all_saturated": bool(f_choice.get("all_saturated")),
+                        "reason": str(f_choice.get("reason", "")),
+                    }
+                )
 
         for proj in manifest.projects:
             if not proj.enabled:
@@ -544,13 +617,15 @@ def run_workload_bench(
                 continue
             if mode_filter in ("plumbing", "hybrid", "agy_live") and proj.mode != mode_filter:
                 continue
+            if adaptive and proj.mode != "plumbing" and adaptive_target_id and proj.id != adaptive_target_id:
+                continue
 
             t_total = time.perf_counter()
 
             # Stage 1: RAM capability routing check
             t_route = time.perf_counter()
             idx = build_index(root, global_config_dir=None)
-            query_str = " ".join([proj.domain, *proj.spokes, proj.intent[:60], proj.emulates[:60]]).strip()
+            query_str = " ".join([proj.domain, proj.form, *proj.spokes, proj.intent[:60], proj.emulates[:60]]).strip()
             _ = route_query(idx, query_str or proj.id, top_k=3)
             route_ms = round((time.perf_counter() - t_route) * 1000.0, 2)
 
@@ -595,7 +670,23 @@ def run_workload_bench(
                     error_summary="; ".join(fault_notes),
                 )
             else:
-                # 'hybrid' or 'agy_live' mode -> produces a staged deliverable and runs public + blind checks
+                # 'hybrid' or 'agy_live' mode -> bandit arm selection, deliverable generation, form diagnostics
+                form_id = _infer_project_form(proj)
+                profile = FORM_PROFILES.get(form_id, FORM_PROFILES["production_brief"])
+                context_key = f"{form_id}:{proj.domain}"
+                arm_choice = (
+                    rml.select_craft_arm(
+                        root,
+                        context_key,
+                        profile.craft_arms,
+                        state_path=bandit_state_path,
+                    )
+                    if rml is not None
+                    else {"arm_id": profile.craft_arms[0], "instruction": ""}
+                )
+                arm_id = str(arm_choice.get("arm_id", profile.craft_arms[0]))
+                arm_instruction = str(arm_choice.get("instruction", ""))
+
                 retries_used = 0
                 max_attempts = 1 + (manifest.defaults.max_retries if proj.mode == "agy_live" else 0)
                 execute_ms = 0.0
@@ -606,6 +697,10 @@ def run_workload_bench(
                 err_detail = ""
                 candidate_text = ""
                 feedback_suffix = ""
+                diag_score = 0.0
+                weakest_aspect = ""
+                diagnosis = ""
+                min_form_score = proj.public_checks.get("min_form_score")
 
                 for attempt in range(max_attempts):
                     if attempt > 0:
@@ -615,7 +710,15 @@ def run_workload_bench(
                         ok_gen = True
                         candidate_text = _synthesize_hybrid_deliverable(root, proj, telemetry_path)
                     else:
-                        prompt = _build_agy_worker_prompt(proj) + feedback_suffix
+                        prompt = (
+                            _build_agy_worker_prompt(
+                                proj,
+                                form_id=form_id,
+                                craft_instruction=arm_instruction,
+                                prior_diagnosis=prior_diagnosis_by_proj.get(proj.id, ""),
+                            )
+                            + feedback_suffix
+                        )
                         ok_gen, candidate_text = worker(prompt, root, manifest.defaults.timeout_seconds)
                     execute_ms += (time.perf_counter() - t_exec) * 1000.0
 
@@ -633,13 +736,49 @@ def run_workload_bench(
                         proj.public_checks,
                         proj.blind_holdouts,
                     )
+                    diag = diagnose_form_deliverable(
+                        candidate_text,
+                        form_id,
+                        repo_root=root,
+                        strict_cpl_mandates=proj.domain.startswith("cpl"),
+                    )
+                    diag_score = diag.overall_score
+                    weakest_aspect = diag.weakest_aspect
+                    diagnosis = diag.diagnosis
+                    if (
+                        pub_ok
+                        and hold_ok
+                        and isinstance(min_form_score, (int, float))
+                        and diag_score < float(min_form_score)
+                    ):
+                        pub_ok = False
+                        fail_cat = "form_device_below_threshold"
+                        err_detail = (
+                            f"form score {diag_score:.3f} < min_form_score={float(min_form_score):.2f} ({diagnosis})"
+                        )
                     verify_ms += (time.perf_counter() - t_ver) * 1000.0
                     if pub_ok and hold_ok:
                         break
-                    # Sanitize retry feedback: never leak private holdout rules
-                    feedback_suffix = f"\nRepair category required: {fail_cat} ({err_detail})\n"
+                    feedback_suffix = f"\nRepair category required: {fail_cat} ({err_detail}; {diagnosis})\n"
 
                 passed = bool(pub_ok and hold_ok)
+                if diagnosis:
+                    prior_diagnosis_by_proj[proj.id] = f"weakest={weakest_aspect} ({diagnosis})"
+
+                frontier_saturated = False
+                if rml is not None:
+                    upd = rml.update_craft_arm(
+                        root,
+                        context_key,
+                        arm_id,
+                        diag_score,
+                        passed=passed,
+                        target_key=proj.id,
+                        state_path=bandit_state_path,
+                    )
+                    dr = rml.assess_diminishing_returns(upd["trajectory"])
+                    frontier_saturated = bool(dr["saturated"])
+
                 deliv_rel = ""
                 if candidate_text and passed:
                     out_file = proj_dir / proj.deliverable
@@ -669,6 +808,12 @@ def run_workload_bench(
                     deliverable_path=deliv_rel,
                     failure_category=fail_cat,
                     error_summary=err_detail,
+                    form_id=form_id,
+                    craft_arm=arm_id,
+                    diagnostic_score=diag_score,
+                    weakest_aspect=weakest_aspect,
+                    diagnosis=diagnosis,
+                    frontier_saturated=frontier_saturated,
                 )
 
             _append_bench_telemetry(telemetry_path, receipt)
@@ -699,6 +844,8 @@ def run_workload_bench(
         "ok": all_passed,
         "run_id": run_id,
         "rounds_completed": rounds,
+        "adaptive": adaptive,
+        "frontier_rotations": frontier_rotations,
         "executed_count": len(active),
         "passed_count": sum(1 for r in active if r.passed),
         "skipped_count": sum(1 for r in all_receipts if r.skipped),
@@ -759,6 +906,17 @@ def summarize_bench_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
         if not r.get("passed") and r.get("failure_category")
     )
     deliverables = [str(r["deliverable_path"]) for r in active if r.get("deliverable_path")][-5:]
+    scored_rows = [r for r in active if float(r.get("diagnostic_score", 0.0)) > 0.0]
+    avg_diag = round(sum(float(r["diagnostic_score"]) for r in scored_rows) / len(scored_rows), 3) if scored_rows else 0.0
+    form_scores: dict[str, list[float]] = {}
+    aspect_fails: Counter[str] = Counter()
+    for r in scored_rows:
+        fid = str(r.get("form_id") or "unknown")
+        form_scores.setdefault(fid, []).append(float(r["diagnostic_score"]))
+        if r.get("weakest_aspect"):
+            aspect_fails[str(r["weakest_aspect"])] += 1
+    avg_by_form = {k: round(sum(v) / len(v), 3) for k, v in sorted(form_scores.items())}
+    weakest_form = min(avg_by_form, key=lambda k: avg_by_form[k]) if avg_by_form else None
 
     if planted_caught < planted_total:
         top_rec = (
@@ -770,15 +928,23 @@ def summarize_bench_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
         top_rec = (
             f"Tighten '{worst_cat}' guidance in spoke/skill prompts (triggered {cnt}x across bench runs)."
         )
+    elif weakest_form and avg_by_form[weakest_form] < 0.85:
+        worst_asp = aspect_fails.most_common(1)[0][0] if aspect_fails else "writing_devices"
+        top_rec = (
+            f"Optimize '{weakest_form}' (avg={avg_by_form[weakest_form]:.3f}, weakest={worst_asp}) via adaptive bandit loop."
+        )
     else:
         top_rec = (
-            f"All {passed}/{len(active)} runs passed (planted canaries {planted_caught}/{planted_total}); "
+            f"All {passed}/{len(active)} runs passed (avg_form_score={avg_diag:.3f}, canaries {planted_caught}/{planted_total}); "
             f"slowest workload is '{slowest.get('project_id')}' ({float(slowest.get('total_ms', 0.0)):.1f}ms)."
         )
 
     return {
         "total_runs": len(active),
         "pass_rate": round(passed / len(active), 4),
+        "avg_form_score": avg_diag,
+        "avg_score_by_form": avg_by_form,
+        "weakest_form": weakest_form,
         "holdout_catch_count": holdout_catches,
         "planted_caught": planted_caught,
         "planted_total": planted_total,

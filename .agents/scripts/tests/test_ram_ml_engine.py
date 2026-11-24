@@ -261,3 +261,56 @@ def test_record_loop_outcome_and_advise_slice_strategy_escalates(tmp_path: Path)
     assert hot["enable_withheld_holdout"] is True
     assert hot["enable_counterexample_ratchet"] is True
     assert hot["recurring_error_hashes"] == ["err_refund_01"]
+
+
+def test_contextual_bandit_ucb1_and_diminishing_returns_frontier_rotation(tmp_path: Path) -> None:
+    state_file = tmp_path / "bandit_state.json"
+    arms = ("spoken_ear_counterpoint", "exemplar_parity_anchor", "decision_first_scaffold")
+
+    # Cold start pulls untried arms in order
+    c1 = ram_ml_engine.select_craft_arm(tmp_path, "av_script:cpl", arms, state_path=state_file)
+    assert c1["arm_id"] == "spoken_ear_counterpoint"
+    assert c1["pulls"] == 0
+    ram_ml_engine.update_craft_arm(tmp_path, "av_script:cpl", c1["arm_id"], 0.90, passed=True, target_key="proj-av", state_path=state_file)
+
+    c2 = ram_ml_engine.select_craft_arm(tmp_path, "av_script:cpl", arms, state_path=state_file)
+    assert c2["arm_id"] == "exemplar_parity_anchor"
+    ram_ml_engine.update_craft_arm(tmp_path, "av_script:cpl", c2["arm_id"], 0.45, passed=True, target_key="proj-av", state_path=state_file)
+
+    c3 = ram_ml_engine.select_craft_arm(tmp_path, "av_script:cpl", arms, state_path=state_file)
+    assert c3["arm_id"] == "decision_first_scaffold"
+    ram_ml_engine.update_craft_arm(tmp_path, "av_script:cpl", c3["arm_id"], 0.40, passed=True, target_key="proj-av", state_path=state_file)
+
+    # Now all arms tried: UCB1 must select spoken_ear_counterpoint (0.90 mean)
+    c4 = ram_ml_engine.select_craft_arm(tmp_path, "av_script:cpl", arms, state_path=state_file)
+    assert c4["arm_id"] == "spoken_ear_counterpoint"
+    assert c4["pulls"] == 1
+
+    # Diminishing returns detector: plateau below min_delta over 2 consecutive steps triggers rotation
+    improving = ram_ml_engine.assess_diminishing_returns([0.55, 0.72, 0.83], min_delta=0.03, window=2)
+    assert improving["saturated"] is False
+
+    plateau = ram_ml_engine.assess_diminishing_returns([0.75, 0.77, 0.78], min_delta=0.03, window=2)
+    assert plateau["saturated"] is True
+    assert "diminishing returns" in plateau["reason"]
+
+    # Frontier rotator skips saturated target and chooses unvisited or unsaturated target
+    state = ram_ml_engine.load_bandit_state(tmp_path, state_file)
+    state["trajectories"]["proj-brief"] = [0.70, 0.71, 0.72]  # saturated plateau
+    state["trajectories"]["proj-call-sheet"] = [0.60, 0.74]   # still improving
+    ram_ml_engine.save_bandit_state(tmp_path, state, state_file)
+
+    pick = ram_ml_engine.select_next_frontier_target(
+        tmp_path,
+        ["proj-brief", "proj-call-sheet", "proj-shot-list"],
+        state_path=state_file,
+    )
+    # Unvisited proj-shot-list goes first; if only brief + call-sheet, call-sheet wins
+    assert pick["selected_id"] == "proj-shot-list"
+    pick2 = ram_ml_engine.select_next_frontier_target(
+        tmp_path,
+        ["proj-brief", "proj-call-sheet"],
+        state_path=state_file,
+    )
+    assert pick2["selected_id"] == "proj-call-sheet"
+    assert pick2["all_saturated"] is False

@@ -1252,6 +1252,7 @@ def cmd_bench(
     bench_mode: str = "offline",
     rounds: int = 1,
     interval_min: float = 0.0,
+    adaptive: bool = False,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1261,7 +1262,7 @@ def cmd_bench(
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
     if action not in ("validate", "run", "report"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--interval-min M] [--project ID...] | report [<telemetry.jsonl>]}"
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--interval-min M] [--adaptive] [--project ID...] | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
 
@@ -1273,9 +1274,12 @@ def cmd_bench(
         else:
             print(
                 f"Crucible Bench Report: runs={summary['total_runs']} | pass_rate={summary['pass_rate']:.1%} | "
+                f"avg_form_score={summary.get('avg_form_score', 0.0):.3f} | "
                 f"planted_canaries={summary['planted_caught']}/{summary['planted_total']} | "
                 f"blind_holdout_catches={summary['holdout_catch_count']}"
             )
+            if summary.get("avg_score_by_form"):
+                print(f"  Form scores: {summary['avg_score_by_form']}")
             if summary["slowest_project"]:
                 print(f"  Slowest workload: {summary['slowest_project']} ({summary['slowest_ms']:.1f}ms)")
             if summary["recent_deliverables"]:
@@ -1313,6 +1317,7 @@ def cmd_bench(
         project_ids=project_ids,
         rounds=rounds,
         interval_sec=max(0.0, float(interval_min) * 60.0),
+        adaptive=adaptive,
     )
     if as_json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
@@ -1320,15 +1325,18 @@ def cmd_bench(
         status = "PASS" if res["ok"] else "BLOCKED"
         print(
             f"Crucible Workload Bench ({status}): run_id={res['run_id']} | mode={bench_mode} | "
-            f"passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
+            f"adaptive={adaptive} | passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
         )
         for r in res["receipts"]:
             if r["skipped"]:
                 continue
             tag = "PASS" if r["passed"] else f"FAIL({r['failure_category']})"
-            extra = f" -> {r['deliverable_path']}" if r["deliverable_path"] else (
-                f" [canaries {r['planted_caught']}/{r['planted_total']}]" if r["planted_total"] else ""
-            )
+            if r["planted_total"]:
+                extra = f" [canaries {r['planted_caught']}/{r['planted_total']}]"
+            else:
+                extra = f" [form={r['form_id']} score={r['diagnostic_score']:.2f} arm={r['craft_arm']} weak={r['weakest_aspect']}]"
+                if r["deliverable_path"]:
+                    extra += f" -> {r['deliverable_path']}"
             print(f"  [r{r['round_idx']}] {r['project_id']} ({r['mode']}): {tag} in {r['total_ms']:.1f}ms{extra}")
         if res["skipped_count"] > 0 and bench_mode == "offline":
             print("  Note: live 'agy_live' workloads skipped in offline mode (pass --mode all to run live agent jobs).")
@@ -1372,6 +1380,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", type=str, default="offline", choices=("offline", "all", "plumbing", "hybrid", "agy_live"), help="Execution mode for 'bench run' (default: offline).")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds to execute in 'bench run'.")
     parser.add_argument("--interval-min", type=float, default=0.0, help="Minutes between rounds in 'bench run'.")
+    parser.add_argument("--adaptive", action="store_true", help="Enable UCB1 bandit craft selection & diminishing-returns frontier rotation in 'bench run'.")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1401,6 +1410,7 @@ def main(argv: list[str] | None = None) -> int:
             bench_mode=args.mode,
             rounds=args.rounds,
             interval_min=args.interval_min,
+            adaptive=args.adaptive,
             project_ids=args.project,
             as_json=args.json,
         )

@@ -13,8 +13,11 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import math
+import os
 import re
 import subprocess
+import tempfile
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -1257,4 +1260,250 @@ def advise_slice_strategy(
         "prior_failures": prior_failures,
         "recurring_error_hashes": sorted(recurring_errors),
         "reason": reason,
+    }
+
+
+BANDIT_STATE_REL_PATH = ".agents/ml_bandit_state.json"
+
+CRAFT_INTERVENTION_INSTRUCTIONS: dict[str, str] = {
+    "decision_first_scaffold": (
+        "Open in lines 1-3 with the exact decision/recommendation requested, named decision owner, "
+        "and separate confirmed facts from [UNKNOWN — OWNER TO CONFIRM] holds."
+    ),
+    "spoken_ear_counterpoint": (
+        "Write an A/V beat table (`MM:SS-MM:SS | Audio | Video`) at <=150 WPM spoken cadence. "
+        "Strip print-prose clichés and ensure narration adds meaning rather than repeating what camera shows."
+    ),
+    "evidence_hold_custody": (
+        "Cite exact local file paths/dates for every factual claim, separate observed evidence from "
+        "proposed hypotheses, and list transfer limits and next testable checks."
+    ),
+    "crew_table_completeness": (
+        "Format operational windows/shots as scannable Markdown tables with explicit times/IDs, "
+        "priority tiers, minimum usable thresholds, and fallback/stop owners."
+    ),
+    "channel_native_split": (
+        "Give each channel (YouTube, Instagram, Newsletter) distinct native hook/format copy and separate "
+        "CH-04 internal handoff, unlisted preview, and public rollout gates."
+    ),
+    "exemplar_parity_anchor": (
+        "Match professional media-agency structural anatomy: concrete named moments, realistic asset/access "
+        "boundaries, and zero-reconstruction next steps for the receiving colleague."
+    ),
+}
+
+
+def load_bandit_state(root: Path, state_path: Path | None = None) -> dict[str, Any]:
+    """Load persisted contextual bandit + diminishing-returns trajectory state."""
+    p = state_path or (root / BANDIT_STATE_REL_PATH)
+    if not p.is_file():
+        return {"contexts": {}, "trajectories": {}}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            data.setdefault("contexts", {})
+            data.setdefault("trajectories", {})
+            return data
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {"contexts": {}, "trajectories": {}}
+
+
+def save_bandit_state(root: Path, state: dict[str, Any], state_path: Path | None = None) -> None:
+    """Atomically persist contextual bandit + trajectory state to JSON."""
+    p = state_path or (root / BANDIT_STATE_REL_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(state, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    fd, tmp_name = tempfile.mkstemp(prefix=".bandit_", dir=str(p.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+        os.replace(tmp_name, p)
+    except Exception:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
+
+
+def select_craft_arm(
+    root: Path,
+    context_key: str,
+    candidate_arms: list[str] | tuple[str, ...],
+    *,
+    state_path: Path | None = None,
+    exploration_c: float = 0.75,
+) -> dict[str, Any]:
+    """Select the next craft intervention arm for context_key using UCB1 over observed form scores."""
+    arms = [a for a in candidate_arms if a] or list(CRAFT_INTERVENTION_INSTRUCTIONS.keys())
+    state = load_bandit_state(root, state_path)
+    ctx_arms = state.get("contexts", {}).get(context_key, {})
+
+    total_pulls = sum(int((ctx_arms.get(a) or {}).get("pulls", 0)) for a in arms)
+    for arm in arms:
+        rec = ctx_arms.get(arm) or {}
+        if int(rec.get("pulls", 0)) == 0:
+            return {
+                "arm_id": arm,
+                "instruction": CRAFT_INTERVENTION_INSTRUCTIONS.get(arm, ""),
+                "ucb_score": float("inf"),
+                "mean_reward": 0.0,
+                "pulls": 0,
+                "reason": f"cold-start exploration of untried arm '{arm}'",
+            }
+
+    best_arm = arms[0]
+    best_ucb = -1.0
+    best_mean = 0.0
+    best_pulls = 0
+    for arm in arms:
+        rec = ctx_arms[arm]
+        pulls = int(rec.get("pulls", 1))
+        mean_r = float(rec.get("mean_reward", 0.0))
+        ucb = mean_r + exploration_c * math.sqrt(math.log(max(1, total_pulls)) / pulls)
+        if ucb > best_ucb:
+            best_ucb = ucb
+            best_arm = arm
+            best_mean = mean_r
+            best_pulls = pulls
+
+    return {
+        "arm_id": best_arm,
+        "instruction": CRAFT_INTERVENTION_INSTRUCTIONS.get(best_arm, ""),
+        "ucb_score": round(best_ucb, 4),
+        "mean_reward": round(best_mean, 4),
+        "pulls": best_pulls,
+        "reason": f"UCB1 selected '{best_arm}' (mean={best_mean:.3f}, pulls={best_pulls}, ucb={best_ucb:.3f})",
+    }
+
+
+def update_craft_arm(
+    root: Path,
+    context_key: str,
+    arm_id: str,
+    score: float,
+    *,
+    passed: bool = True,
+    target_key: str | None = None,
+    state_path: Path | None = None,
+) -> dict[str, Any]:
+    """Update UCB1 bandit arm statistics and score trajectory after observing a round result."""
+    state = load_bandit_state(root, state_path)
+    contexts = state.setdefault("contexts", {})
+    ctx_arms = contexts.setdefault(context_key, {})
+    rec = ctx_arms.setdefault(arm_id, {"pulls": 0, "sum_reward": 0.0, "mean_reward": 0.0, "last_score": 0.0})
+
+    clipped = max(0.0, min(1.0, float(score)))
+    effective_reward = clipped if passed else round(clipped * 0.5, 4)
+
+    rec["pulls"] = int(rec.get("pulls", 0)) + 1
+    rec["sum_reward"] = round(float(rec.get("sum_reward", 0.0)) + effective_reward, 4)
+    rec["mean_reward"] = round(rec["sum_reward"] / rec["pulls"], 4)
+    rec["last_score"] = round(clipped, 4)
+
+    traj_key = target_key or context_key
+    trajs = state.setdefault("trajectories", {})
+    hist = list(trajs.get(traj_key, []))
+    hist.append(round(clipped, 4))
+    trajs[traj_key] = hist[-25:]
+
+    save_bandit_state(root, state, state_path)
+    return {"context_key": context_key, "arm_id": arm_id, "arm_state": dict(rec), "trajectory": trajs[traj_key]}
+
+
+def assess_diminishing_returns(
+    score_history: list[float],
+    *,
+    min_delta: float = 0.03,
+    window: int = 2,
+    saturation_score: float = 0.92,
+) -> dict[str, Any]:
+    """Detect plateau / diminishing marginal gains on a continuous optimization trajectory."""
+    if not score_history:
+        return {"saturated": False, "reason": "no observations yet", "recent_delta": 0.0, "latest_score": 0.0}
+
+    latest = float(score_history[-1])
+    if latest >= saturation_score:
+        return {
+            "saturated": True,
+            "reason": f"reached saturation threshold ({latest:.3f} >= {saturation_score:.2f})",
+            "recent_delta": round(latest - float(score_history[-2]), 4) if len(score_history) >= 2 else latest,
+            "latest_score": latest,
+        }
+
+    if len(score_history) < window + 1:
+        delta = round(latest - float(score_history[-2]), 4) if len(score_history) >= 2 else latest
+        return {
+            "saturated": False,
+            "reason": f"insufficient window ({len(score_history)}/{window + 1} samples)",
+            "recent_delta": delta,
+            "latest_score": latest,
+        }
+
+    recent = score_history[-(window + 1) :]
+    deltas = [recent[i + 1] - recent[i] for i in range(window)]
+    max_recent_gain = max(deltas)
+    if max_recent_gain < min_delta:
+        return {
+            "saturated": True,
+            "reason": f"diminishing returns over last {window} rounds (max gain {max_recent_gain:.3f} < {min_delta:.2f})",
+            "recent_delta": round(deltas[-1], 4),
+            "latest_score": latest,
+        }
+
+    return {
+        "saturated": False,
+        "reason": f"still improving (latest={latest:.3f}, delta={deltas[-1]:+.3f})",
+        "recent_delta": round(deltas[-1], 4),
+        "latest_score": latest,
+    }
+
+
+def select_next_frontier_target(
+    root: Path,
+    candidate_ids: list[str],
+    *,
+    state_path: Path | None = None,
+    min_delta: float = 0.03,
+    saturation_score: float = 0.92,
+) -> dict[str, Any]:
+    """Pick the next highest-leverage unsaturated target, rotating away from saturated forms/aspects."""
+    if not candidate_ids:
+        return {"selected_id": None, "all_saturated": True, "frontier": []}
+
+    state = load_bandit_state(root, state_path)
+    trajs = state.get("trajectories", {})
+
+    frontier: list[dict[str, Any]] = []
+    unsaturated: list[dict[str, Any]] = []
+    for cid in candidate_ids:
+        hist = [float(x) for x in trajs.get(cid, [])]
+        dr = assess_diminishing_returns(hist, min_delta=min_delta, saturation_score=saturation_score)
+        entry = {
+            "id": cid,
+            "runs": len(hist),
+            "latest_score": dr["latest_score"],
+            "saturated": dr["saturated"],
+            "reason": dr["reason"],
+        }
+        frontier.append(entry)
+        if not dr["saturated"]:
+            unsaturated.append(entry)
+
+    if not unsaturated:
+        # All targets saturated: pick the lowest-scoring one for periodic regression verification
+        chosen = min(frontier, key=lambda e: (e["latest_score"], e["runs"]))
+        return {
+            "selected_id": chosen["id"],
+            "all_saturated": True,
+            "reason": f"all {len(frontier)} targets saturated; re-verifying lowest score ({chosen['id']})",
+            "frontier": frontier,
+        }
+
+    # Prioritize unvisited targets first, then lowest latest score still making gains
+    chosen = min(unsaturated, key=lambda e: (0 if e["runs"] == 0 else 1, e["latest_score"], e["runs"]))
+    return {
+        "selected_id": chosen["id"],
+        "all_saturated": False,
+        "reason": f"frontier focus -> '{chosen['id']}' ({chosen['reason']})",
+        "frontier": frontier,
     }
