@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
+import os
 import re
+import shlex
 import subprocess
 import time
 from collections import defaultdict, deque
@@ -30,12 +33,18 @@ class EffectTier(str, Enum):
     EXTERNAL_RELEASE = "EXTERNAL_RELEASE"
 
 
+OPERATOR_GRANTS_REL_PATH = Path(".agents") / "operator_grants.json"
+_FORBIDDEN_ISSUERS = frozenset({"", "model", "agent", "assistant", "llm", "subagent", "self", "auto"})
+
+
 @dataclass(frozen=True)
 class CapabilityToken:
     scope: str
     target_sha256: str
     issuer: str
     granted: bool = True
+    grant_id: str = ""
+
 
 
 @dataclass(frozen=True)
@@ -54,21 +63,71 @@ def authorize_effect(
     effect: EffectTier,
     target_path: Path | None = None,
     token: CapabilityToken | None = None,
+    *,
+    root: Path | None = None,
 ) -> tuple[bool, str]:
-    """Enforce capability-based security: destructive/external effects require SHA-256-bound token."""
+    """Enforce capability-based security: destructive/external effects require verified operator grant."""
     if effect in (EffectTier.READ, EffectTier.LOCAL_MUTATE):
         return True, f"{effect.value} permitted autonomously"
     if token is None or not token.granted:
         return False, f"DENIED: {effect.value} requires granted CapabilityToken"
-    if target_path is not None and target_path.is_file():
-        actual_hash = sha256_file(target_path)
-        if token.target_sha256 != actual_hash:
-            return (
-                False,
-                f"DENIED: stale CapabilityToken for {target_path.name} "
-                f"(token={token.target_sha256[:12]} != actual={actual_hash[:12]})",
-            )
-    return True, f"{effect.value} authorized by {token.issuer}"
+    if token.issuer.strip().lower() in _FORBIDDEN_ISSUERS:
+        return (
+            False,
+            f"DENIED: forbidden model/self issuer '{token.issuer}' cannot authorize {effect.value}",
+        )
+    if not token.grant_id.strip() or root is None:
+        return (
+            False,
+            f"DENIED: unbacked in-memory CapabilityToken; {effect.value} requires verified grant_id in .agents/operator_grants.json",
+        )
+
+    root_resolved = root.resolve()
+    grants_path = root_resolved / OPERATOR_GRANTS_REL_PATH
+    try:
+        data = json.loads(grants_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False, "DENIED: missing or invalid .agents/operator_grants.json"
+    if not isinstance(data, dict) or not isinstance(data.get("grants", []), list):
+        return False, "DENIED: missing or invalid .agents/operator_grants.json"
+
+    grant = next(
+        (g for g in data.get("grants", []) if isinstance(g, dict) and g.get("grant_id") == token.grant_id),
+        None,
+    )
+    if grant is None or grant.get("granted") is not True:
+        return (
+            False,
+            f"DENIED: grant_id '{token.grant_id}' not found or revoked in .agents/operator_grants.json",
+        )
+
+    grant_issuer = str(grant.get("issuer", ""))
+    if (
+        grant.get("effect") != effect.value
+        or grant.get("scope") != token.scope
+        or grant_issuer.strip().lower() in _FORBIDDEN_ISSUERS
+        or grant_issuer != token.issuer
+        or str(grant.get("target_sha256", "")).lower() != token.target_sha256.lower()
+    ):
+        return False, f"DENIED: grant record mismatch for '{token.grant_id}'"
+
+    if grant.get("target_path") and target_path is not None:
+        grant_target = (root_resolved / str(grant["target_path"])).resolve()
+        req_target = (root_resolved / target_path).resolve()
+        if grant_target != req_target:
+            return False, f"DENIED: grant record mismatch for '{token.grant_id}'"
+
+    if target_path is not None:
+        eff_target = target_path if target_path.is_absolute() else (root_resolved / target_path)
+        if eff_target.is_file():
+            actual_hash = sha256_file(eff_target)
+            if token.target_sha256.lower() != actual_hash.lower():
+                return (
+                    False,
+                    f"DENIED: stale CapabilityToken for {target_path.name} "
+                    f"(token={token.target_sha256[:12]} != actual={actual_hash[:12]})",
+                )
+    return True, f"{effect.value} authorized by verified operator grant {token.grant_id} ({token.issuer})"
 
 
 _YAML_DEP_RE = re.compile(r"^\s*-\s+(.+?)\s*$")
@@ -235,10 +294,44 @@ def evaluate_evoi(unknowns: list[Unknown]) -> dict[str, list[str]]:
 def step_lyapunov_potential(prev_v: int | None, cur_v: int) -> str:
     """Control-theory convergence verdict on scalar progress potential V(state)."""
     if cur_v == 0:
-        return "VERIFIED_DONE"
+        return "ZERO_HYGIENE_POTENTIAL"
     if prev_v is None or cur_v < prev_v:
         return "CONVERGING"
     return "HALT_OSCILLATION"
+
+
+_NON_INDEPENDENT_REVIEWERS = frozenset({"", "self", "author", "same-agent", "model-self"})
+
+
+def validate_review_receipt(root: Path, receipt: dict[str, Any] | None) -> tuple[bool, str]:
+    """Verify independent review receipt bound by SHA-256 hashes of reviewed files."""
+    if not isinstance(receipt, dict):
+        return False, "missing or invalid review_receipt"
+    if receipt.get("status") != "PASS":
+        return False, f"review_receipt status is '{receipt.get('status')}', expected 'PASS'"
+    reviewer = str(receipt.get("reviewer", "")).strip()
+    if reviewer.lower() in _NON_INDEPENDENT_REVIEWERS:
+        return False, f"non-independent or missing reviewer '{reviewer}'"
+    reviewed_sha256 = receipt.get("reviewed_sha256")
+    if not isinstance(reviewed_sha256, dict) or len(reviewed_sha256) == 0:
+        return False, "review_receipt missing non-empty reviewed_sha256"
+    root_resolved = root.resolve()
+    for rel_path, expected_sha in reviewed_sha256.items():
+        candidate = (root_resolved / str(rel_path)).resolve()
+        try:
+            candidate.relative_to(root_resolved)
+        except ValueError:
+            return False, f"reviewed path escapes root: {rel_path}"
+        if not candidate.is_file():
+            return False, f"reviewed file missing: {rel_path}"
+        actual_sha = sha256_file(candidate).lower()
+        if actual_sha != str(expected_sha).lower():
+            return (
+                False,
+                f"stale review_receipt for {rel_path} "
+                f"(expected={str(expected_sha)[:12]} != actual={actual_sha[:12]})",
+            )
+    return True, f"verified by {reviewer}"
 
 
 def _git_dirty_files(root: Path) -> list[str]:
@@ -298,6 +391,16 @@ def autofix_stale_sha256(root: Path) -> list[dict[str, str]]:
     return repaired
 
 
+def _split_verify_cmd(verify_cmd: str) -> list[str]:
+    parts = shlex.split(verify_cmd, posix=(os.name != "nt"))
+    if os.name == "nt":
+        return [
+            p[1:-1] if len(p) >= 2 and p[0] == p[-1] and p[0] in ('"', "'") else p
+            for p in parts
+        ]
+    return parts
+
+
 def run_kernel(
     root: Path,
     outcome: str = "",
@@ -307,6 +410,9 @@ def run_kernel(
     unknowns: list[Unknown] | None = None,
     prev_potential: int | None = None,
     autofix: bool = False,
+    verify_cmd: str = "",
+    review_receipt: dict[str, Any] | None = None,
+    consequential: bool = True,
 ) -> dict[str, Any]:
     """Execute one closed-loop kernel evaluation over DAG, capabilities, EVOI, CEGIS, and Lyapunov V(state)."""
     t0 = time.perf_counter()
@@ -321,7 +427,7 @@ def run_kernel(
 
     capability_denials: list[str] = []
     for eff, target_path, tok in requested_effects or []:
-        ok, msg = authorize_effect(eff, target_path, tok)
+        ok, msg = authorize_effect(eff, target_path, tok, root=root)
         if not ok:
             capability_denials.append(msg)
 
@@ -330,14 +436,55 @@ def run_kernel(
     potential_v = len(counterexamples) + len(capability_denials) + len(evoi["escalate_to_operator"])
     convergence = step_lyapunov_potential(prev_potential, potential_v)
 
+    verify_ran = False
+    verify_exit_code: int | None = None
+    verify_detail = ""
+    if potential_v == 0 and verify_cmd.strip():
+        verify_ran = True
+        try:
+            args = _split_verify_cmd(verify_cmd)
+            proc = subprocess.run(
+                args,
+                cwd=root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+                check=False,
+            )
+            verify_exit_code = proc.returncode
+            verify_detail = (proc.stdout or proc.stderr or "").strip()
+        except subprocess.TimeoutExpired:
+            verify_exit_code = 124
+            verify_detail = "verify_cmd timed out after 60s"
+        except (ValueError, OSError) as exc:
+            verify_exit_code = 127
+            verify_detail = f"verify_cmd execution failed: {exc}"
+
+    review_valid, review_detail = validate_review_receipt(root, review_receipt)
+    hygiene_ok = potential_v == 0
+    checks_passed = hygiene_ok and (not verify_ran or verify_exit_code == 0)
+    outcome_verified = bool(
+        hygiene_ok
+        and outcome.strip()
+        and verify_ran
+        and verify_exit_code == 0
+        and (review_valid if consequential else True)
+    )
+
     if capability_denials or evoi["escalate_to_operator"]:
         status = "OPERATOR_ESCALATION"
     elif convergence == "HALT_OSCILLATION":
         status = "HALT_OSCILLATION"
     elif counterexamples:
         status = "AUTONOMOUS_REPAIR"
+    elif verify_ran and verify_exit_code != 0:
+        status = "VERIFY_FAILED"
+    elif outcome_verified:
+        status = "OUTCOME_VERIFIED"
     else:
-        status = "VERIFIED_DONE"
+        status = "CHECKS_PASSED"
 
     return {
         "elapsed_ms": round((time.perf_counter() - t0) * 1000.0, 2),
@@ -345,6 +492,14 @@ def run_kernel(
         "status": status,
         "potential_v": potential_v,
         "convergence": convergence,
+        "hygiene_ok": hygiene_ok,
+        "checks_passed": checks_passed,
+        "outcome_verified": outcome_verified,
+        "verify_ran": verify_ran,
+        "verify_exit_code": verify_exit_code,
+        "verify_detail": verify_detail,
+        "review_valid": review_valid,
+        "review_detail": review_detail,
         "changed_files": changes,
         "dirty_closure": dirty_downstream,
         "autofixed": autofixed,
