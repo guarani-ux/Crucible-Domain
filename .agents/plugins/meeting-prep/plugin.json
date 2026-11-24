@@ -1,0 +1,7 @@
+{
+  "name": "meeting-prep",
+  "version": "0.1.0",
+  "description": "Walk-in meeting readiness, cold-start domain shield, Causal Objection DAG rehearsal, and 1-page cockpit MCP spoke (K-MCP-01).",
+  "mcp_config": "mcp_config.json",
+  "skills": ["skills/meeting-prep"]
+}

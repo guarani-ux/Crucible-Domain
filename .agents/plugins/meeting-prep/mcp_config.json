@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "meeting-prep": {
+      "command": "python",
+      "args": ["-m", "meeting_prep_spoke", "mcp"],
+      "cwd": "C:/crucible-spokes/meeting-prep",
+      "env": {
+        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain",
+        "CRUCIBLE_ALLOWED_ROOTS": "C:/crucible-domain;C:/crucible-spokes/meeting-prep"
+      }
+    }
+  }
+}
