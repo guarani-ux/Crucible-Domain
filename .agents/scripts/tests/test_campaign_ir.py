@@ -14,11 +14,13 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import concurrent.futures
+import hashlib
 import json
 
 from crucible.campaign_ir import (
     WORKER_RESULT_SCHEMA,
     CacheConflictError,
+    CampaignCheckpoint,
     CampaignCompileError,
     CampaignSpec,
     ErrorCircuitBreaker,
@@ -30,15 +32,18 @@ from crucible.campaign_ir import (
     append_ratchet_ledger,
     build_slice_worker_prompt,
     compile_campaign,
+    execute_slice_transaction,
     compute_slice_input_sha256,
     file_sha256,
     hash_error_output,
+    load_campaign_checkpoint,
     load_campaign_spec,
     load_ratchet_ledger,
     load_receipt_cache,
     merge_receipt_cache,
     optimize_campaign,
     save_receipt_cache,
+    save_campaign_checkpoint,
     save_receipt_cache_cas,
 )
 
@@ -731,3 +736,116 @@ def test_campaign_telemetry_emit_and_summarize(tmp_path: Path) -> None:
     assert summary["cache_hit_rate"] == 0.3333
     assert summary["slowest_slice"] == "s3"
     assert summary["failure_counts_by_error_sha256"] == {"deadbeef": 1}
+
+def test_execute_slice_transaction_rolls_back_on_verify_failure(tmp_path: Path) -> None:
+    target = tmp_path / "mod.py"
+    created = tmp_path / "created.py"
+    original_bytes = b"VALUE = 1\n"
+    target.write_bytes(original_bytes)
+
+    node = SliceNode(id="s-fail", target_paths=["mod.py", "created.py"], verify_cmd="pytest")
+    cp = CampaignCheckpoint(campaign_name="tx-rollback", max_rounds=4)
+
+    def apply_bad() -> None:
+        target.write_bytes(b"VALUE = 999\n")
+        created.write_bytes(b"NEW = True\n")
+
+    ok, detail = execute_slice_transaction(
+        tmp_path,
+        node,
+        apply_bad,
+        lambda: (False, "lint error"),
+        cp,
+    )
+    assert ok is False
+    assert detail == "ROLLED_BACK: lint error"
+    assert target.read_bytes() == original_bytes
+    assert not created.exists()
+    assert cp.rounds_used == 1
+    assert "s-fail" not in cp.completed_slices
+    assert cp.failed_slices["s-fail"] == hashlib.sha256(b"lint error").hexdigest()[:16]
+
+    def apply_crash() -> None:
+        target.write_bytes(b"BROKEN\n")
+        raise RuntimeError("boom")
+
+    ok2, detail2 = execute_slice_transaction(
+        tmp_path,
+        node,
+        apply_crash,
+        lambda: (True, "unreachable"),
+        cp,
+    )
+    assert ok2 is False
+    assert detail2 == "ROLLED_BACK: RuntimeError: boom"
+    assert target.read_bytes() == original_bytes
+    assert cp.rounds_used == 2
+    assert "s-fail" not in cp.completed_slices
+
+
+def test_execute_slice_transaction_halts_at_max_rounds(tmp_path: Path) -> None:
+    target = tmp_path / "bounded.py"
+    original_bytes = b"LOCKED = True\n"
+    target.write_bytes(original_bytes)
+
+    node = SliceNode(id="s-bound", target_paths=["bounded.py"])
+    cp = CampaignCheckpoint(campaign_name="bound-test", rounds_used=3, max_rounds=3)
+    called = False
+
+    def apply_should_not_run() -> None:
+        nonlocal called
+        called = True
+        target.write_bytes(b"MUTATED\n")
+
+    ok, detail = execute_slice_transaction(
+        tmp_path,
+        node,
+        apply_should_not_run,
+        lambda: (True, "ok"),
+        cp,
+    )
+    assert ok is False
+    assert "HALT_MAX_ROUNDS" in detail
+    assert called is False
+    assert target.read_bytes() == original_bytes
+    assert cp.rounds_used == 3
+    assert "s-bound" not in cp.completed_slices
+
+
+def test_campaign_checkpoint_roundtrip_and_corrupt_json(tmp_path: Path) -> None:
+    cp_path = tmp_path / "state" / "checkpoint.json"
+    assert load_campaign_checkpoint(cp_path) is None
+
+    target = tmp_path / "feature.py"
+    target.write_bytes(b"X = 1\n")
+    node = SliceNode(id="s1", target_paths=["feature.py"], verify_cmd="pytest")
+    cp = CampaignCheckpoint(
+        campaign_name="resume-campaign",
+        failed_slices={"s1": "prior_err_hash"},
+        rounds_used=0,
+        max_rounds=5,
+    )
+
+    def apply_good() -> None:
+        target.write_bytes(b"X = 2\n")
+
+    ok, detail = execute_slice_transaction(
+        tmp_path,
+        node,
+        apply_good,
+        lambda: (True, "verified"),
+        cp,
+    )
+    assert ok is True
+    assert detail == "verified"
+    assert cp.rounds_used == 1
+    assert "s1" not in cp.failed_slices
+    assert cp.completed_slices["s1"] == compute_slice_input_sha256(node, tmp_path)
+
+    save_campaign_checkpoint(cp_path, cp)
+    loaded = load_campaign_checkpoint(cp_path)
+    assert loaded == cp
+
+    cp_path.write_text("{corrupt json", encoding="utf-8")
+    with pytest.raises(ValueError, match="Corrupt campaign checkpoint"):
+        load_campaign_checkpoint(cp_path)

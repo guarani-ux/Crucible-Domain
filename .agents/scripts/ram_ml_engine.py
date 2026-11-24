@@ -11,6 +11,7 @@ Runs 100% locally in RAM (zero LLM API calls, zero persistent model files):
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import re
 import subprocess
@@ -23,9 +24,15 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.model_selection import StratifiedKFold
 
 
 def _git_changed_files(root: Path) -> tuple[list[str], str]:
@@ -516,49 +523,118 @@ def _load_history_stats(history_path: Path) -> tuple[Counter[str], Counter[str],
     return fails, totals, rows
 
 
-def fit_supervised_model(
-    hist_fails: Counter[str],
-    hist_totals: Counter[str],
-    hist_rows: list[dict[str, Any]],
-) -> tuple[LogisticRegression | None, str, float | None, dict[str, Any] | None]:
-    """Fit LogisticRegression in RAM and compute held-out StratifiedKFold precision/recall/F1."""
-    if len(hist_rows) < 10:
-        return None, "heuristic_bootstrap", None, None
-
-    X_train: list[list[float]] = []
-    y_train: list[int] = []
-    for r in hist_rows:
+def _featurize_rows(
+    rows: list[dict[str, Any]],
+    fails_counter: Counter[str],
+    totals_counter: Counter[str],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Featurize history rows using Laplace-smoothed historical failure rates."""
+    X_list: list[list[float]] = []
+    y_list: list[int] = []
+    for r in rows:
         tname = str(r.get("test_name") or "")
         cfiles = r.get("changed_files") or []
         c_stems = {Path(cf).stem for cf in cfiles}
         direct = 1.0 if any(Path(cf).name == tname for cf in cfiles) else 0.0
         stem_hit = 1.0 if any(s in tname for s in c_stems) else 0.0
-        f_rate = hist_fails[tname] / max(1, hist_totals[tname])
-        X_train.append([direct, stem_hit, f_rate, float(len(cfiles))])
-        y_train.append(1 if int(r.get("outcome", 1)) == 0 else 0)
+        f_rate = (fails_counter[tname] + 1.0) / (totals_counter[tname] + 2.0)
+        X_list.append([direct, stem_hit, f_rate, float(len(cfiles))])
+        y_list.append(1 if int(r.get("outcome", 1)) == 0 else 0)
+    return np.array(X_list, dtype=float), np.array(y_list, dtype=int)
 
-    if len(set(y_train)) != 2:
+
+def _compute_ece(y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 5) -> float:
+    """Compute n-bin Expected Calibration Error over [0.0, 1.0]."""
+    if len(y_true) == 0:
+        return 0.0
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+    n = float(len(y_true))
+    for i in range(n_bins):
+        lo, hi = bin_edges[i], bin_edges[i + 1]
+        if i == 0:
+            mask = (y_prob >= lo) & (y_prob <= hi)
+        else:
+            mask = (y_prob > lo) & (y_prob <= hi)
+        count = int(np.sum(mask))
+        if count > 0:
+            acc = float(np.mean(y_true[mask]))
+            conf = float(np.mean(y_prob[mask]))
+            ece += (count / n) * abs(acc - conf)
+    return round(float(ece), 4)
+
+
+def fit_supervised_model(
+    hist_fails: Counter[str],
+    hist_totals: Counter[str],
+    hist_rows: list[dict[str, Any]],
+) -> tuple[LogisticRegression | None, str, float | None, dict[str, Any] | None]:
+    """Fit LogisticRegression in RAM with leakage-free StratifiedKFold CV, provenance, and calibration."""
+    if len(hist_rows) < 10:
         return None, "heuristic_bootstrap", None, None
 
-    X_arr = np.array(X_train, dtype=float)
-    y_arr = np.array(y_train, dtype=int)
-    clf = LogisticRegression(max_iter=200, random_state=42)
-    clf.fit(X_arr, y_arr)
-    train_acc = round(float(clf.score(X_arr, y_arr)), 3)
+    y_arr = np.array([1 if int(r.get("outcome", 1)) == 0 else 0 for r in hist_rows], dtype=int)
+    if len(set(y_arr.tolist())) != 2:
+        return None, "heuristic_bootstrap", None, None
 
     held_out: dict[str, Any] | None = None
     min_class = min(int(np.sum(y_arr == 0)), int(np.sum(y_arr == 1)))
     if min_class >= 2:
         n_splits = min(5, min_class)
         cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
-        y_pred = cross_val_predict(LogisticRegression(max_iter=200, random_state=42), X_arr, y_arr, cv=cv)
+        oof_preds = np.zeros(len(hist_rows), dtype=int)
+        oof_probs = np.zeros(len(hist_rows), dtype=float)
+        for train_idx, val_idx in cv.split(np.zeros(len(hist_rows)), y_arr):
+            train_rows = [hist_rows[i] for i in train_idx]
+            val_rows = [hist_rows[i] for i in val_idx]
+            fold_fails: Counter[str] = Counter()
+            fold_totals: Counter[str] = Counter()
+            for r in train_rows:
+                tname = str(r.get("test_name") or "")
+                fold_totals[tname] += 1
+                if int(r.get("outcome", 1)) == 0:
+                    fold_fails[tname] += 1
+            X_tr, y_tr = _featurize_rows(train_rows, fold_fails, fold_totals)
+            X_val, _ = _featurize_rows(val_rows, fold_fails, fold_totals)
+            fold_clf = LogisticRegression(max_iter=200, random_state=42)
+            fold_clf.fit(X_tr, y_tr)
+            oof_preds[val_idx] = fold_clf.predict(X_val)
+            oof_probs[val_idx] = fold_clf.predict_proba(X_val)[:, 1]
+
+        brier_score = round(float(brier_score_loss(y_arr, oof_probs)), 4)
+        ece = _compute_ece(y_arr, oof_probs, n_bins=5)
+        average_precision = round(float(average_precision_score(y_arr, oof_probs)), 4)
+        baseline_ap = round(float(np.mean(y_arr)), 4)
+        ranking_lift_ap = round(average_precision - baseline_ap, 4)
+        dataset_sha256 = hashlib.sha256(
+            json.dumps(hist_rows, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
         held_out = {
             "folds": n_splits,
-            "accuracy": round(float(np.mean(y_pred == y_arr)), 3),
-            "precision": round(float(precision_score(y_arr, y_pred, zero_division=0)), 3),
-            "recall": round(float(recall_score(y_arr, y_pred, zero_division=0)), 3),
-            "f1": round(float(f1_score(y_arr, y_pred, zero_division=0)), 3),
+            "accuracy": round(float(np.mean(oof_preds == y_arr)), 3),
+            "precision": round(float(precision_score(y_arr, oof_preds, zero_division=0)), 3),
+            "recall": round(float(recall_score(y_arr, oof_preds, zero_division=0)), 3),
+            "f1": round(float(f1_score(y_arr, oof_preds, zero_division=0)), 3),
+            "brier_score": brier_score,
+            "ece": ece,
+            "average_precision": average_precision,
+            "baseline_ap": baseline_ap,
+            "ranking_lift_ap": ranking_lift_ap,
+            "provenance": {
+                "dataset_sha256": dataset_sha256,
+                "row_count": len(hist_rows),
+                "fail_count": int(np.sum(y_arr == 1)),
+                "pass_count": int(np.sum(y_arr == 0)),
+                "feature_schema": ["direct_match", "stem_hit", "laplace_fail_rate", "changed_file_count"],
+                "random_state": 42,
+                "leakage_free_cv": True,
+            },
         }
+
+    X_arr, y_full = _featurize_rows(hist_rows, hist_fails, hist_totals)
+    clf = LogisticRegression(max_iter=200, random_state=42)
+    clf.fit(X_arr, y_full)
+    train_acc = round(float(clf.score(X_arr, y_full)), 3)
     return clf, "supervised_logistic", train_acc, held_out
 
 
@@ -721,7 +797,7 @@ def rank_tests_for_changes(
             reasons.append(f"tfidf({sim:.2f})")
 
         # 5. Supervised historical failure probability (when trained)
-        fail_rate = hist_fails[t_name] / max(1, hist_totals[t_name])
+        fail_rate = (hist_fails[t_name] + 1.0) / (hist_totals[t_name] + 2.0)
         if clf is not None:
             stem_hit = 1.0 if (imp_hits or sym_hits or any(s in t_name for s in changed_stems)) else 0.0
             fail_prob = float(clf.predict_proba(np.array([[direct_mod, stem_hit, fail_rate, float(len(changes))]], dtype=float))[0][1])

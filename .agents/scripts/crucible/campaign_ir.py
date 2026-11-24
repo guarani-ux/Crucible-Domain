@@ -13,7 +13,7 @@ import tempfile
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 class CampaignCompileError(ValueError):
@@ -876,3 +876,145 @@ def summarize_telemetry(telemetry_path: Path | str) -> dict[str, Any]:
         "slowest_slice": slowest.get("slice_id"),
         "failure_counts_by_error_sha256": failures,
     }
+
+@dataclass
+class CampaignCheckpoint:
+    """Persistent checkpoint tracking completed/failed slices and bounded round count."""
+
+    campaign_name: str
+    completed_slices: dict[str, str] = field(default_factory=dict)
+    failed_slices: dict[str, str] = field(default_factory=dict)
+    rounds_used: int = 0
+    max_rounds: int = 12
+
+
+def save_campaign_checkpoint(path: Path | str, cp: CampaignCheckpoint) -> None:
+    """Atomically persist CampaignCheckpoint JSON via temp file in parent + os.replace."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "campaign_name": str(cp.campaign_name),
+        "completed_slices": {str(k): str(v) for k, v in sorted(cp.completed_slices.items())},
+        "failed_slices": {str(k): str(v) for k, v in sorted(cp.failed_slices.items())},
+        "rounds_used": int(cp.rounds_used),
+        "max_rounds": int(cp.max_rounds),
+    }
+    data = (json.dumps(payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(prefix=".cp_", dir=str(p.parent))
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp_name, p)
+    except Exception:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
+
+
+def load_campaign_checkpoint(path: Path | str) -> CampaignCheckpoint | None:
+    """Load CampaignCheckpoint JSON if present, returning None if absent or raising ValueError on corrupt JSON."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    try:
+        raw = p.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Corrupt campaign checkpoint JSON in '{p}': {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Corrupt campaign checkpoint in '{p}': expected JSON object")
+
+    required = ("campaign_name", "completed_slices", "failed_slices", "rounds_used", "max_rounds")
+    missing = [k for k in required if k not in data]
+    if missing:
+        raise ValueError(f"Corrupt campaign checkpoint in '{p}': missing keys {missing}")
+
+    campaign_name = data["campaign_name"]
+    completed = data["completed_slices"]
+    failed = data["failed_slices"]
+    rounds_used = data["rounds_used"]
+    max_rounds = data["max_rounds"]
+    if (
+        not isinstance(campaign_name, str)
+        or not isinstance(completed, dict)
+        or not isinstance(failed, dict)
+        or isinstance(rounds_used, bool)
+        or not isinstance(rounds_used, int)
+        or isinstance(max_rounds, bool)
+        or not isinstance(max_rounds, int)
+    ):
+        raise ValueError(f"Corrupt campaign checkpoint in '{p}': invalid field types")
+
+    return CampaignCheckpoint(
+        campaign_name=campaign_name,
+        completed_slices={str(k): str(v) for k, v in completed.items()},
+        failed_slices={str(k): str(v) for k, v in failed.items()},
+        rounds_used=rounds_used,
+        max_rounds=max_rounds,
+    )
+
+
+def _restore_slice_snapshots(snapshots: list[tuple[Path, bytes | None]]) -> None:
+    for path, prev_bytes in reversed(snapshots):
+        if prev_bytes is None:
+            if path.is_file() or path.is_symlink():
+                path.unlink()
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(prefix=".rb_", dir=str(path.parent))
+            try:
+                with os.fdopen(fd, "wb") as fh:
+                    fh.write(prev_bytes)
+                os.replace(tmp_name, path)
+            except Exception:
+                if os.path.exists(tmp_name):
+                    os.unlink(tmp_name)
+                raise
+
+
+def execute_slice_transaction(
+    repo_root: Path,
+    node: SliceNode,
+    apply_fn: Callable[[], None],
+    verify_fn: Callable[[], tuple[bool, str]],
+    checkpoint: CampaignCheckpoint,
+) -> tuple[bool, str]:
+    """Execute a slice atomically with RAM pre-image rollback and bounded max_rounds enforcement."""
+    if checkpoint.rounds_used >= checkpoint.max_rounds:
+        return (False, "HALT_MAX_ROUNDS: bounded execution limit reached")
+
+    root = Path(repo_root).resolve()
+    snapshots: list[tuple[Path, bytes | None]] = []
+    seen: set[Path] = set()
+    for raw_path in node.target_paths:
+        p = Path(raw_path)
+        resolved = p.resolve() if p.is_absolute() else (root / p).resolve()
+        if resolved != root and not resolved.is_relative_to(root):
+            raise ValueError(f"target_path '{raw_path}' escapes repo_root '{root}'")
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        snapshots.append((resolved, resolved.read_bytes() if resolved.is_file() else None))
+
+    ok = False
+    detail = ""
+    try:
+        apply_fn()
+        ok, detail = verify_fn()
+    except Exception as exc:
+        ok = False
+        detail = f"{type(exc).__name__}: {exc}"
+
+    if ok is True:
+        checkpoint.rounds_used += 1
+        checkpoint.completed_slices[node.id] = compute_slice_input_sha256(node, root)
+        checkpoint.failed_slices.pop(node.id, None)
+        return (True, detail)
+
+    _restore_slice_snapshots(snapshots)
+    checkpoint.rounds_used += 1
+    checkpoint.completed_slices.pop(node.id, None)
+    error_hash = hashlib.sha256(detail.encode("utf-8")).hexdigest()[:16]
+    checkpoint.failed_slices[node.id] = error_hash
+    return (False, f"ROLLED_BACK: {detail}")

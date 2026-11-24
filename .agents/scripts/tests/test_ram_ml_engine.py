@@ -167,3 +167,72 @@ def test_context_compiler_and_adaptive_commit_risk() -> None:
     assert high["tier"] == "HIGH"
     assert high["enforce_strict"] is True
     assert high["risk_prob"] >= 0.55
+
+
+def test_leakage_free_cv_provenance_calibration_and_lift() -> None:
+    from collections import Counter
+
+    # Negative leakage test: 1 unique test_name per row, 50% fail / 50% pass, identical changed_files=[]
+    # With full-dataset target leakage, f_rate would equal each row's own label (0.0 or 1.0) -> F1 == 1.0.
+    # With fold-isolated Laplace smoothing, unseen test_names in val folds receive 0.5 -> F1 < 0.9.
+    unique_rows = [
+        {"test_name": f"test_unique_{i}.py", "changed_files": [], "outcome": 0 if i % 2 == 0 else 1}
+        for i in range(20)
+    ]
+    u_fails = Counter({r["test_name"]: (1 if r["outcome"] == 0 else 0) for r in unique_rows})
+    u_totals = Counter({r["test_name"]: 1 for r in unique_rows})
+
+    clf, mode, train_acc, held_out = ram_ml_engine.fit_supervised_model(u_fails, u_totals, unique_rows)
+    assert clf is not None
+    assert mode == "supervised_logistic"
+    assert train_acc is not None
+    assert held_out is not None
+    assert held_out["f1"] < 0.9
+    prov = held_out["provenance"]
+    assert prov["leakage_free_cv"] is True
+    assert len(prov["dataset_sha256"]) == 64
+    assert all(ch in "0123456789abcdef" for ch in prov["dataset_sha256"])
+    assert prov["row_count"] == 20
+    assert prov["fail_count"] == 10
+    assert prov["pass_count"] == 10
+    assert prov["feature_schema"] == ["direct_match", "stem_hit", "laplace_fail_rate", "changed_file_count"]
+    assert prov["random_state"] == 42
+    assert 0.0 <= held_out["brier_score"] <= 1.0
+    assert 0.0 <= held_out["ece"] <= 1.0
+    assert 0.0 <= held_out["average_precision"] <= 1.0
+    assert held_out["baseline_ap"] == 0.5
+    assert held_out["ranking_lift_ap"] == round(held_out["average_precision"] - held_out["baseline_ap"], 4)
+
+    # Positive signal test: repeated test names + stem matches should produce positive ranking lift & good calibration
+    signal_rows = []
+    for i in range(24):
+        is_fail = i < 12
+        signal_rows.append(
+            {
+                "test_name": "test_core_gate.py" if is_fail else "test_readme_doc.py",
+                "changed_files": ["core_gate.py"] if is_fail else ["notes.md"],
+                "outcome": 0 if is_fail else 1,
+            }
+        )
+    s_fails: Counter[str] = Counter()
+    s_totals: Counter[str] = Counter()
+    for r in signal_rows:
+        s_totals[r["test_name"]] += 1
+        if r["outcome"] == 0:
+            s_fails[r["test_name"]] += 1
+
+    s_clf, s_mode, _, s_ho = ram_ml_engine.fit_supervised_model(s_fails, s_totals, signal_rows)
+    assert s_clf is not None
+    assert s_mode == "supervised_logistic"
+    assert s_ho is not None
+    assert s_ho["ranking_lift_ap"] > 0.0
+    assert s_ho["brier_score"] < 0.25
+
+    # Negative bootstrap guard: insufficient rows or single class must fall back cleanly
+    clf_small, mode_small, acc_small, ho_small = ram_ml_engine.fit_supervised_model(
+        Counter(), Counter(), unique_rows[:4]
+    )
+    assert clf_small is None
+    assert mode_small == "heuristic_bootstrap"
+    assert acc_small is None
+    assert ho_small is None
