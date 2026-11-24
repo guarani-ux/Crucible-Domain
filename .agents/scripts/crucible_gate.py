@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import py_compile
 import re
@@ -334,8 +335,44 @@ def _extract_frontmatter_depends_on(md_path: Path) -> list[str]:
     return deps
 
 
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _extract_frontmatter_depends_on_sha256(md_path: Path) -> dict[str, str]:
+    """Parse optional YAML frontmatter `depends_on_sha256:` mapping of rel_path -> sha256."""
+    text = md_path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+
+    hashes: dict[str, str] = {}
+    in_map = False
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if stripped.startswith("depends_on_sha256:"):
+            in_map = True
+            continue
+        if in_map:
+            if line.startswith((" ", "\t")) and ":" in stripped:
+                key, val = stripped.split(":", 1)
+                k = key.strip().strip("'\"")
+                v = val.strip().strip("'\"").lower()
+                if k and v:
+                    hashes[k] = v
+            elif stripped and not line.startswith((" ", "\t")):
+                in_map = False
+    return hashes
+
+
 def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> tuple[list[str], list[str]]:
-    """Check Markdown frontmatter depends_on targets for missing files (FAIL) and staleness (WARN / --strict FAIL)."""
+    """Check Markdown frontmatter depends_on / depends_on_sha256 targets for missing files (FAIL) and staleness (WARN / --strict FAIL)."""
     failures: list[str] = []
     warnings: list[str] = []
     root_resolved = root.resolve()
@@ -346,11 +383,13 @@ def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> 
             continue
         for md_path in sorted(folder.rglob("*.md")):
             deps = _extract_frontmatter_depends_on(md_path)
-            if not deps:
+            pinned_hashes = _extract_frontmatter_depends_on_sha256(md_path)
+            all_deps = list(dict.fromkeys([*deps, *pinned_hashes.keys()]))
+            if not all_deps:
                 continue
             rel_art = str(md_path.relative_to(root)).replace("\\", "/")
             art_mtime = md_path.stat().st_mtime
-            for dep in deps:
+            for dep in all_deps:
                 dep_path = (root / dep).resolve()
                 try:
                     dep_path.relative_to(root_resolved)
@@ -360,7 +399,15 @@ def _check_artifact_dependencies(root: Path = ROOT, *, strict: bool = False) -> 
                 if not dep_path.is_file():
                     failures.append(f"broken depends_on in {rel_art}: missing '{dep}'")
                     continue
-                if dep_path.stat().st_mtime > art_mtime:
+                if dep in pinned_hashes:
+                    actual_sha = _sha256_file(dep_path)
+                    if actual_sha != pinned_hashes[dep]:
+                        msg = f"stale artifact {rel_art} (content hash changed for '{dep}')"
+                        if strict:
+                            failures.append(msg)
+                        else:
+                            warnings.append(msg)
+                elif dep_path.stat().st_mtime > art_mtime:
                     msg = f"stale artifact {rel_art} (older than depends_on '{dep}')"
                     if strict:
                         failures.append(msg)

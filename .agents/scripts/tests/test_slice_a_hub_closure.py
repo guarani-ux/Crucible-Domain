@@ -145,3 +145,32 @@ def test_capability_precedence_tie_break() -> None:
     ordered_kinds = [m.entry.kind for m in matches]
     assert ordered_kinds == ["entry_doc", "procedure", "skill", "primitive", "knowledge"]
     assert CAPABILITY_PRECEDENCE["entry_doc"] < CAPABILITY_PRECEDENCE["procedure"] < CAPABILITY_PRECEDENCE["skill"]
+
+
+def test_content_hash_staleness_ignores_mtime_and_catches_mutation(tmp_path: Path) -> None:
+    (tmp_path / "Personal Work").mkdir(parents=True, exist_ok=True)
+    dep = tmp_path / "Personal Work" / "GROUND_TRUTH.md"
+    dep.write_text("# Ground Truth v1\n", encoding="utf-8")
+    v1_sha = crucible_gate._sha256_file(dep)
+
+    art = tmp_path / "Personal Work" / "hashed_brief.md"
+    art.write_text(
+        f"---\ndepends_on_sha256:\n  Personal Work/GROUND_TRUTH.md: {v1_sha}\n---\n# Hashed Brief\n",
+        encoding="utf-8",
+    )
+
+    # Good: dep mtime is newer, but content SHA-256 matches -> NOT stale
+    os.utime(art, (1_700_000_000, 1_700_000_000))
+    os.utime(dep, (1_700_000_500, 1_700_000_500))
+    f_ok, w_ok = crucible_gate._check_artifact_dependencies(tmp_path, strict=True)
+    assert f_ok == []
+    assert w_ok == []
+
+    # Changed/Bad: dep content mutates -> WARN under default, FAIL under --strict
+    dep.write_text("# Ground Truth v2\n", encoding="utf-8")
+    f_soft, w_soft = crucible_gate._check_artifact_dependencies(tmp_path, strict=False)
+    assert f_soft == []
+    assert len(w_soft) == 1 and "content hash changed" in w_soft[0]
+
+    f_strict, _ = crucible_gate._check_artifact_dependencies(tmp_path, strict=True)
+    assert len(f_strict) == 1 and "content hash changed" in f_strict[0]
