@@ -1,0 +1,10 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "writers-room",
+  "displayName": "The Writer's Room",
+  "version": "0.1.0",
+  "description": "Deterministic 3-tool MCP spoke connecting Crucible Domain ground truth and pinned craft excerpts to The Writer's Room authoring and verification engine.",
+  "suggestedPrompts": [
+    "Recognize a production request and prepare a Writer's Room packet from local ground truth."
+  ]
+}
