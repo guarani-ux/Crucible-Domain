@@ -191,3 +191,46 @@ def test_negative_multiple_simultaneous_constraints_reported() -> None:
     assert "overlapping target_paths" in joined
     assert "cross-domain" in joined
     assert "authority hold" in joined
+
+def test_bounded_verification_metadata_on_sat_and_unsat_reports() -> None:
+    sat_report = solve_wave_feasibility(
+        waves=[["s1", "s2"]],
+        target_paths_by_slice={"s1": ["Personal Work/a.py"], "s2": ["Personal Work/b.py"]},
+        domain_by_slice={"s1": "Personal Work", "s2": "Personal Work"},
+    )
+    assert sat_report.satisfiable is True
+    assert sat_report.verification_scope == "bounded_model_check"
+    assert sat_report.soundness_boundary == "finite_encoded_constraints_only"
+    assert sat_report.proves_unbounded_correctness is False
+
+    unsat_report = solve_wave_feasibility(
+        waves=[["s1", "s2"]],
+        target_paths_by_slice={"s1": ["Personal Work/shared.py"], "s2": ["Personal Work/shared.py"]},
+    )
+    assert unsat_report.satisfiable is False
+    assert unsat_report.conflicts != []
+    assert unsat_report.verification_scope == "bounded_model_check"
+    assert unsat_report.soundness_boundary == "finite_encoded_constraints_only"
+    assert unsat_report.proves_unbounded_correctness is False
+    if unsat_report.solver_backend == "z3":
+        assert unsat_report.unsat_core != []
+
+
+def test_negative_unsatisfiable_duplicate_slice_and_overstatement_rejection() -> None:
+    waves = [["s1", "s1"]]
+    target_paths = {"s1": ["Personal Work/only.py"]}
+
+    report = solve_wave_feasibility(waves=waves, target_paths_by_slice=target_paths)
+    assert report.satisfiable is False
+    assert any("duplicate slice" in c for c in report.conflicts)
+    assert report.verification_scope == "bounded_model_check"
+    assert report.proves_unbounded_correctness is False
+
+    with pytest.raises(ScheduleConstraintError) as exc_info:
+        assert_wave_feasibility(waves=waves, target_paths_by_slice=target_paths)
+    assert exc_info.value.verification_scope == "bounded_model_check"
+    assert exc_info.value.soundness_boundary == "finite_encoded_constraints_only"
+    assert exc_info.value.proves_unbounded_correctness is False
+
+    with pytest.raises(ValueError):
+        FeasibilityReport(satisfiable=True, proves_unbounded_correctness=True)
