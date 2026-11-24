@@ -1,7 +1,6 @@
-# Crucible Domain — Idea & Slice Ledger (`IDEAS.md`)
+# Crucible Domain — Idea & Slice Scratchpad (`IDEAS.md`)
 
-> Parsed automatically at `SessionStart` by `C:/Users/flowe/.gemini/config/scripts/operator_router.py` (`parse_ledger_summary`). Keep `Stage 4` at `WIP <= 1`.
-> **Harness Freeze (Active — 2026-11-23):** No new hooks, gates, scripts, or meta-tooling until **3 real deliverables** have been handed to actual human recipients and returned real feedback.
+> Optional passive scratchpad. Not enforced by `SessionStart`, `PreInvocation`, or `crucible_gate.py check`. Use `Orient -> Freeze -> Execute -> Verify` per-request instead of a global freeze.
 
 ## Stage 4: Active (WIP <= 1)
 (empty)

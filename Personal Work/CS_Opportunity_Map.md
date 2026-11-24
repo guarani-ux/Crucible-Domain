@@ -3,6 +3,8 @@ depends_on:
   - Personal Work/GROUND_TRUTH.md
   - Graphs/00_System_Atlas_and_Neon_Handoff.md
   - Knowledge/Knowledge_Register.md
+depends_on_sha256:
+  Graphs/00_System_Atlas_and_Neon_Handoff.md: cb1336aa0539a55e3444eead5b2bdf4bc1bcc09ef554b231cb935cf593c5e623
 ---
 
 # Crucible Domain — Computer Science & Engineering Architecture Manual

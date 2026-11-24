@@ -68,7 +68,7 @@ class TestCrucibleGate(unittest.TestCase):
             ss_data = json.loads(ss.stdout)
             msg = ss_data["injectSteps"][0]["systemMessage"]["systemMessage"]
             self.assertIn("SHIFTING_SAND:", msg)
-            self.assertIn("Active WIP: none", msg)
+            self.assertNotIn("Active WIP:", msg)
 
             cpl_dir = repo / "Calgary Public Library"
             cpl_dir.mkdir()

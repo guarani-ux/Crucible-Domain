@@ -75,7 +75,6 @@ def _extract_active_wip(ideas_path: Path) -> str:
 def _check_local_install_and_plugins(root: Path = ROOT) -> str:
     """Check core governance files and plugin manifests in local memory."""
     root_checks = [
-        ("IDEAS.md", root / "IDEAS.md"),
         ("AGENTS.md", root / "AGENTS.md"),
         ("acceptance.lock.json", root / ".agents" / "acceptance.lock.json"),
     ]
@@ -107,7 +106,6 @@ def _build_system_map(root: Path = ROOT) -> str:
     rc_head, head_out = _git_output(["log", "-n", "1", "--oneline"], root)
     git_head = head_out.strip() if rc_head == 0 and head_out.strip() else "unknown"
 
-    active_wip = _extract_active_wip(root / "IDEAS.md")
     install_status = _check_local_install_and_plugins(root)
 
     cap_line = 'Route: python ".agents/scripts/crucible_gate.py" route "<task or ID>" | Health: doctor'
@@ -137,7 +135,6 @@ def _build_system_map(root: Path = ROOT) -> str:
                 f"Project: {context_counts['Project']}"
             ),
             f"Git HEAD: {git_head} | Dirty: {dirty_count} | Sync locks: {lock_status}",
-            f"Active WIP: {active_wip}",
             install_status,
             cap_line,
             "SHIFTING_SAND: Check existing local ground truth first; if a domain folder is [EMPTY — INTAKE REQUIRED], synthesize GROUND_TRUTH.md from local sources with explicit [PROPOSED DEFAULT] / [UNKNOWN — OWNER TO CONFIRM] holds and push right instead of quizzing the operator on reversible defaults.",

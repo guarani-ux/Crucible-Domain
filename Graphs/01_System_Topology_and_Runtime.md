@@ -9,8 +9,8 @@
 ## 1. Three-Chain Hook Execution Model (Per-Turn Lifecycle)
 
 Every Antigravity turn inside `C:\crucible-domain` currently triggers **three separate hook configurations**:
-1. **Global Config (`~/.gemini/config/hooks.json`):** `operator_router.py` (`SessionStart`, `PreInvocation`) + `hook_v4.py` (`PreToolUse`, `PostToolUse`, `Stop`).
-2. **Workspace Gate (`.agents/hooks.json`):** `crucible_gate.py` (`SessionStart`, `PreToolUse`, `Stop`).
+1. **Global Config (`~/.gemini/config/hooks.json`):** `operator_router.py` (`SessionStart`, `PreInvocation`) + `sentinel.py` (`PreToolUse`, `PostToolUse`, `Stop`).
+2. **Workspace Gate (`.agents/hooks.json`):** `crucible_gate.py` (`SessionStart`, `PreToolUse`).
 3. **Workspace Plugin (`.agents/plugins/inner-gravity/hooks.json`):** `observe.py` (`SessionStart`, `Stop`).
 
 ```mermaid
@@ -23,14 +23,14 @@ sequenceDiagram
     participant IDX as crucible_index.py (RAM)
 
     AGY->>GLB: SessionStart -> operator_router.py
-    GLB-->>AGY: Inject IDEAS.md summary + Mode-Reframe modulator
+    GLB-->>AGY: Inject global constitution status
     AGY->>WSP: SessionStart -> crucible_gate.py session-start
     WSP->>IDX: build_index() (~32ms RAM)
-    WSP-->>AGY: Inject domain counts, git HEAD, WIP, SHIFTING_SAND
+    WSP-->>AGY: Inject domain counts, git HEAD, spokes, SHIFTING_SAND
     AGY->>IG: SessionStart -> observe.py session-start
 
     Note over AGY,WSP: Agent attempts write_file or edit_file
-    AGY->>GLB: PreToolUse -> hook_v4.py (PROTECTED_FILES / safety)
+    AGY->>GLB: PreToolUse -> sentinel.py (Orient-Before-Edit, 3-Strike, AST, RW-04)
     AGY->>WSP: PreToolUse -> crucible_gate.py pre-tool
     alt Target in empty CPL / Personal / Graphs without GROUND_TRUTH.md
         WSP-->>AGY: DENY (SHIFTING_SAND)
@@ -39,8 +39,7 @@ sequenceDiagram
     end
 
     Note over AGY,IG: Agent finishes turn
-    AGY->>GLB: Stop -> hook_v4.py
-    AGY->>WSP: Stop -> crucible_gate.py stop (contract + acceptance.lock)
+    AGY->>GLB: Stop -> sentinel.py (Verify-Before-Stop + acceptance.lock)
     AGY->>IG: Stop -> observe.py stop (receipt)
 ```
 

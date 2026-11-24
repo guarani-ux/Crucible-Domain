@@ -165,7 +165,7 @@
       "status": "WIRED_HERE",
       "sources": [
         ".agents/scripts/test_quality_gate.py",
-        "C:/Users/flowe/.gemini/config/scripts/hook_v4.py",
+        "C:/Users/flowe/.gemini/config/scripts/sentinel.py",
         "espada@6fade68:espada/deceptive.py",
         "espada@6fade68:espada/differential.py"
       ],
