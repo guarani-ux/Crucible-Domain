@@ -1,0 +1,9 @@
+{
+  "name": "crucible-observatory",
+  "version": "0.1.0",
+  "description": "Standalone offline research, repo-sieve, prior-art forging, and telemetry MCP spoke for Crucible Domain.",
+  "mcp_config": "mcp_config.json",
+  "skills": [
+    "skills/crucible-observatory"
+  ]
+}

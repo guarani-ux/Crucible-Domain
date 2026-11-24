@@ -6,7 +6,6 @@ import math
 import re
 from typing import Any
 
-from .ledger import capability_posterior_multiplier
 from .models import (
     CHATGPT_SKILL_BINDINGS,
     STOPWORDS,
@@ -74,7 +73,7 @@ def _score_entries(
         if score > 0 and entry.kind == "procedure" and len(hit_tokens) >= 2:
             score += 0.5
         if score >= min_score:
-            prior_mult = capability_posterior_multiplier(ledger, entry.id) if ledger is not None else 1.0
+            prior_mult = 1.0
             adj_score = score * prior_mult
             via = "tokens:" + ",".join(sorted(hit_tokens))
             if prior_mult != 1.0:

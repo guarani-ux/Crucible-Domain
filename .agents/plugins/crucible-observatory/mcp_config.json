@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "crucible-observatory": {
+      "command": "python",
+      "args": [
+        "-m",
+        "observatory",
+        "mcp"
+      ],
+      "cwd": "C:/crucible-spokes/crucible-observatory",
+      "env": {
+        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain"
+      }
+    }
+  }
+}
