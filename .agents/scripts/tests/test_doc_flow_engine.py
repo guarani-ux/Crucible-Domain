@@ -257,3 +257,25 @@ def test_lever_registry_pull_and_steering_packet(tmp_path: Path) -> None:
         pass
 
 
+def test_non_redundant_trial_loop_tracks_rubric_and_drr(tmp_path: Path) -> None:
+    import shutil
+    from crucible.lever_control import run_offline_trial_loop
+
+    bench_dir = tmp_path / ".agents" / "bench"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(ROOT / ".agents" / "bench" / "levers.yaml", bench_dir / "levers.yaml")
+    shutil.copy(ROOT / ".agents" / "bench" / "org_charter.yaml", bench_dir / "org_charter.yaml")
+
+    r1 = run_offline_trial_loop(tmp_path, rounds=3, batch_size=12, reset=True)
+    assert r1["ok"] is True
+    assert r1["total_trials_ever"] == sum(rr["trials"] for rr in r1["rounds"])
+    assert len(r1["rubric_adjustments_by_form"]) >= 1
+
+    # Running again without reset advances strictly to unseen trials (zero redundancy)
+    r2 = run_offline_trial_loop(tmp_path, rounds=10, batch_size=12, reset=False)
+    assert r2["ok"] is True
+    assert r2["total_trials_ever"] >= r1["total_trials_ever"]
+    assert r2["stopped_reason"] in ("diminishing_returns_reached", "rounds_completed", "frontier_exhausted")
+
+
+

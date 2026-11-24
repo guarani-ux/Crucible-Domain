@@ -29,7 +29,7 @@ def test_load_workload_manifest_rejects_invalid_and_accepts_starter() -> None:
     starter = HUB_ROOT / ".agents" / "bench" / "workloads.yaml"
     manifest = load_workload_manifest(starter)
     assert manifest.version == "1.0"
-    assert len(manifest.projects) == 11
+    assert len(manifest.projects) == 12
     covered_forms = {p.form for p in manifest.projects if p.form}
     assert set(FORM_PROFILES.keys()).issubset(covered_forms)
 
@@ -128,7 +128,9 @@ def test_agy_live_worker_retry_repairs_blind_holdout_without_leaking_secrets(tmp
         # Second attempt sees sanitized failure category (never the raw forbidden list) and fixes it
         return (
             True,
-            "## Patron Scenarios\nSee Calgary Public Library/GROUND_TRUTH.md under official 2027-2030 Collections and Expertise mandates.\n",
+            "## Observed Signal\nPer `Calgary Public Library/GROUND_TRUTH.md` (2026-11-24), patrons skip long intros.\n"
+            "## Patron Scenarios\nHypothesis: under official 2027-2030 Collections and Expertise mandates, a 3-second hook improves free reading-list clicks.\n"
+            "## Transfer Limits & Next Test\nLimit: branch cohorts differ. Next test: measure CTR baseline. [UNKNOWN — OWNER TO CONFIRM] Slot — Owner: Producer\n",
         )
 
     res = run_workload_bench(tmp_path, manifest, mode_filter="all", agy_worker_fn=fake_agy_worker)
@@ -165,7 +167,7 @@ def test_cli_bench_validate_run_offline_and_report_end_to_end(tmp_path: Path) ->
         check=False,
     )
     assert val_proc.returncode == 0, val_proc.stderr
-    assert json.loads(val_proc.stdout)["project_count"] == 11
+    assert json.loads(val_proc.stdout)["project_count"] == 12
 
     run_proc = subprocess.run(
         [
@@ -189,7 +191,7 @@ def test_cli_bench_validate_run_offline_and_report_end_to_end(tmp_path: Path) ->
     run_data = json.loads(run_proc.stdout)
     assert run_data["ok"] is True
     assert run_data["executed_count"] == 8  # 4 offline projects x 2 rounds
-    assert run_data["skipped_count"] == 14  # 7 agy_live projects x 2 rounds
+    assert run_data["skipped_count"] == 16  # 8 agy_live projects (all 8 forms) x 2 rounds
     assert len(run_data["deliverables"]) == 4
 
     rep_proc = subprocess.run(
@@ -440,8 +442,9 @@ def test_progress_streaming_emits_start_banner_heartbeat_and_element_breakdown(t
         _time.sleep(0.15)
         return (
             True,
-            "## Observed Signal\n2026-11-24 `Calgary Public Library/GROUND_TRUTH.md` 213-video audit.\n"
-            "## Hypothesis\nTest patron barrier; transfer limit and next check pending owner.\n",
+            "## Observed Signal\n2026-11-24 `Calgary Public Library/GROUND_TRUTH.md` 213-video audit shows patron drop-off.\n"
+            "## Hypothesis\nTest immediate patron action on YouTube under Experiences mandate; transfer limit noted; next test: measure baseline.\n"
+            "- [UNKNOWN — OWNER TO CONFIRM] Branch slot — Owner: Producer\n",
         )
 
     orig_hb = wb._run_with_heartbeat
@@ -507,12 +510,15 @@ def test_parallel_workers_trains_multiple_forms_concurrently_without_race(tmp_pa
         if "shot list" in prompt.lower():
             return (
                 True,
-                "## Shot List\n| ID / Setup | Priority | Minimum | Alternate |\n| --- | --- | --- | --- |\n"
-                "| P01 | Essential | Clean focus | Reframe |\n| H01 | Supporting | Wide | Hold |\n",
+                "## Shot List\n| ID / Setup | Framing | Priority | Minimum | Alternate |\n| --- | --- | --- | --- | --- |\n"
+                "| P01 | WS | Essential | Clean focus | Reframe |\n"
+                "| P02 | MS | Essential | Patron enters | Cutaway |\n"
+                "| H01 | CU | Supporting | Wide | Hold |\n",
             )
         return (
             True,
-            "## Premise & Story\nOpen on hands folding paper; visual frame stays tight; pending studio access.\n",
+            "## Premise & Story\nA builder crafts deterministic tools under deadline. Visual camera arc stays tight.\n"
+            "- [UNKNOWN — OWNER TO CONFIRM] Studio location release — Owner: Producer\n",
         )
 
     t0 = _time.perf_counter()

@@ -1250,6 +1250,7 @@ def cmd_bench(
     query: list[str] | str,
     *,
     bench_mode: str = "offline",
+    form_filter: str | None = None,
     rounds: int = 1,
     interval_min: float = 0.0,
     adaptive: bool = False,
@@ -1264,10 +1265,35 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | audit <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | audit <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "trial":
+        lc = _resolve_crucible_submodule("lever_control")
+        do_reset = len(parts) >= 2 and parts[1].lower() in ("reset", "--reset")
+        res = lc.run_offline_trial_loop(root, rounds=max(1, rounds), reset=do_reset)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"Crucible Non-Redundant Trial Loop ({res['stopped_reason'].upper()}): "
+                f"rounds={res['rounds_executed']} | DRR={res['drr']:.2%} (stop>={res['drr_threshold']:.0%}) | "
+                f"tested={res['total_trials_ever']}/{res['total_pool_size']} | "
+                f"unique_discoveries={res['total_unique_discoveries']} | remaining={res['remaining_frontier']} in {res['elapsed_ms']:.1f}ms"
+            )
+            for rr in res["rounds"]:
+                print(
+                    f"  [r{rr['round']:02d}] trials={rr['trials']:<2} new_discoveries={rr['new_discoveries']:<2} "
+                    f"yield={rr['novelty_yield']:.1%} DRR={rr['drr']:.1%} "
+                    f"(real_fails={rr['real_failures']}, ml_gaps={rr['ml_disagreements']}, survivors={rr['surviving_mutants']})"
+                )
+            if res.get("rubric_adjustments_by_form"):
+                print("  Rubric Adjustments by Document Type:")
+                for fid, adj in res["rubric_adjustments_by_form"].items():
+                    print(f"    - {fid:<18}: weakest_element={adj['weakest_rubric_element']:<22} | levers={adj['top_adjustment_levers']}")
+        return 0
 
     if action == "steer":
         lc = _resolve_crucible_submodule("lever_control")
@@ -1481,6 +1507,7 @@ def cmd_bench(
         root,
         manifest,
         mode_filter=bench_mode,
+        form_filter=form_filter,
         project_ids=project_ids,
         rounds=rounds,
         interval_sec=max(0.0, float(interval_min) * 60.0),
@@ -1558,6 +1585,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--until-exit", action="store_true", help="Run 'bench run' continuously until Ctrl+C or 'bench stop'.")
     parser.add_argument("--max-minutes", type=float, default=0.0, help="Optional safety time limit (minutes) for continuous 'bench run'.")
     parser.add_argument("--workers", type=int, default=None, help="Parallel live workers per round in 'bench run' (default: 3 for live modes, 1 for offline).")
+    parser.add_argument("--form", type=str, default=None, help="Filter 'bench run' to a single document type (e.g. production_brief, av_script, leadership_report).")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1585,6 +1613,7 @@ def main(argv: list[str] | None = None) -> int:
             root,
             args.query,
             bench_mode=args.mode,
+            form_filter=args.form,
             rounds=args.rounds,
             interval_min=args.interval_min,
             adaptive=args.adaptive,

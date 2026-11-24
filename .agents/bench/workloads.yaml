@@ -461,3 +461,69 @@ projects:
     - re-sequencing under hold
     tools:
     - Knowledge/Media Agency/Skills and Workflows/practice-exercises.md (Exercise 3)
+- id: cpl-production-brief-mastery
+  domain: cpl_research
+  mode: agy_live
+  form: production_brief
+  target_audience: Media Production Manager, Marketing & Engagement Director, Communications Director, and CEO
+  intent: 'Write a decision-first 1-page Production Brief for Calgary Public Library aligned with the official 2027-2030 Strategic Plan (Collections, Experiences, Expertise, Spaces, Technology) and patron service promises. Put the Decision Request in the top 3 lines, ground claims in Calgary Public Library/GROUND_TRUTH.md, include a Deliverables specs table, and assign a named accountable owner to every [UNKNOWN — OWNER TO CONFIRM] hold.
+
+    '
+  deliverable: cpl_production_brief.md
+  spokes:
+  - writers-room
+  - meeting-prep
+  public_checks:
+    max_words: 650
+    min_words: 80
+    required_sections:
+    - Decision
+    - Context
+    - Deliverables
+    - Open Holds
+    must_cite_local_files: true
+    min_form_score: 0.70
+  blind_holdouts:
+    require_official_cpl_mandate: true
+    forbid_terms_as_mandates:
+    - Grow
+    - Books & Reading
+    - Community
+    forbid_unverified_claims:
+    - approved for release
+    - Asana updated
+    - published live
+    failure_category: cpl_mandate_or_authority_violation
+  use_cases:
+  - id: ep01-preflight-brief
+    intent: 'Decision-first Production Brief requesting G02 pre-flight greenlight for PITCH-YCD Episode 1 (free VHS digitization for Calgary patrons) under official 2027-2030 Experiences and Technology mandates, with deliverables table and owner-assigned holds.'
+    target_audience: Media Production Manager, Marketing & Engagement Director, Communications Director, and CEO
+    skills:
+    - decision-first executive framing
+    - production scoping and deliverables specs
+    - 2027-2030 strategic mandate and service-promise alignment
+    - owner-assigned hold custody
+    tools:
+    - Calgary Public Library/GROUND_TRUTH.md
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-01)
+  - id: series-pilot-greenlight-brief
+    intent: 'Decision-first Production Brief requesting Phase 1 pilot approval for PITCH-NQ (The Next Question) under official 2027-2030 Collections and Expertise mandates, separating discoverability from retention and assigning named owners to all open holds.'
+    target_audience: Marketing & Engagement Director, Communications Director, and CEO
+    skills:
+    - portfolio tradeoff framing
+    - evidence-grounded scoping
+    - audience and immediate patron action clarity
+    - governance boundary custody
+    tools:
+    - Calgary Public Library/GROUND_TRUTH.md
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-01)
+  - id: branch-capture-scope-brief
+    intent: 'Decision-first Production Brief for a 2-hour Central Library studio capture under Spaces and Technology mandates: exact crew/equipment/runtime deliverables table, immediate patron booking CTA, and named owners for branch booking, talent releases, and G06 hold.'
+    target_audience: Media Production Manager, Marketing Manager, and Service Owner
+    skills:
+    - shootability and operational feasibility
+    - channel and patron-action alignment
+    - clearance and G02/G06 hold custody
+    tools:
+    - Calgary Public Library/GROUND_TRUTH.md
+    - Knowledge/Media Agency/Skills and Workflows/media-production.md (MP-01)

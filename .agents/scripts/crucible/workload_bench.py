@@ -517,6 +517,13 @@ def _build_agy_worker_prompt(
         f"Domain: {project.domain}",
         f"Document Domain: {profile.display_name} ({eff_form})",
         f"Target Audience & Receiver: {audience}",
+        "Executive & Organizational Buy-In Board (all 6 lenses evaluate this document):",
+        "  1. Media Production Manager: shootable specs, feasible timing/WPM (<=150 WPM, audio-video counterpoint), explicit clearance holds.",
+        "  2. Marketing Manager: clear target audience, immediate patron action/CTA, channel fit, never Vision 2040 as a single-video KPI.",
+        "  3. Communications Strategist: observed evidence before hypothesis, exact local file citations, zero corporate slop, transfer limits.",
+        "  4. Marketing & Engagement Director: bounded scope/resources, every hold assigned to a named owner, clean document flow.",
+        "  5. Communications Director: strict 2027-2030 mandate hygiene (Collections, Experiences, Expertise, Spaces, Technology — never label internal editorial lenses as official mandates; never cite prior 2023-2026 plan as active; zero unauthorized G06/Asana claims).",
+        "  6. CEO: Decision/Recommendation in the top 25% of the doc, 2027-2030 strategic plan + patron service-promise alignment, accountable owners.",
         "Mastery Elements for this Document Domain:",
         f"  - Style: {profile.style_spec}",
         f"  - Audience: {profile.audience_spec}",
@@ -532,8 +539,8 @@ def _build_agy_worker_prompt(
     if craft_instruction:
         lines.append(f"Selected Craft Priority: {craft_instruction}")
     if learned_rules:
-        lines.append("Accumulated Proven Craft Rules from Prior Rounds:")
-        for rule in learned_rules[:3]:
+        lines.append("Active Pulled Levers & Proven Craft Rules from Prior Rounds (MUST FOLLOW):")
+        for rule in learned_rules[:5]:
             lines.append(f"  * {rule}")
     if escalation_challenge:
         lines.append(escalation_challenge)
@@ -675,6 +682,7 @@ def run_workload_bench(
     manifest: WorkloadManifest,
     *,
     mode_filter: str = "all",
+    form_filter: str | None = None,
     project_ids: list[str] | None = None,
     rounds: int = 1,
     interval_sec: float = 0.0,
@@ -686,7 +694,7 @@ def run_workload_bench(
     agy_worker_fn: Callable[[str, Path, float], tuple[bool, str]] | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    """Execute YAML workloads for N rounds or --until-exit with parallel workers, --effort tiering, and ML mastery."""
+    """Execute YAML workloads for N rounds or --until-exit with 6-role board enforcement, auto-levers, and ML mastery."""
     if not until_exit and rounds < 1:
         raise ValueError("rounds must be >= 1 unless until_exit=True")
     if mode_filter not in ("all", "offline", "plumbing", "hybrid", "agy_live"):
@@ -701,8 +709,10 @@ def run_workload_bench(
     stop_file_path = (root / manifest.defaults.stop_file).resolve()
     worker = agy_worker_fn or _default_agy_worker
     selected_ids = set(project_ids) if project_ids else None
+    norm_form_filter = resolve_form_id(form_filter) if form_filter else None
     max_workers = max(1, int(workers))
     state_lock = threading.Lock()
+    quota_hit = threading.Event()
 
     all_receipts: list[ProjectRunReceipt] = []
     prior_diagnosis_by_proj: dict[str, str] = {}
@@ -720,6 +730,10 @@ def run_workload_bench(
 
     try:
         while until_exit or round_idx < rounds:
+            if quota_hit.is_set():
+                stopped_reason = "quota_exhausted"
+                _safe_progress("  [CIRCUIT BREAKER] Cloud quota exhausted (HTTP 429). Stopping cleanly instead of spinning.")
+                break
             if stop_file_path.is_file():
                 stopped_reason = "stop_file"
                 try:
@@ -743,6 +757,7 @@ def run_workload_bench(
                     for p in manifest.projects
                     if p.enabled
                     and (selected_ids is None or p.id in selected_ids)
+                    and (norm_form_filter is None or _infer_project_form(p) == norm_form_filter)
                     and p.mode != "plumbing"
                     and not (mode_filter == "offline" and p.mode == "agy_live")
                     and (mode_filter not in ("hybrid", "agy_live") or p.mode == mode_filter)
@@ -895,13 +910,22 @@ def run_workload_bench(
                             candidate_text = _synthesize_hybrid_deliverable(root, proj, telemetry_path)
                         else:
                             effort = "high" if (attempt > 0 or cur_level >= 3) else ("medium" if cur_level == 2 else "low")
+                            form_lever_rules: list[str] = []
+                            if learned_policies_path.is_file():
+                                try:
+                                    raw_pol = json.loads(learned_policies_path.read_text(encoding="utf-8", errors="replace"))
+                                    if isinstance(raw_pol, dict) and isinstance(raw_pol.get(form_id), dict):
+                                        form_lever_rules = [str(x) for x in raw_pol[form_id].get("rules", [])]
+                                except Exception:
+                                    pass
+                            merged_rules = list(dict.fromkeys(form_lever_rules + list(mastery_ctx.get("learned_rules", []))))
                             prompt = (
                                 _build_agy_worker_prompt(
                                     eff_proj,
                                     form_id=form_id,
                                     craft_instruction=arm_instruction,
                                     prior_diagnosis=persisted_diag,
-                                    learned_rules=list(mastery_ctx.get("learned_rules", [])),
+                                    learned_rules=merged_rules,
                                     escalation_challenge=escalation_txt,
                                     skills=uc_skills,
                                     tools=uc_tools,
@@ -921,6 +945,12 @@ def run_workload_bench(
                         if not ok_gen:
                             pub_ok = False
                             hold_ok = False
+                            low_err = candidate_text.lower()
+                            if "resource_exhausted" in low_err or "code 429" in low_err or "quota reached" in low_err:
+                                fail_cat = "quota_exhausted"
+                                err_detail = candidate_text
+                                quota_hit.set()
+                                break
                             fail_cat = "worker_execution_error"
                             err_detail = candidate_text
                             feedback_suffix = "\nPrevious attempt failed to produce output; emit valid Markdown only.\n"
@@ -938,12 +968,42 @@ def run_workload_bench(
                             repo_root=root,
                             strict_cpl_mandates=proj.domain.startswith("cpl"),
                         )
-                        diag_score = diag.overall_score
+                        diag_score = round(
+                            0.40 * diag.overall_score + 0.30 * diag.flow_score + 0.30 * diag.board_score,
+                            3,
+                        )
                         weakest_aspect = diag.weakest_aspect
                         weakest_element = diag.weakest_element
                         element_scores = dict(diag.element_scores or {})
-                        diagnosis = diag.diagnosis
+                        blocking_roles = list(diag.blocking_roles or [])
+                        rec_levers = list(diag.recommended_levers or [])
+                        diagnosis = (
+                            f"{diag.diagnosis} | flow={diag.flow_score:.2f} board={diag.board_score:.2f}"
+                            + (f" blocks={blocking_roles}" if blocking_roles else " blocks=[]")
+                        )
                         mastery_tip = diag.mastery_tip
+
+                        # Enforce 6-Role Executive Buy-In Board + Flow AST on live generated documents
+                        if pub_ok and hold_ok and proj.mode == "agy_live" and (blocking_roles or diag.flow_score < 0.85):
+                            pub_ok = False
+                            fail_cat = "stakeholder_board_blocked"
+                            err_detail = (
+                                f"6-Role Board blocked by {blocking_roles} "
+                                f"(flow={diag.flow_score:.2f}, board={diag.board_score:.2f}); levers={rec_levers[:3]}"
+                            )
+                            # Automatically pull the top recommended lever into learned policies for future drafts
+                            if rec_levers:
+                                try:
+                                    from .lever_control import load_lever_registry, pull_lever
+
+                                    with state_lock:
+                                        reg = load_lever_registry(root)
+                                        for lv in rec_levers[:2]:
+                                            if lv in reg:
+                                                pull_lever(root, lv, form_id=form_id, reason=f"auto_pull:{proj.id}:r{round_idx}")
+                                except Exception:
+                                    pass
+
                         if (
                             pub_ok
                             and hold_ok
@@ -958,7 +1018,10 @@ def run_workload_bench(
                         verify_ms += (time.perf_counter() - t_ver) * 1000.0
                         if pub_ok and hold_ok:
                             break
-                        feedback_suffix = f"\nRepair category required: {fail_cat} ({err_detail}; {diagnosis})\n"
+                        feedback_suffix = (
+                            f"\nMANDATORY REPAIR FOR NEXT DRAFT: {fail_cat} ({err_detail}). "
+                            f"Fix every blocking stakeholder role ({blocking_roles}) and apply levers {rec_levers[:3]} directly.\n"
+                        )
 
                     passed = bool(pub_ok and hold_ok)
                     frontier_saturated = False
@@ -1086,6 +1149,8 @@ def run_workload_bench(
                 if not proj.enabled:
                     continue
                 if selected_ids is not None and proj.id not in selected_ids:
+                    continue
+                if norm_form_filter is not None and (proj.mode == "plumbing" or _infer_project_form(proj) != norm_form_filter):
                     continue
                 if mode_filter == "offline" and proj.mode == "agy_live":
                     all_receipts.append(

@@ -14,6 +14,8 @@ Thumbs.db
 .agents/ml_learned_policies.json
 .agents/doc_ml_model.json
 .agents/bench_lever_log.jsonl
+.agents/bench_trial_state.json
+.agents/bench_trial_telemetry.jsonl
 .agents/bench.stop
 .agents/bench_runs/
 .agents/bench_telemetry.jsonl
