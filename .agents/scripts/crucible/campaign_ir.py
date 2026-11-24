@@ -35,6 +35,7 @@ class SliceNode:
     input_sha256: str = ""
     withheld_verify_cmd: str = ""
     withheld_failure_category: str = ""
+    verify_timeout_s: float = 120.0
 
 
 @dataclass
@@ -758,6 +759,7 @@ def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
             input_sha256 = item.get("input_sha256", "")
             withheld_verify_cmd = item.get("withheld_verify_cmd", "")
             withheld_failure_category = item.get("withheld_failure_category", "")
+            verify_timeout_s = item.get("verify_timeout_s", 120.0)
             if not isinstance(verify_cmd, str):
                 errors.append(f"slices[{idx}].verify_cmd must be a string")
                 verify_cmd = ""
@@ -770,6 +772,14 @@ def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
             if not isinstance(withheld_failure_category, str):
                 errors.append(f"slices[{idx}].withheld_failure_category must be a string")
                 withheld_failure_category = ""
+            if (
+                isinstance(verify_timeout_s, bool)
+                or not isinstance(verify_timeout_s, (int, float))
+                or not math.isfinite(float(verify_timeout_s))
+                or float(verify_timeout_s) <= 0
+            ):
+                errors.append(f"slices[{idx}].verify_timeout_s must be a positive number")
+                verify_timeout_s = 120.0
             slices.append(
                 SliceNode(
                     id=sid,
@@ -779,6 +789,7 @@ def load_campaign_spec(source: Path | str | dict[str, Any]) -> CampaignSpec:
                     input_sha256=input_sha256,
                     withheld_verify_cmd=withheld_verify_cmd,
                     withheld_failure_category=withheld_failure_category,
+                    verify_timeout_s=float(verify_timeout_s),
                 )
             )
 

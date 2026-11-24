@@ -212,18 +212,30 @@ def is_grounded_anchor(anchor: str, objective: str) -> bool:
     return bool(obj_words and clean_anchor in objective and len(anchor_words) >= min(2, len(obj_words)))
 
 
-def run_counterexample_probe(exec_root: Path, probe: CounterexampleProbe) -> tuple[bool, int, str]:
-    """Execute a single CounterexampleProbe in exec_root and compare exit code + stdout."""
-    proc = subprocess.run(
-        probe.command,
-        cwd=exec_root,
-        shell=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+DEFAULT_VERIFY_TIMEOUT_S = 120.0
+DEFAULT_PROBE_TIMEOUT_S = 30.0
+
+
+def run_counterexample_probe(
+    exec_root: Path,
+    probe: CounterexampleProbe,
+    timeout_s: float = DEFAULT_PROBE_TIMEOUT_S,
+) -> tuple[bool, int, str]:
+    """Execute a single CounterexampleProbe in exec_root with hard timeout and compare exit code + stdout."""
+    try:
+        proc = subprocess.run(
+            probe.command,
+            cwd=exec_root,
+            shell=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, -1, f"PROBE_TIMEOUT: exceeded {timeout_s}s"
     matched = proc.returncode == probe.expected_exit_code and proc.stdout.strip() == probe.expected_stdout.strip()
     return matched, proc.returncode, proc.stdout.strip()
 
@@ -776,23 +788,28 @@ def _compute_unified_diff(
 
 
 def _run_withheld_holdout(exec_root: Path, node: SliceNode) -> tuple[bool, str]:
-    """Run optional private withheld_verify_cmd without leaking private stdout/stderr on failure."""
+    """Run optional private withheld_verify_cmd with hard timeout without leaking private stdout/stderr on failure."""
     cmd = node.withheld_verify_cmd.strip()
     if not cmd:
         return True, ""
-    proc = subprocess.run(
-        cmd,
-        cwd=exec_root,
-        shell=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    timeout_s = float(getattr(node, "verify_timeout_s", DEFAULT_VERIFY_TIMEOUT_S) or DEFAULT_VERIFY_TIMEOUT_S)
+    category = node.withheld_failure_category.strip() or "private_holdout_mismatch"
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=exec_root,
+            shell=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"WITHHELD_HOLDOUT_FAILED: {category}"
     if proc.returncode == 0:
         return True, "withheld_holdout_ok"
-    category = node.withheld_failure_category.strip() or "private_holdout_mismatch"
     return False, f"WITHHELD_HOLDOUT_FAILED: {category}"
 
 
@@ -811,16 +828,21 @@ def _run_slice_verify(
         return True, str(detail)
 
     if node.verify_cmd.strip():
-        proc = subprocess.run(
-            node.verify_cmd,
-            cwd=exec_root,
-            shell=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
+        timeout_s = float(getattr(node, "verify_timeout_s", DEFAULT_VERIFY_TIMEOUT_S) or DEFAULT_VERIFY_TIMEOUT_S)
+        try:
+            proc = subprocess.run(
+                node.verify_cmd,
+                cwd=exec_root,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_s,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"VERIFY_TIMEOUT: exceeded {timeout_s}s"
         combined = "\n".join(part for part in (proc.stdout.strip(), proc.stderr.strip()) if part)
         if proc.returncode != 0:
             return False, (combined or f"exit_code={proc.returncode}")

@@ -29,6 +29,7 @@ from crucible.replay_loop import (
     is_grounded_anchor,
     replay_trace_file,
     run_autonomous_campaign,
+    run_counterexample_probe,
 )
 
 
@@ -531,3 +532,54 @@ def test_counterexample_ratchet_guards_grounding_duplicates_and_disagreement(tmp
     res_dup = ratchet.evaluate(tmp_path, objective, propose_fn=lambda: passing)
     assert res_dup.passed is False
     assert "REJECT_DUPLICATE_PROBE" in res_dup.reason
+
+
+def test_hard_subprocess_timeouts_roll_back_cleanly(tmp_path: Path) -> None:
+    target = tmp_path / "slow.py"
+    target.write_text("X = 0\n", encoding="utf-8")
+
+    sleep_cmd = f'"{sys.executable}" -c "import time; time.sleep(5)"'
+    node_pub = SliceNode(
+        id="s-timeout-pub",
+        target_paths=["slow.py"],
+        verify_cmd=sleep_cmd,
+        verify_timeout_s=0.3,
+    )
+    diff_pub = execute_replay_verified_slice(
+        tmp_path,
+        node_pub,
+        apply_fn=lambda root: (root / "slow.py").write_text("X = 1\n", encoding="utf-8"),
+    )
+    assert diff_pub.passed is False
+    assert diff_pub.rolled_back is True
+    assert "VERIFY_TIMEOUT" in diff_pub.error
+    assert target.read_text(encoding="utf-8") == "X = 0\n"
+
+    node_withheld = SliceNode(
+        id="s-timeout-withheld",
+        target_paths=["slow.py"],
+        verify_cmd=f'"{sys.executable}" -c "print(1)"',
+        withheld_verify_cmd=sleep_cmd,
+        withheld_failure_category="holdout_timeout",
+        verify_timeout_s=0.3,
+    )
+    diff_w = execute_replay_verified_slice(
+        tmp_path,
+        node_withheld,
+        apply_fn=lambda root: (root / "slow.py").write_text("X = 2\n", encoding="utf-8"),
+    )
+    assert diff_w.passed is False
+    assert diff_w.rolled_back is True
+    assert "WITHHELD_HOLDOUT_FAILED: holdout_timeout" in diff_w.error
+    assert target.read_text(encoding="utf-8") == "X = 0\n"
+
+    probe = CounterexampleProbe(
+        id="cx-slow",
+        anchor="must terminate quickly",
+        command=sleep_cmd,
+        expected_stdout="ok",
+    )
+    matched, rc, out = run_counterexample_probe(tmp_path, probe, timeout_s=0.3)
+    assert matched is False
+    assert rc == -1
+    assert "PROBE_TIMEOUT" in out
