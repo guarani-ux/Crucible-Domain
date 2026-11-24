@@ -19,17 +19,30 @@ class ScheduleConstraintError(ValueError):
 
     def __init__(self, conflicts: list[str]) -> None:
         self.conflicts = list(conflicts)
+        self.verification_scope = "bounded_model_check"
+        self.soundness_boundary = "finite_encoded_constraints_only"
+        self.proves_unbounded_correctness = False
         super().__init__("; ".join(self.conflicts))
 
 
 @dataclass(frozen=True)
 class FeasibilityReport:
-    """Result of SAT/SMT wave schedule feasibility checking."""
+    """Bounded SAT/SMT wave schedule feasibility result over finite encoded constraints."""
 
     satisfiable: bool
     conflicts: list[str] = field(default_factory=list)
     solver_backend: str = "z3"
     unsat_core: list[str] = field(default_factory=list)
+    verification_scope: str = "bounded_model_check"
+    soundness_boundary: str = "finite_encoded_constraints_only"
+    proves_unbounded_correctness: bool = False
+
+    def __post_init__(self) -> None:
+        if self.proves_unbounded_correctness:
+            raise ValueError(
+                "FeasibilityReport cannot claim proves_unbounded_correctness=True; "
+                "verification is bounded to finite encoded constraints."
+            )
 
 
 def _extract_slice_id(item: Any) -> str:
@@ -214,6 +227,9 @@ def solve_wave_feasibility(
         conflicts=conflicts,
         solver_backend=backend,
         unsat_core=unsat_core,
+        verification_scope="bounded_model_check",
+        soundness_boundary="finite_encoded_constraints_only",
+        proves_unbounded_correctness=False,
     )
 
 
