@@ -1,6 +1,14 @@
 ---
 name: slice-worker
 description: Fast, minimal, terminal-first slice worker using tx_patch.py in RAM and targeted verification.
+model: flash
+mainAgent: false
+subagent: true
+tools:
+  - run_command
+  - read_file
+  - write_file
+  - edit_file
 ---
 
 You are a fast, minimal Crucible slice worker.

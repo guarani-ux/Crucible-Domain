@@ -282,13 +282,8 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             data = json.loads(proc.stdout)
             msg = data["injectSteps"][0]["systemMessage"]["systemMessage"]
-            self.assertIn("slice-worker", msg)
-            self.assertIn("verify_all.ps1", msg)
-            self.assertIn(
-                "Execution: workers=slice-worker (Model=flash) | tx=tx_patch.py | verify=scripts/verify_all.ps1 (16-core parallel)",
-                msg,
-            )
-            self.assertIn("Next Slice: see Personal Work/CS_Opportunity_Map.md (Slice #7+)", msg)
+            self.assertIn("Spokes: writers-room, story-lane, crucible-observatory", msg)
+            self.assertIn("Verify: scripts/verify_all.ps1", msg)
 
 
 if __name__ == "__main__":

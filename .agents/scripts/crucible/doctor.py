@@ -131,11 +131,45 @@ def _audit_hooks(
                 counts["disabled"] += 1
                 continue
             for ev in ("SessionStart", "PreInvocation", "PostInvocation", "PreToolUse", "PostToolUse", "Stop"):
+                is_grouped = ev in ("PreToolUse", "PostToolUse")
                 for entry in hook_cfg.get(ev) or []:
+                    if not isinstance(entry, dict):
+                        counts["failed"] += 1
+                        findings.append(
+                            DiagnosticFinding(
+                                category="hooks",
+                                severity="FAIL",
+                                subject=f"{rel_hf}::{hook_name}.{ev}",
+                                detail=f"{ev} entry must be a JSON object, got {type(entry).__name__}",
+                            )
+                        )
+                        continue
+                    if is_grouped and "hooks" not in entry:
+                        counts["failed"] += 1
+                        findings.append(
+                            DiagnosticFinding(
+                                category="hooks",
+                                severity="FAIL",
+                                subject=f"{rel_hf}::{hook_name}.{ev}",
+                                detail=f"{ev} requires grouped {{matcher, hooks}} object, got flat handler",
+                            )
+                        )
+                        continue
+                    if not is_grouped and ("hooks" in entry or "matcher" in entry):
+                        counts["failed"] += 1
+                        findings.append(
+                            DiagnosticFinding(
+                                category="hooks",
+                                severity="FAIL",
+                                subject=f"{rel_hf}::{hook_name}.{ev}",
+                                detail=f"{ev} requires flat handler objects (no 'matcher'/'hooks' wrapper)",
+                            )
+                        )
+                        continue
                     cmds = (
                         [h.get("command", "") for h in entry.get("hooks", [])]
-                        if isinstance(entry, dict) and "hooks" in entry
-                        else [entry.get("command", "") if isinstance(entry, dict) else ""]
+                        if is_grouped
+                        else [entry.get("command", "")]
                     )
                     for cmd in cmds:
                         counts["checked"] += 1

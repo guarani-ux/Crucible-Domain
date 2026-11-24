@@ -151,8 +151,7 @@ def cmd_session_start(root: Path = ROOT) -> int:
     system_map = "\n".join(
         [
             _build_system_map(root),
-            "Execution: workers=slice-worker (Model=flash) | tx=tx_patch.py | verify=scripts/verify_all.ps1 (16-core parallel)",
-            "Next Slice: see Personal Work/CS_Opportunity_Map.md (Slice #7+)",
+            "Spokes: writers-room, story-lane, crucible-observatory | Verify: scripts/verify_all.ps1",
         ]
     )
     payload = {
