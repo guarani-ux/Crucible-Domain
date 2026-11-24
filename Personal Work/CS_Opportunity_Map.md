@@ -72,3 +72,13 @@ flowchart LR
    * Every real Hub→Spoke call gets logged as a replayable event. Whenever you upgrade `writers-room` or `story-lane`, you replay your real historical work log + 200 fuzzed edge cases automatically. The system gets **more reliable every time you use it**, not more fragile.
 3. **Zero-Trust Multi-Domain Execution (`Microkernel` + `Formal State Machines` + `Capability-Based Security`):**
    * You can safely run autonomous 12-round `crucible-loop` sessions across both `Personal Work/` and `Calgary Public Library/` because **illegal state transitions** (shipping unapproved cuts) and **cross-domain leaks** (CPL data touching Personal Work) are blocked mathematically at the spoke boundary.
+
+---
+
+## 4. Top 3 Ranked Vertical Slices (Leverage vs. Complexity)
+
+| Rank | Vertical Slice | CS Primitives Combined | Why Build It First | Bounded Scope (1 `crucible-loop`) |
+| :---: | :--- | :--- | :--- | :--- |
+| **#1** | **Content-Hash Staleness & Spoke Memoization** | `DAGs` + `Content-Addressable SHA-256 Caching` | Highest immediate leverage with minimal code (~60L). Eliminates false `mtime` staleness in `crucible_gate.py check --strict` and lets spokes return instant cached receipts when inputs haven't changed. | Add optional `depends_on_sha256` verification to `crucible_gate.py` + SHA-256 receipt cache to `storylane_spoke`. |
+| **#2** | **Capability-Scoped Spoke Sandbox** | `Microkernel IPC` + `Capability-Based Security` | Hardens the `Calgary Public Library/` vs. `Personal Work/` boundary at the process level so autonomous loops can never leak across domains. | Pass `CRUCIBLE_ALLOWED_ROOTS` via `mcp_config.json` and enforce path containment in `storylane_spoke` and `Universal_MCP_Spoke_Template.md`. |
+| **#3** | **Property-Based Fuzzing & Replay Harness** | `Property-Based Testing` + `Event Sourcing` | Turns every real Hub→Spoke session into a permanent regression suite and catches malformed JSON/timestamp/frontmatter edge cases automatically. | Add a stdlib randomized fuzzer test suite for `crucible_gate.py` + `storylane_spoke` and optional JSONL RPC replay fixture. |
