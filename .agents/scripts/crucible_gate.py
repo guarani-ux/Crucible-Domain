@@ -1245,6 +1245,97 @@ def cmd_g5_check(
     return 0 if res["passed"] else 1
 
 
+def cmd_bench(
+    root: Path,
+    query: list[str] | str,
+    *,
+    bench_mode: str = "offline",
+    rounds: int = 1,
+    interval_min: float = 0.0,
+    project_ids: list[str] | None = None,
+    as_json: bool = False,
+) -> int:
+    wb = _resolve_crucible_submodule("workload_bench")
+    parts = query.split() if isinstance(query, str) else list(query)
+    action = parts[0] if parts else "run"
+    default_yaml = root / ".agents" / "bench" / "workloads.yaml"
+
+    if action not in ("validate", "run", "report"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--interval-min M] [--project ID...] | report [<telemetry.jsonl>]}"
+        print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
+        return 2
+
+    if action == "report":
+        tel_path = _resolve_cli_path(root, parts[1]) if len(parts) >= 2 else (root / ".agents" / "bench_telemetry.jsonl")
+        summary = wb.summarize_bench_telemetry(tel_path)
+        if as_json:
+            print(json.dumps(summary, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"Crucible Bench Report: runs={summary['total_runs']} | pass_rate={summary['pass_rate']:.1%} | "
+                f"planted_canaries={summary['planted_caught']}/{summary['planted_total']} | "
+                f"blind_holdout_catches={summary['holdout_catch_count']}"
+            )
+            if summary["slowest_project"]:
+                print(f"  Slowest workload: {summary['slowest_project']} ({summary['slowest_ms']:.1f}ms)")
+            if summary["recent_deliverables"]:
+                print("  Ready deliverables:")
+                for d in summary["recent_deliverables"]:
+                    print(f"    - {d}")
+            print(f"  #1 Action: {summary['top_recommendation']}")
+        return 0
+
+    yaml_path = _resolve_cli_path(root, parts[1]) if len(parts) >= 2 else default_yaml
+    try:
+        manifest = wb.load_workload_manifest(yaml_path)
+    except wb.WorkloadSpecError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "errors": exc.errors}, indent=2, ensure_ascii=False))
+        else:
+            print(f"BENCH INVALID ({yaml_path}): {'; '.join(exc.errors)}", file=sys.stderr)
+        return 1
+
+    if action == "validate":
+        payload = {
+            "ok": True,
+            "manifest": str(yaml_path),
+            "version": manifest.version,
+            "project_count": len(manifest.projects),
+            "projects": [p.id for p in manifest.projects],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"BENCH VALID: {len(manifest.projects)} workloads in {yaml_path.name}")
+        return 0
+
+    res = wb.run_workload_bench(
+        root,
+        manifest,
+        mode_filter=bench_mode,
+        project_ids=project_ids,
+        rounds=rounds,
+        interval_sec=max(0.0, float(interval_min) * 60.0),
+    )
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    else:
+        status = "PASS" if res["ok"] else "BLOCKED"
+        print(
+            f"Crucible Workload Bench ({status}): run_id={res['run_id']} | mode={bench_mode} | "
+            f"passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
+        )
+        for r in res["receipts"]:
+            if r["skipped"]:
+                continue
+            tag = "PASS" if r["passed"] else f"FAIL({r['failure_category']})"
+            extra = f" -> {r['deliverable_path']}" if r["deliverable_path"] else (
+                f" [canaries {r['planted_caught']}/{r['planted_total']}]" if r["planted_total"] else ""
+            )
+            print(f"  [r{r['round_idx']}] {r['project_id']} ({r['mode']}): {tag} in {r['total_ms']:.1f}ms{extra}")
+        if res["skipped_count"] > 0 and bench_mode == "offline":
+            print("  Note: live 'agy_live' workloads skipped in offline mode (pass --mode all to run live agent jobs).")
+        print(f"  #1 Telemetry Insight: {res['telemetry_summary']['top_recommendation']}")
+    return 0 if res["ok"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -1255,7 +1346,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ast-scan", "discover", "story", "g5-check", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon", "kernel"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "bench", "ast-scan", "discover", "story", "g5-check", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon", "kernel"),
         help="Gate action to execute.",
     )
     parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route', action+target for 'campaign', or paths for 'ml-rank'/'ml-review'.")
@@ -1278,6 +1369,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target", type=int, default=10, help="Graduation target count for 'g5-check'.")
     parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
     parser.add_argument("--autofix", action="store_true", help="Auto-repair mechanical stale_sha256 hashes in 'kernel'.")
+    parser.add_argument("--mode", type=str, default="offline", choices=("offline", "all", "plumbing", "hybrid", "agy_live"), help="Execution mode for 'bench run' (default: offline).")
+    parser.add_argument("--rounds", type=int, default=1, help="Number of rounds to execute in 'bench run'.")
+    parser.add_argument("--interval-min", type=float, default=0.0, help="Minutes between rounds in 'bench run'.")
+    parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -1298,6 +1393,16 @@ def main(argv: list[str] | None = None) -> int:
             last=args.last,
             use_worktree=args.worktree,
             replay_out=args.replay_out,
+        )
+    if args.subcommand == "bench":
+        return cmd_bench(
+            root,
+            args.query,
+            bench_mode=args.mode,
+            rounds=args.rounds,
+            interval_min=args.interval_min,
+            project_ids=args.project,
+            as_json=args.json,
         )
     if args.subcommand == "ast-scan":
         return cmd_ast_scan(root, args.query, import_root=args.import_root, as_json=args.json)
