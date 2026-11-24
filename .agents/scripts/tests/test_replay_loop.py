@@ -16,7 +16,9 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from crucible.campaign_ir import (
     CampaignSpec,
+    RatchetEntry,
     SliceNode,
+    append_ratchet_ledger,
     compile_campaign,
     load_campaign_spec,
     load_ratchet_ledger,
@@ -24,6 +26,7 @@ from crucible.campaign_ir import (
 from crucible.replay_loop import (
     CounterexampleProbe,
     CounterexampleRatchet,
+    audit_campaign_chain,
     discover_gaps,
     execute_replay_verified_slice,
     is_grounded_anchor,
@@ -634,3 +637,114 @@ def test_run_autonomous_campaign_closed_ml_feedback_escalates_on_next_run(tmp_pa
     assert adv3["enable_withheld_holdout"] is True
     assert adv3["enable_counterexample_ratchet"] is True
     assert len(ml_hist.read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_audit_campaign_chain_replays_git_commits_and_catches_scope_or_sha_tamper(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
+
+    (repo / "a.py").write_text("VAL = 1\n", encoding="utf-8")
+    (repo / "b.py").write_text("OTHER = 1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+
+    # Commit 1: valid scoped edit to a.py
+    (repo / "a.py").write_text("VAL = 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.py"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "slice a"], cwd=repo, check=True, capture_output=True)
+    sha1 = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+    from crucible.replay_loop import _hash_target_state
+
+    after_sha1 = _hash_target_state(repo, ["a.py"])
+    spec = CampaignSpec(
+        name="audit-chain-test",
+        repo_root=str(repo),
+        slices=[
+            SliceNode(
+                id="s-a",
+                target_paths=["a.py"],
+                verify_cmd=f'"{sys.executable}" -c "import a; assert a.VAL == 2"',
+            )
+        ],
+    )
+    ledger = tmp_path / "results.tsv"
+    append_ratchet_ledger(
+        ledger,
+        RatchetEntry(
+            timestamp="2026-11-24T00:00:00Z",
+            campaign="audit-chain-test",
+            round_id=1,
+            slice_id="s-a",
+            status="KEEP",
+            seconds=0.5,
+            commit_sha=sha1,
+            after_sha256=after_sha1,
+        ),
+    )
+
+    clean = audit_campaign_chain(repo, spec, ledger_path=ledger)
+    assert clean["ok"] is True
+    assert clean["learning_eligible"] is True
+    assert clean["violations"] == []
+    assert len(clean["replayed_slices"]) == 1
+
+    # CLI check: crucible_gate.py campaign audit <spec.json> <ledger.tsv> --json
+    spec_file = tmp_path / "campaign.json"
+    spec_file.write_text(
+        json.dumps(
+            {
+                "name": "audit-chain-test",
+                "repo_root": str(repo),
+                "slices": [
+                    {
+                        "id": "s-a",
+                        "target_paths": ["a.py"],
+                        "verify_cmd": f'"{sys.executable}" -c "import a; assert a.VAL == 2"',
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    cli = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "campaign", "audit", str(spec_file), str(ledger), "--json"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert cli.returncode == 0, cli.stderr
+    cli_data = json.loads(cli.stdout)
+    assert cli_data["ok"] is True
+    assert cli_data["learning_eligible"] is True
+
+    # Negative control: commit touching out-of-scope file b.py must fail audit
+    (repo / "a.py").write_text("VAL = 2\n# ok\n", encoding="utf-8")
+    (repo / "b.py").write_text("OTHER = 999\n", encoding="utf-8")
+    subprocess.run(["git", "add", "a.py", "b.py"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "out of scope"], cwd=repo, check=True, capture_output=True)
+    sha2 = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+    bad_ledger = tmp_path / "bad_results.tsv"
+    append_ratchet_ledger(
+        bad_ledger,
+        RatchetEntry(
+            timestamp="2026-11-24T00:01:00Z",
+            campaign="audit-chain-test",
+            round_id=2,
+            slice_id="s-a",
+            status="KEEP",
+            seconds=0.5,
+            commit_sha=sha2,
+            after_sha256="0" * 64,
+        ),
+    )
+    failed = audit_campaign_chain(repo, spec, ledger_path=bad_ledger)
+    assert failed["ok"] is False
+    assert failed["learning_eligible"] is False
+    assert any("OUT_OF_SCOPE_FILE" in v for v in failed["violations"])
+    assert any("SHA_MISMATCH" in v for v in failed["violations"])

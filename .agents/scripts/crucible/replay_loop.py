@@ -35,6 +35,7 @@ from crucible.campaign_ir import (
     compute_slice_input_sha256,
     execute_slice_transaction,
     load_campaign_checkpoint,
+    load_ratchet_ledger,
     optimize_campaign,
     save_campaign_checkpoint,
 )
@@ -1483,4 +1484,140 @@ def replay_trace_file(
         "total": len(events),
         "mismatches": mismatches,
         "events": [e.to_dict() for e in events],
+    }
+
+
+def _git_output(root: Path, *args: str) -> tuple[int, str]:
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return proc.returncode, proc.stdout.strip()
+
+
+def audit_campaign_chain(
+    repo_root: Path,
+    spec: CampaignSpec,
+    ledger_path: Path | None = None,
+) -> dict[str, Any]:
+    """Zero-token offline Git chain replay audit verifying scope, digests, and cumulative retention."""
+    root = Path(repo_root).resolve()
+    ordered = compile_campaign(spec)
+    by_id = {n.id: n for n in ordered}
+    violations: list[str] = []
+    replayed_slices: list[dict[str, Any]] = []
+    has_git = (root / ".git").exists()
+
+    if ledger_path is not None:
+        entries = load_ratchet_ledger(ledger_path)
+        keep_entries = [e for e in entries if e.status == "KEEP"]
+        for entry in keep_entries:
+            node = by_id.get(entry.slice_id)
+            if node is None:
+                violations.append(f"UNKNOWN_SLICE: ledger entry '{entry.slice_id}' not in campaign spec")
+                continue
+
+            allowed_rel = {rel for rel, _ in _resolve_slice_targets(root, node.target_paths)}
+            commit_sha = entry.commit_sha.strip()
+            scope_ok = True
+            sha_ok = True
+            verify_ok = False
+            detail = ""
+
+            if has_git and commit_sha:
+                rc_rev, resolved_oid = _git_output(root, "rev-parse", "--verify", f"{commit_sha}^{{commit}}")
+                if rc_rev != 0 or not resolved_oid:
+                    violations.append(f"MISSING_COMMIT: slice '{node.id}' commit '{commit_sha}' not found")
+                    replayed_slices.append(
+                        {
+                            "slice_id": node.id,
+                            "commit_sha": commit_sha,
+                            "scope_ok": False,
+                            "sha_ok": False,
+                            "verify_ok": False,
+                            "detail": "commit not found",
+                        }
+                    )
+                    continue
+
+                rc_diff, diff_out = _git_output(
+                    root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", resolved_oid
+                )
+                touched = {line.strip().replace("\\", "/") for line in diff_out.splitlines() if line.strip()}
+                out_of_scope = sorted(touched - allowed_rel)
+                if rc_diff != 0 or out_of_scope:
+                    scope_ok = False
+                    violations.append(
+                        f"OUT_OF_SCOPE_FILE: slice '{node.id}' commit {commit_sha} touched {out_of_scope}"
+                    )
+
+                wt_parent = Path(tempfile.mkdtemp(prefix="crucible_audit_wt_"))
+                wt_dir = wt_parent / "wt"
+                try:
+                    rc_add, add_out = _git_output(root, "worktree", "add", "--detach", str(wt_dir), resolved_oid)
+                    if rc_add != 0:
+                        violations.append(f"WORKTREE_FAILED: slice '{node.id}' ({add_out})")
+                        detail = f"worktree add failed: {add_out}"
+                    else:
+                        if entry.after_sha256:
+                            actual_sha = _hash_target_state(wt_dir, sorted(allowed_rel))
+                            if actual_sha != entry.after_sha256:
+                                sha_ok = False
+                                violations.append(
+                                    f"SHA_MISMATCH: slice '{node.id}' commit {commit_sha} "
+                                    f"expected {entry.after_sha256}, observed {actual_sha}"
+                                )
+                        verify_ok, detail = _run_slice_verify(wt_dir, node, None)
+                        if not verify_ok:
+                            violations.append(
+                                f"REPLAY_VERIFY_FAILED: slice '{node.id}' commit {commit_sha}: {detail}"
+                            )
+                finally:
+                    _git_output(root, "worktree", "remove", "--force", str(wt_dir))
+                    shutil.rmtree(wt_parent, ignore_errors=True)
+            else:
+                if entry.after_sha256:
+                    actual_sha = _hash_target_state(root, sorted(allowed_rel))
+                    if actual_sha != entry.after_sha256:
+                        sha_ok = False
+                        violations.append(
+                            f"SHA_MISMATCH: slice '{node.id}' expected {entry.after_sha256}, observed {actual_sha}"
+                        )
+                verify_ok, detail = _run_slice_verify(root, node, None)
+                if not verify_ok:
+                    violations.append(f"REPLAY_VERIFY_FAILED: slice '{node.id}': {detail}")
+
+            replayed_slices.append(
+                {
+                    "slice_id": node.id,
+                    "commit_sha": commit_sha,
+                    "scope_ok": scope_ok,
+                    "sha_ok": sha_ok,
+                    "verify_ok": verify_ok,
+                    "detail": detail,
+                }
+            )
+
+    # Cumulative retention check on current repo_root: every slice in spec must still pass
+    retention: list[dict[str, Any]] = []
+    for node in ordered:
+        r_ok, r_detail = _run_slice_verify(root, node, None)
+        if not r_ok:
+            violations.append(f"RETENTION_REGRESSION: slice '{node.id}' failed on current tree: {r_detail}")
+        retention.append({"slice_id": node.id, "passed": r_ok, "detail": r_detail})
+
+    passed = len(violations) == 0
+    return {
+        "campaign": spec.name,
+        "repo_root": str(root),
+        "ok": passed,
+        "learning_eligible": passed,
+        "replayed_slices": replayed_slices,
+        "retention": retention,
+        "violations": violations,
     }

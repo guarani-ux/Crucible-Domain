@@ -905,6 +905,40 @@ def _campaign_ledger(cir, target_path: Path, last: int, as_json: bool) -> int:
     return 0
 
 
+def _campaign_audit(
+    cir,
+    root: Path,
+    spec_path: Path,
+    ledger_path: Path | None,
+    as_json: bool,
+) -> int:
+    try:
+        spec = cir.load_campaign_spec(spec_path)
+    except (OSError, cir.CampaignCompileError) as exc:
+        errs = exc.errors if isinstance(exc, cir.CampaignCompileError) else [str(exc)]
+        return _emit_campaign_errors(errs, "audit", as_json)
+
+    rl = _resolve_crucible_submodule("replay_loop")
+    try:
+        res = rl.audit_campaign_chain(Path(spec.repo_root), spec, ledger_path=ledger_path)
+    except (OSError, ValueError, cir.CampaignCompileError) as exc:
+        errs = exc.errors if isinstance(exc, cir.CampaignCompileError) else [str(exc)]
+        return _emit_campaign_errors(errs, "audit", as_json)
+
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    else:
+        status = "PASS" if res["ok"] else "BLOCKED"
+        print(
+            f"CAMPAIGN AUDIT ({status}): {res['campaign']} | replayed={len(res['replayed_slices'])} | "
+            f"retention={sum(1 for r in res['retention'] if r['passed'])}/{len(res['retention'])} | "
+            f"learning_eligible={res['learning_eligible']} | violations={len(res['violations'])}"
+        )
+        for v in res["violations"]:
+            print(f"  - {v}")
+    return 0 if res["ok"] else 1
+
+
 def cmd_campaign(
     root: Path,
     query: list[str] | str,
@@ -919,9 +953,21 @@ def cmd_campaign(
     usage_msg = (
         "usage: crucible_gate.py campaign "
         "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | "
-        "run <spec.json> [--cache <checkpoint.json>] [--worktree] [--replay-out <trace.jsonl>] | ledger <ledger.tsv> [--last N]}"
+        "run <spec.json> [--cache <checkpoint.json>] [--worktree] [--replay-out <trace.jsonl>] | "
+        "audit <spec.json> [<ledger.tsv>] | ledger <ledger.tsv> [--last N]}"
     )
-    if len(parts) != 2 or parts[0] not in ("compile", "plan", "run", "ledger"):
+    if not parts or parts[0] not in ("compile", "plan", "run", "audit", "ledger"):
+        print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
+        return 2
+    if parts[0] == "audit":
+        if len(parts) not in (2, 3):
+            print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
+            return 2
+        cir = _resolve_campaign_ir_module()
+        spec_path = _resolve_cli_path(root, parts[1])
+        ledger_path = _resolve_cli_path(root, parts[2]) if len(parts) == 3 else None
+        return _campaign_audit(cir, root, spec_path, ledger_path, as_json)
+    if len(parts) != 2:
         print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
         return 2
 
