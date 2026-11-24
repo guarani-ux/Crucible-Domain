@@ -1422,11 +1422,11 @@ def assess_diminishing_returns(
         return {"saturated": False, "reason": "no observations yet", "recent_delta": 0.0, "latest_score": 0.0}
 
     latest = float(score_history[-1])
-    if latest >= saturation_score:
+    if len(score_history) >= 2 and min(float(score_history[-2]), latest) >= saturation_score:
         return {
             "saturated": True,
-            "reason": f"reached saturation threshold ({latest:.3f} >= {saturation_score:.2f})",
-            "recent_delta": round(latest - float(score_history[-2]), 4) if len(score_history) >= 2 else latest,
+            "reason": f"reached saturation threshold for 2 rounds ({latest:.3f} >= {saturation_score:.2f})",
+            "recent_delta": round(latest - float(score_history[-2]), 4),
             "latest_score": latest,
         }
 
@@ -1506,4 +1506,132 @@ def select_next_frontier_target(
         "all_saturated": False,
         "reason": f"frontier focus -> '{chosen['id']}' ({chosen['reason']})",
         "frontier": frontier,
+    }
+
+
+LEARNED_POLICIES_REL_PATH = ".agents/ml_learned_policies.json"
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    fd, tmp_name = tempfile.mkstemp(prefix=".mlpol_", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(payload)
+        os.replace(tmp_name, path)
+    except Exception:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
+
+
+def load_learned_policies(root: Path, policy_path: Path | None = None) -> dict[str, Any]:
+    """Load persistent cross-session learned rules, difficulty levels, and 5-element mastery per form/target."""
+    p = policy_path or (root / LEARNED_POLICIES_REL_PATH)
+    if p.is_file():
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                raw.setdefault("targets", {})
+                raw.setdefault("forms", {})
+                return raw
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {"targets": {}, "forms": {}}
+
+
+def get_domain_mastery_context(
+    root: Path,
+    target_key: str,
+    form_id: str,
+    *,
+    policy_path: Path | None = None,
+) -> dict[str, Any]:
+    """Retrieve persisted difficulty level, prior diagnosis, and top learned rules for a target/form."""
+    data = load_learned_policies(root, policy_path)
+    t_rec = data["targets"].get(target_key, {})
+    f_rec = data["forms"].get(form_id, {})
+    return {
+        "difficulty_level": int(t_rec.get("difficulty_level", 1)),
+        "weakest_element": str(t_rec.get("weakest_element", "")),
+        "last_diagnosis": str(t_rec.get("last_diagnosis", "")),
+        "element_averages": dict(f_rec.get("element_averages", {})),
+        "learned_rules": list(f_rec.get("learned_rules", []))[:4],
+    }
+
+
+def record_domain_mastery(
+    root: Path,
+    target_key: str,
+    form_id: str,
+    *,
+    score: float,
+    passed: bool,
+    arm_id: str,
+    element_scores: dict[str, float] | None,
+    weakest_element: str,
+    diagnosis: str,
+    mastery_tip: str = "",
+    saturated: bool = False,
+    policy_path: Path | None = None,
+    bandit_state_path: Path | None = None,
+) -> dict[str, Any]:
+    """Persist cross-restart mastery telemetry, promote winning craft rules, and escalate difficulty on saturation."""
+    p = policy_path or (root / LEARNED_POLICIES_REL_PATH)
+    data = load_learned_policies(root, p)
+    t_rec = data["targets"].setdefault(
+        target_key,
+        {"form_id": form_id, "difficulty_level": 1, "runs": 0, "best_score": 0.0},
+    )
+    t_rec["form_id"] = form_id
+    t_rec["runs"] = int(t_rec.get("runs", 0)) + 1
+    t_rec["best_score"] = round(max(float(t_rec.get("best_score", 0.0)), float(score)), 4)
+    t_rec["last_score"] = round(float(score), 4)
+    t_rec["weakest_element"] = weakest_element
+    t_rec["last_diagnosis"] = diagnosis
+
+    escalated_to: int | None = None
+    cur_level = int(t_rec.get("difficulty_level", 1))
+    if saturated and cur_level < 3 and float(score) >= 0.72:
+        cur_level += 1
+        t_rec["difficulty_level"] = cur_level
+        escalated_to = cur_level
+        # Reset local plateau trajectory at the new difficulty level so continuous runs keep exploring
+        b_state = load_bandit_state(root, bandit_state_path)
+        if target_key in b_state.get("trajectories", {}):
+            b_state["trajectories"][target_key] = []
+            save_bandit_state(root, b_state, bandit_state_path)
+
+    f_rec = data["forms"].setdefault(
+        form_id,
+        {"runs": 0, "element_averages": {}, "learned_rules": []},
+    )
+    f_rec["runs"] = int(f_rec.get("runs", 0)) + 1
+    if element_scores:
+        prev_avgs = f_rec.setdefault("element_averages", {})
+        alpha = 0.35
+        for el, val in element_scores.items():
+            if el in prev_avgs:
+                prev_avgs[el] = round((1.0 - alpha) * float(prev_avgs[el]) + alpha * float(val), 4)
+            else:
+                prev_avgs[el] = round(float(val), 4)
+
+    if passed and float(score) >= 0.80:
+        inst = CRAFT_INTERVENTION_INSTRUCTIONS.get(arm_id, "").strip()
+        candidate_rule = f"[{arm_id}] {inst}" if inst else arm_id
+        if mastery_tip:
+            candidate_rule = f"{candidate_rule} Focus: {mastery_tip}"
+        rules = list(f_rec.get("learned_rules", []))
+        if candidate_rule not in rules:
+            rules.append(candidate_rule)
+            f_rec["learned_rules"] = rules[-6:]
+
+    _atomic_write_json(p, data)
+    return {
+        "target_key": target_key,
+        "form_id": form_id,
+        "difficulty_level": cur_level,
+        "escalated_to": escalated_to,
+        "learned_rules_count": len(f_rec.get("learned_rules", [])),
     }

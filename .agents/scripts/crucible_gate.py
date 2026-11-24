@@ -1253,6 +1253,8 @@ def cmd_bench(
     rounds: int = 1,
     interval_min: float = 0.0,
     adaptive: bool = False,
+    until_exit: bool = False,
+    max_minutes: float = 0.0,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1261,10 +1263,16 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--interval-min M] [--adaptive] [--project ID...] | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "stop":
+        stop_p = wb.request_bench_stop(root)
+        payload = {"ok": True, "stop_file": str(stop_p)}
+        print(json.dumps(payload, indent=2) if as_json else f"BENCH STOP REQUESTED: created {stop_p} (active loop will exit cleanly after current item)")
+        return 0
 
     if action == "report":
         tel_path = _resolve_cli_path(root, parts[1]) if len(parts) >= 2 else (root / ".agents" / "bench_telemetry.jsonl")
@@ -1310,6 +1318,10 @@ def cmd_bench(
         print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"BENCH VALID: {len(manifest.projects)} workloads in {yaml_path.name}")
         return 0
 
+    stream_progress = (lambda msg: print(msg, flush=True)) if (until_exit and not as_json) else None
+    if until_exit and not as_json:
+        print("Crucible Workload Bench: starting continuous loop (press Ctrl+C or run 'crucible_gate.py bench stop' in another terminal to exit cleanly)...", flush=True)
+
     res = wb.run_workload_bench(
         root,
         manifest,
@@ -1318,6 +1330,9 @@ def cmd_bench(
         rounds=rounds,
         interval_sec=max(0.0, float(interval_min) * 60.0),
         adaptive=adaptive,
+        until_exit=until_exit,
+        max_minutes=max_minutes,
+        progress_fn=stream_progress,
     )
     if as_json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
@@ -1325,19 +1340,22 @@ def cmd_bench(
         status = "PASS" if res["ok"] else "BLOCKED"
         print(
             f"Crucible Workload Bench ({status}): run_id={res['run_id']} | mode={bench_mode} | "
-            f"adaptive={adaptive} | passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
+            f"adaptive={adaptive} | rounds={res['rounds_completed']} | stop={res['stopped_reason']} | "
+            f"passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
         )
-        for r in res["receipts"]:
-            if r["skipped"]:
-                continue
-            tag = "PASS" if r["passed"] else f"FAIL({r['failure_category']})"
-            if r["planted_total"]:
-                extra = f" [canaries {r['planted_caught']}/{r['planted_total']}]"
-            else:
-                extra = f" [form={r['form_id']} score={r['diagnostic_score']:.2f} arm={r['craft_arm']} weak={r['weakest_aspect']}]"
-                if r["deliverable_path"]:
-                    extra += f" -> {r['deliverable_path']}"
-            print(f"  [r{r['round_idx']}] {r['project_id']} ({r['mode']}): {tag} in {r['total_ms']:.1f}ms{extra}")
+        if not until_exit:
+            for r in res["receipts"]:
+                if r["skipped"]:
+                    continue
+                tag = "PASS" if r["passed"] else f"FAIL({r['failure_category']})"
+                if r["planted_total"]:
+                    extra = f" [canaries {r['planted_caught']}/{r['planted_total']}]"
+                else:
+                    esc = f" ESC->L{r['escalated_to']}" if r.get("escalated_to") else ""
+                    extra = f" [form={r['form_id']} L{r.get('difficulty_level', 1)} score={r['diagnostic_score']:.2f} weak_el={r.get('weakest_element') or r['weakest_aspect']} arm={r['craft_arm']}{esc}]"
+                    if r["deliverable_path"]:
+                        extra += f" -> {r['deliverable_path']}"
+                print(f"  [r{r['round_idx']}] {r['project_id']} ({r['mode']}): {tag} in {r['total_ms']:.1f}ms{extra}")
         if res["skipped_count"] > 0 and bench_mode == "offline":
             print("  Note: live 'agy_live' workloads skipped in offline mode (pass --mode all to run live agent jobs).")
         print(f"  #1 Telemetry Insight: {res['telemetry_summary']['top_recommendation']}")
@@ -1381,6 +1399,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds to execute in 'bench run'.")
     parser.add_argument("--interval-min", type=float, default=0.0, help="Minutes between rounds in 'bench run'.")
     parser.add_argument("--adaptive", action="store_true", help="Enable UCB1 bandit craft selection & diminishing-returns frontier rotation in 'bench run'.")
+    parser.add_argument("--until-exit", action="store_true", help="Run 'bench run' continuously until Ctrl+C or 'bench stop'.")
+    parser.add_argument("--max-minutes", type=float, default=0.0, help="Optional safety time limit (minutes) for continuous 'bench run'.")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1411,6 +1431,8 @@ def main(argv: list[str] | None = None) -> int:
             rounds=args.rounds,
             interval_min=args.interval_min,
             adaptive=args.adaptive,
+            until_exit=args.until_exit,
+            max_minutes=args.max_minutes,
             project_ids=args.project,
             as_json=args.json,
         )

@@ -26,9 +26,12 @@ OFFICIAL_CPL_MANDATES_2027 = ("Collections", "Experiences", "Expertise", "Spaces
 CPL_INTERNAL_LENSES = ("Grow", "Books & Reading", "Community")
 
 
+MASTERY_ELEMENTS = ("style", "audience", "purpose", "formatting", "stakeholder_connection")
+
+
 @dataclass(frozen=True)
 class FormProfile:
-    """Professional specification for one document form, its writing devices, and receiver criteria."""
+    """Professional specification for one document domain across 5 mastery elements."""
 
     form_id: str
     display_name: str
@@ -37,6 +40,11 @@ class FormProfile:
     expected_devices: tuple[str, ...]
     craft_arms: tuple[str, ...]
     max_words_target: int
+    style_spec: str = ""
+    audience_spec: str = ""
+    purpose_spec: str = ""
+    formatting_spec: str = ""
+    stakeholder_spec: str = ""
 
 
 FORM_PROFILES: dict[str, FormProfile] = {
@@ -48,6 +56,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("decision_first_opener", "explicit_owner_holds", "scoped_constraints"),
         craft_arms=("decision_first_scaffold", "evidence_hold_custody", "exemplar_parity_anchor"),
         max_words_target=650,
+        style_spec="Decision-led, concise operational prose; zero promotional fluff.",
+        audience_spec="Commissioner authorizing budget/crew + producer building the workback.",
+        purpose_spec="Approve exact deliverable scope and route unresolved questions to named owners.",
+        formatting_spec="Decision request in first 2 lines, numbered sections, deliverables specs table, Held Questions owner table.",
+        stakeholder_spec="Separate verified facts from [UNKNOWN — OWNER TO CONFIRM] holds; assign an owner to every open gate.",
     ),
     "av_script": FormProfile(
         form_id="av_script",
@@ -57,6 +70,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("timecode_beats", "spoken_ear_wpm", "av_counterpoint", "low_print_slop"),
         craft_arms=("spoken_ear_counterpoint", "exemplar_parity_anchor", "decision_first_scaffold"),
         max_words_target=550,
+        style_spec="Spoken-ear active sentences at <=150 WPM; strip print-prose clichés; keep room for breathing & visual holds.",
+        audience_spec="Host speaking aloud on camera + director/editor cutting picture to sound.",
+        purpose_spec="Deliver a shootable timed beat sheet where picture and spoken words add distinct value.",
+        formatting_spec="Contiguous `MM:SS-MM:SS | Audio | Video` pipe table + WPM timing estimate + caption/muted check.",
+        stakeholder_spec="Flag voice/location clearances pending; avoid overclaiming sound/picture assets not yet captured.",
     ),
     "research_note": FormProfile(
         form_id="research_note",
@@ -66,6 +84,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("observation_vs_hypothesis", "explicit_source_citations", "transfer_limits"),
         craft_arms=("evidence_hold_custody", "decision_first_scaffold", "exemplar_parity_anchor"),
         max_words_target=500,
+        style_spec="Qualified, investigative, non-hype precision; distinguish observation from inference.",
+        audience_spec="Strategist/producer deciding whether an opportunity merits a pilot.",
+        purpose_spec="Select one testable bet or decline with falsifiable evidence and transfer limits.",
+        formatting_spec="Observed signal + date, audience barrier, evidence vs. hypothesis split, transfer limits, proposed test.",
+        stakeholder_spec="Cite exact local files/dates; explicitly reserve programme/service eligibility to service owners.",
     ),
     "treatment": FormProfile(
         form_id="treatment",
@@ -75,6 +98,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("narrative_arc", "intended_vs_available_assets", "concrete_moments"),
         craft_arms=("exemplar_parity_anchor", "evidence_hold_custody", "decision_first_scaffold"),
         max_words_target=500,
+        style_spec="Evocative yet concrete visual storytelling without vague buzzwords.",
+        audience_spec="Sponsor approving creative direction + crew evaluating visual feasibility.",
+        purpose_spec="Commit to a coherent story arc & look before spending production hours.",
+        formatting_spec="Summary hook, open -> turn -> payoff arc, visual look/camera grammar, intended vs. available assets list.",
+        stakeholder_spec="Never present proposed locations, talent, or unverified approvals as locked assets.",
     ),
     "call_sheet": FormProfile(
         form_id="call_sheet",
@@ -84,6 +112,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("time_window_table", "named_role_fallbacks", "safety_and_access_gates"),
         craft_arms=("crew_table_completeness", "evidence_hold_custody", "exemplar_parity_anchor"),
         max_words_target=700,
+        style_spec="Terse, imperative, unambiguous shoot-day instructions.",
+        audience_spec="Crew, presenter, and room contact scanning on mobile under time pressure.",
+        purpose_spec="Run door-to-reset execution without missing cues, sound checks, or safety stops.",
+        formatting_spec="HH:MM time-window table (`Window | Who & First Job | Gate & Fallback`) + sound/coverage setup checks.",
+        stakeholder_spec="Name stop authority, read-back owners, and explicit `[UNKNOWN]` site/power/contact holds.",
     ),
     "shot_list": FormProfile(
         form_id="shot_list",
@@ -93,6 +126,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("shot_id_table", "priority_tiers", "minimum_usable_take"),
         craft_arms=("crew_table_completeness", "exemplar_parity_anchor", "spoken_ear_counterpoint"),
         max_words_target=550,
+        style_spec="Exact visual framing, orientation, and pass/fail capture criteria.",
+        audience_spec="Camera operator/sound helper on floor and editor verifying coverage.",
+        purpose_spec="Guarantee essential story beats are captured cleanly before spending time on optional detail.",
+        formatting_spec="Structured table (`ID / Setup | Priority & Action | Minimum Usable Take | Use & Alternate`) with P01/H01/A01 IDs.",
+        stakeholder_spec="Protect presenter window with explicit cutoffs and archive/pickup fallbacks.",
     ),
     "leadership_report": FormProfile(
         form_id="leadership_report",
@@ -102,6 +140,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("inverted_pyramid_opener", "exact_mandate_custody", "bounded_remit"),
         craft_arms=("decision_first_scaffold", "evidence_hold_custody", "exemplar_parity_anchor"),
         max_words_target=350,
+        style_spec="Executive brevity (<=260 words target), inverted-pyramid clarity, exact institutional terms.",
+        audience_spec="Acting Director / senior leader deciding in <90 seconds within organizational remit.",
+        purpose_spec="Surface one clear decision option, verified institutional mandate fit, and hard limits.",
+        formatting_spec="Decision request at top, mandate & evidence block, explicit remit/limits and open holds at bottom.",
+        stakeholder_spec="Use exact 2027-2030 mandate wording; keep internal editorial lenses distinct; never overclaim release/Asana.",
     ),
     "content_calendar": FormProfile(
         form_id="content_calendar",
@@ -111,6 +154,11 @@ FORM_PROFILES: dict[str, FormProfile] = {
         expected_devices=("channel_native_differentiation", "exposure_stage_separation", "cta_route_check"),
         craft_arms=("channel_native_split", "crew_table_completeness", "evidence_hold_custody"),
         max_words_target=750,
+        style_spec="Platform-native hooks per channel; zero copy-paste duplication across surfaces.",
+        audience_spec="Channel owners, social schedulers, and newsletter editors preparing staged rollout.",
+        purpose_spec="Give every channel a distinct job while preventing premature external/public exposure.",
+        formatting_spec="Per-channel copy blocks + Milestone Exposure Ledger (`Milestone | Receiver | Version/Dest | Gate | Receipt`).",
+        stakeholder_spec="Enforce CH-04 separation (internal handoff vs. unlisted preview vs. public rollout) and verified CTA URLs.",
     ),
 }
 
@@ -137,7 +185,7 @@ def resolve_form_id(raw_form: str) -> str:
 
 @dataclass
 class FormDiagnosticReport:
-    """Decomposed quality and writing-device score against professional standards."""
+    """Decomposed quality and 5-element mastery score against professional standards."""
 
     form_id: str
     overall_score: float
@@ -148,9 +196,36 @@ class FormDiagnosticReport:
     weakest_aspect: str
     diagnosis: str
     measured_features: dict[str, Any]
+    element_scores: dict[str, float] | None = None
+    weakest_element: str = ""
+    mastery_tip: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def build_escalation_challenge(form_id: str, weakest_element: str, difficulty_level: int) -> str:
+    """Generate progressive scenario pressure when an element saturates at an easier difficulty tier."""
+    if difficulty_level <= 1:
+        return ""
+    profile = FORM_PROFILES.get(form_id, FORM_PROFILES["production_brief"])
+    if difficulty_level == 2:
+        focus = {
+            "style": f"Tighten style under 25% fewer words while preserving {profile.style_spec}",
+            "audience": f"Serve two readers simultaneously without jargon: {profile.audience_spec}",
+            "purpose": "Make the single required decision/action unmistakable in the first 3 lines.",
+            "formatting": f"Ensure zero ambiguity in layout: {profile.formatting_spec}",
+            "stakeholder_connection": f"Isolate at least 2 realistic missing facts/approvals with named owners: {profile.stakeholder_spec}",
+        }.get(weakest_element, profile.stakeholder_spec)
+        return f"[Training Level 2 — Constraint Tightening] Focus on '{weakest_element}': {focus}"
+
+    # Level 3: multi-constraint & disruption stress test
+    return (
+        f"[Training Level 3 — Real-World Disruption Stress Test] Handle a mid-project constraint change "
+        f"(e.g., 20% shorter runtime/window OR one unconfirmed branch/asset hold) while keeping '{weakest_element}' "
+        f"({getattr(profile, {'style': 'style_spec', 'audience': 'audience_spec', 'purpose': 'purpose_spec', 'formatting': 'formatting_spec', 'stakeholder_connection': 'stakeholder_spec'}.get(weakest_element, 'purpose_spec'))}) "
+        "immediately actionable for a cold colleague."
+    )
 
 
 def _count_words(text: str) -> int:
@@ -499,6 +574,32 @@ def diagnose_form_deliverable(
     }
     weakest_aspect = min(aspects, key=lambda k: aspects[k])
 
+    # Compute the 5 writing-domain mastery elements (style, audience, purpose, formatting, stakeholder_connection)
+    has_holds = bool(re.search(r"(\[UNKNOWN|TBD|hold|owner:|pending|confirm)", lower))
+    has_table = _has_markdown_table(text)
+    style_el = round(max(0.0, min(1.0, (0.60 * device_score + 0.40 * (1.0 if brevity_ok else 0.35)) - slop_pen)), 3)
+    audience_el = round(max(0.0, min(1.0, 0.50 * receiver_actionability + 0.30 * lex_parity + (0.20 if brevity_ok else 0.05))), 3)
+    purpose_el = round(max(0.0, min(1.0, 0.50 * structure_score + 0.50 * device_score)), 3)
+    fmt_table_bonus = 0.25 if (form_id in ("av_script", "call_sheet", "shot_list", "content_calendar") and has_table) else (0.25 if "##" in text or "**" in text else 0.10)
+    formatting_el = round(max(0.0, min(1.0, 0.55 * structure_score + 0.20 * (1.0 if brevity_ok else 0.4) + fmt_table_bonus)), 3)
+    stakeholder_el = round(max(0.0, min(1.0, 0.55 * receiver_actionability + (0.30 if has_holds else 0.05) + 0.15 * professional_parity)), 3)
+    element_scores = {
+        "style": style_el,
+        "audience": audience_el,
+        "purpose": purpose_el,
+        "formatting": formatting_el,
+        "stakeholder_connection": stakeholder_el,
+    }
+    weakest_element = min(element_scores, key=lambda k: element_scores[k])
+    spec_attr = {
+        "style": "style_spec",
+        "audience": "audience_spec",
+        "purpose": "purpose_spec",
+        "formatting": "formatting_spec",
+        "stakeholder_connection": "stakeholder_spec",
+    }[weakest_element]
+    mastery_tip = getattr(profile, spec_attr, "")
+
     diag_parts: list[str] = []
     if missing_cues:
         diag_parts.append(f"missing cues {missing_cues}")
@@ -517,4 +618,7 @@ def diagnose_form_deliverable(
         weakest_aspect=weakest_aspect,
         diagnosis=diagnosis,
         measured_features={"words": words, **dev_feats, "missing_cues": missing_cues},
+        element_scores=element_scores,
+        weakest_element=weakest_element,
+        mastery_tip=mastery_tip,
     )

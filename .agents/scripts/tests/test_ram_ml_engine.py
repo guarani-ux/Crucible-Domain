@@ -314,3 +314,40 @@ def test_contextual_bandit_ucb1_and_diminishing_returns_frontier_rotation(tmp_pa
     )
     assert pick2["selected_id"] == "proj-call-sheet"
     assert pick2["all_saturated"] is False
+
+
+def test_learned_policies_persist_and_escalate_difficulty_across_restarts(tmp_path: Path) -> None:
+    pol_file = tmp_path / "learned_policies.json"
+    bandit_file = tmp_path / "bandit_state.json"
+
+    b = ram_ml_engine.load_bandit_state(tmp_path, bandit_file)
+    b["trajectories"]["p-script"] = [0.85, 0.86, 0.87]
+    ram_ml_engine.save_bandit_state(tmp_path, b, bandit_file)
+
+    res = ram_ml_engine.record_domain_mastery(
+        tmp_path,
+        "p-script",
+        "av_script",
+        score=0.87,
+        passed=True,
+        arm_id="spoken_ear_counterpoint",
+        element_scores={"style": 0.90, "audience": 0.85, "purpose": 0.88, "formatting": 0.90, "stakeholder_connection": 0.78},
+        weakest_element="stakeholder_connection",
+        diagnosis="av_script: flag pending voice clearances",
+        mastery_tip="Flag voice/location clearances pending.",
+        saturated=True,
+        policy_path=pol_file,
+        bandit_state_path=bandit_file,
+    )
+    assert res["difficulty_level"] == 2
+    assert res["escalated_to"] == 2
+    assert res["learned_rules_count"] == 1
+
+    # On restart: persisted context remembers difficulty level 2, prior diagnosis, and promoted rule
+    ctx = ram_ml_engine.get_domain_mastery_context(tmp_path, "p-script", "av_script", policy_path=pol_file)
+    assert ctx["difficulty_level"] == 2
+    assert ctx["weakest_element"] == "stakeholder_connection"
+    assert len(ctx["learned_rules"]) == 1
+    assert "spoken_ear_counterpoint" in ctx["learned_rules"][0]
+    # Trajectory reset cleanly for the new difficulty level
+    assert ram_ml_engine.load_bandit_state(tmp_path, bandit_file)["trajectories"]["p-script"] == []

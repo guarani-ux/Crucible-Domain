@@ -14,11 +14,12 @@ HUB_ROOT = SCRIPTS_DIR.parents[1]
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from crucible.form_diagnostics import diagnose_form_deliverable, FORM_PROFILES
+from crucible.form_diagnostics import FORM_PROFILES, MASTERY_ELEMENTS, diagnose_form_deliverable
 from crucible.workload_bench import (
     WorkloadSpecError,
     evaluate_deliverable,
     load_workload_manifest,
+    request_bench_stop,
     run_workload_bench,
     summarize_bench_telemetry,
 )
@@ -334,3 +335,70 @@ def test_adaptive_bench_learns_from_weakness_and_rotates_on_diminishing_returns(
     assert "av_script:personal_creative" in bandit["contexts"]
     assert len(bandit["trajectories"]["p-av-script"]) == 2
     assert len(bandit["trajectories"]["p-call-sheet"]) == 1
+
+
+def test_until_exit_mode_runs_continuously_escalates_and_stops_on_bench_stop(tmp_path: Path) -> None:
+    manifest = load_workload_manifest(
+        {
+            "version": "1.0",
+            "defaults": {
+                "staging_dir": "runs",
+                "telemetry_file": "tel.jsonl",
+                "ml_history_file": "ml.jsonl",
+                "bandit_state_file": "bandit.json",
+                "learned_policies_file": "learned.json",
+                "stop_file": "bench.stop",
+                "timeout_seconds": 15,
+                "max_retries": 0,
+            },
+            "projects": [
+                {
+                    "id": "p-brief-continuous",
+                    "domain": "cpl_research",
+                    "mode": "agy_live",
+                    "form": "production_brief",
+                    "intent": "Draft a concise CPL production brief grounded in Calgary Public Library/GROUND_TRUTH.md.",
+                    "deliverable": "brief.md",
+                    "public_checks": {"required_sections": ["Goal", "Audience", "Deliverable", "Open Holds"]},
+                    "blind_holdouts": {"require_official_cpl_mandate": True},
+                }
+            ],
+        }
+    )
+
+    seen_prompts: list[str] = []
+
+    def continuous_worker(prompt: str, _root: Path, _timeout_s: float) -> tuple[bool, str]:
+        seen_prompts.append(prompt)
+        # After 3 rounds (score >= 0.85 -> saturated at L1 -> escalates to L2!), trigger graceful stop_file
+        if len(seen_prompts) >= 3:
+            request_bench_stop(tmp_path, "bench.stop")
+        return (
+            True,
+            "Decision requested: Approve Pilot B production brief for Calgary Public Library.\n"
+            "Context: Grounded in Calgary Public Library/GROUND_TRUTH.md (Experiences & Expertise mandates).\n"
+            "Goal: Show patron VHS digitization end-to-end.\n"
+            "Audience: Calgary residents.\n"
+            "Deliverable: 30s 16:9 master + captions.\n"
+            "Open Holds: [UNKNOWN — OWNER TO CONFIRM] Branch access and G06 release owner pending.\n",
+        )
+
+    res = run_workload_bench(
+        tmp_path,
+        manifest,
+        mode_filter="all",
+        adaptive=True,
+        until_exit=True,
+        agy_worker_fn=continuous_worker,
+    )
+    assert res["until_exit"] is True
+    assert res["stopped_reason"] == "stop_file"
+    assert res["rounds_completed"] == 3
+    assert not (tmp_path / "bench.stop").exists()  # cleaned up on exit
+    # Verify 5 mastery elements scored on receipts and persisted in learned.json
+    r0 = res["receipts"][0]
+    assert set(r0["element_scores"].keys()) == set(MASTERY_ELEMENTS)
+    assert r0["weakest_element"] in MASTERY_ELEMENTS
+    learned = json.loads((tmp_path / "learned.json").read_text(encoding="utf-8"))
+    assert learned["targets"]["p-brief-continuous"]["difficulty_level"] == 2
+    assert len(learned["forms"]["production_brief"]["learned_rules"]) >= 1
