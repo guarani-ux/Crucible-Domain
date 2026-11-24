@@ -154,7 +154,7 @@ projects:
   - writers-room
   - story-lane
   public_checks:
-    max_words: 420
+    max_words: 1600
     min_words: 60
     required_sections:
     - Audio
@@ -199,6 +199,42 @@ projects:
     - memorability
     tools:
     - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-06)
+  - id: 1m-branch-walkthrough
+    intent: '1-minute (01:00) timed A/V script table (`MM:SS-MM:SS | Audio | Video`) walking a first-time patron through booking and using a CPL Technology or Spaces resource (e.g., Central Library recording studio or VHS station). Spoken cadence <=150 WPM, visual-audio counterpoint, and clear immediate patron action.'
+    target_audience: Director, Host, Camera Operator, and Editor
+    skills:
+    - spoken-ear writing
+    - audio-visual counterpoint
+    - 1-minute pacing and beat structure
+    tools:
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-04)
+    - story-lane
+  - id: 3m-patron-story-mini-doc
+    intent: '3-minute (03:00) timed A/V script table (`MM:SS-MM:SS | Audio | Video`) for a patron-centered CPL mini-documentary under official 2027-2030 Experiences and Expertise mandates: 3-act arc, B-roll/interview counterpoint, spoken cadence <=150 WPM, explicit audio/location clearance holds, and caption/muted check.'
+    target_audience: Director, Producer, Host, and Editor
+    skills:
+    - 3-act documentary pacing
+    - interview-and-broll counterpoint
+    - spoken-ear cadence and breathing room
+    - clearance-hold custody
+    tools:
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-04)
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-02)
+    - story-lane
+  - id: 5m-deep-dive-episode
+    intent: '5-minute (05:00) full YouTube episode A/V script table (`MM:SS-MM:SS | Audio | Video`) for PITCH-YCD or PITCH-NQ aligned with official 2027-2030 CPL mandates: cold open hook, 3-4 chapters with retention resets every 60-90 seconds, visual-first storytelling at <=150 WPM, B-roll/lower-third cues, caption/muted readiness, and explicit owner holds for unverified facts or clearances.'
+    target_audience: Series Producer, Director, Host, and Senior Editor
+    skills:
+    - long-form YouTube retention architecture
+    - chapter-beat pacing
+    - visual-first subtraction
+    - spoken-ear cadence at scale
+    - claim-and-clearance custody
+    tools:
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-04)
+    - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-02)
+    - story-lane
+    - writers-room
 - id: creative-short-doc-treatment
   domain: personal_creative
   mode: agy_live

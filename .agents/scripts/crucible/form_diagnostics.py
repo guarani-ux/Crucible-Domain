@@ -69,7 +69,7 @@ FORM_PROFILES: dict[str, FormProfile] = {
         required_cues=("audio", "video", "timing"),
         expected_devices=("timecode_beats", "spoken_ear_wpm", "av_counterpoint", "low_print_slop"),
         craft_arms=("spoken_ear_counterpoint", "exemplar_parity_anchor", "decision_first_scaffold"),
-        max_words_target=550,
+        max_words_target=1600,
         style_spec="Spoken-ear active sentences at <=150 WPM; strip print-prose clichés; keep room for breathing & visual holds.",
         audience_spec="Host speaking aloud on camera + director/editor cutting picture to sound.",
         purpose_spec="Deliver a shootable timed beat sheet where picture and spoken words add distinct value.",
