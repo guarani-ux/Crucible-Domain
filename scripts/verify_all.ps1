@@ -11,7 +11,7 @@ $steps = @(
     @{ Name = "Hub Gate (--strict)"; Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "check", "--strict") },
     @{ Name = "Hub Doctor";          Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "doctor") },
     @{ Name = "Hub Pytest";          Cwd = $HubRoot; Cmd = @("pytest", ".agents/scripts/tests", "-q") },
-    @{ Name = "Story-Lane Pytest";   Cwd = $SpokeRoot; Cmd = @("python", "-m", "pytest", "-q") }
+    @{ Name = "Story-Lane Spoke Pytest"; Cwd = $SpokeRoot; Cmd = @("python", "-m", "pytest", "tests/test_storylane_spoke_mcp.py", "tests/test_storylane_fuzz_and_replay.py", "-q") }
 )
 
 $results = @()
