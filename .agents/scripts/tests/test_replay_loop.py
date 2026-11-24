@@ -583,3 +583,54 @@ def test_hard_subprocess_timeouts_roll_back_cleanly(tmp_path: Path) -> None:
     assert matched is False
     assert rc == -1
     assert "PROBE_TIMEOUT" in out
+
+
+def test_run_autonomous_campaign_closed_ml_feedback_escalates_on_next_run(tmp_path: Path) -> None:
+    target = tmp_path / "mod.py"
+    target.write_text("X = 0\n", encoding="utf-8")
+    ml_hist = tmp_path / "ml_history.jsonl"
+
+    spec = CampaignSpec(
+        name="ml-feedback-campaign",
+        repo_root=str(tmp_path),
+        slices=[SliceNode(id="s-ml", target_paths=["mod.py"])],
+        max_rounds=4,
+    )
+
+    # Run 1 (fails): cold advisory is flash; failure gets written to ml_history.jsonl
+    res1 = run_autonomous_campaign(
+        tmp_path,
+        spec,
+        apply_map={"s-ml": lambda root: (root / "mod.py").write_text("X = 1\n", encoding="utf-8")},
+        verify_map={"s-ml": lambda _root: (False, "same deterministic failure")},
+        ml_history_path=ml_hist,
+    )
+    assert res1["ok"] is False
+    assert res1["slice_advisories"]["s-ml"]["recommended_model_tier"] == "flash"
+    assert ml_hist.is_file()
+
+    # Run 2 (fails again with same error hash): escalates further
+    res2 = run_autonomous_campaign(
+        tmp_path,
+        spec,
+        apply_map={"s-ml": lambda root: (root / "mod.py").write_text("X = 1\n", encoding="utf-8")},
+        verify_map={"s-ml": lambda _root: (False, "same deterministic failure")},
+        ml_history_path=ml_hist,
+    )
+    assert res2["ok"] is False
+    assert res2["slice_advisories"]["s-ml"]["prior_failures"] == 1
+
+    # Run 3 (succeeds): pre-slice ML advisory now sees 2 recurring failures -> recommends pro + holdout + ratchet
+    res3 = run_autonomous_campaign(
+        tmp_path,
+        spec,
+        apply_map={"s-ml": lambda root: (root / "mod.py").write_text("X = 2\n", encoding="utf-8")},
+        verify_map={"s-ml": lambda _root: (True, "ok")},
+        ml_history_path=ml_hist,
+    )
+    assert res3["ok"] is True
+    adv3 = res3["slice_advisories"]["s-ml"]
+    assert adv3["recommended_model_tier"] == "pro"
+    assert adv3["enable_withheld_holdout"] is True
+    assert adv3["enable_counterexample_ratchet"] is True
+    assert len(ml_hist.read_text(encoding="utf-8").splitlines()) == 3

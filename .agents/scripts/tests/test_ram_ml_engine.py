@@ -236,3 +236,28 @@ def test_leakage_free_cv_provenance_calibration_and_lift() -> None:
     assert mode_small == "heuristic_bootstrap"
     assert acc_small is None
     assert ho_small is None
+
+
+def test_record_loop_outcome_and_advise_slice_strategy_escalates(tmp_path: Path) -> None:
+    hist = tmp_path / "ml_history.jsonl"
+
+    # Cold start: no prior history -> low risk, fast tier, guards off
+    cold = ram_ml_engine.advise_slice_strategy(tmp_path, "s-pay", ["billing.py"], history_path=hist)
+    assert cold["recommended_model_tier"] == "flash"
+    assert cold["enable_withheld_holdout"] is False
+    assert cold["enable_counterexample_ratchet"] is False
+
+    # Record 2 recurring failures with identical error hash -> escalates to pro + holdout + ratchet
+    ram_ml_engine.record_loop_outcome(
+        tmp_path, "s-pay", ["billing.py"], passed=False, error_sha256="err_refund_01", seconds=1.2, out_path=hist
+    )
+    ram_ml_engine.record_loop_outcome(
+        tmp_path, "s-pay", ["billing.py"], passed=False, error_sha256="err_refund_01", seconds=1.4, out_path=hist
+    )
+    hot = ram_ml_engine.advise_slice_strategy(tmp_path, "s-pay", ["billing.py"], history_path=hist)
+    assert hot["prior_runs"] == 2
+    assert hot["prior_failures"] == 2
+    assert hot["recommended_model_tier"] == "pro"
+    assert hot["enable_withheld_holdout"] is True
+    assert hot["enable_counterexample_ratchet"] is True
+    assert hot["recurring_error_hashes"] == ["err_refund_01"]

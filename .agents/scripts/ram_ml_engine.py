@@ -1149,3 +1149,112 @@ def assess_commit_risk(
         "impacted_tests": impacted_tests,
         "advisories": advisories,
     }
+
+
+def record_loop_outcome(
+    root: Path,
+    slice_id: str,
+    target_paths: list[str],
+    passed: bool,
+    *,
+    error_sha256: str = "",
+    model_tier: str = "inherit",
+    seconds: float = 0.0,
+    out_path: Path | None = None,
+) -> dict[str, Any]:
+    """Append a single crucible-loop slice outcome to ml_history.jsonl for closed-loop ML routing."""
+    target_path = out_path or (root / HISTORY_REL_PATH)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    norm_files = [p.replace("\\", "/").removeprefix("./") for p in target_paths if p.strip()]
+    row: dict[str, Any] = {
+        "source": "crucible_loop",
+        "slice_id": slice_id,
+        "changed_files": norm_files,
+        "test_name": f"slice:{slice_id}",
+        "outcome": 1 if passed else 0,
+        "error_sha256": error_sha256,
+        "model_tier": model_tier,
+        "seconds": round(float(seconds), 4),
+    }
+    with target_path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    return row
+
+
+def advise_slice_strategy(
+    root: Path,
+    slice_id: str,
+    target_paths: list[str],
+    *,
+    history_path: Path | None = None,
+) -> dict[str, Any]:
+    """Recommend model tier and anti-Goodhart guardrails for a slice using historical loop/verify outcomes."""
+    target_history = history_path or (root / HISTORY_REL_PATH)
+    norm_targets = {p.replace("\\", "/").removeprefix("./") for p in target_paths if p.strip()}
+    _, _, rows = _load_history_stats(target_history)
+
+    prior_runs = 0
+    prior_failures = 0
+    err_counts: Counter[str] = Counter()
+    slice_key = f"slice:{slice_id}"
+
+    for row in rows:
+        row_files = {
+            str(f).replace("\\", "/").removeprefix("./")
+            for f in (row.get("changed_files") or [])
+            if isinstance(f, str)
+        }
+        same_slice = row.get("test_name") == slice_key or row.get("slice_id") == slice_id
+        overlaps_file = bool(norm_targets and (norm_targets & row_files))
+        if not (same_slice or overlaps_file):
+            continue
+        prior_runs += 1
+        if int(row.get("outcome", 1)) == 0:
+            prior_failures += 1
+            eh = str(row.get("error_sha256", "") or "").strip()
+            if eh:
+                err_counts[eh] += 1
+
+    if prior_runs > 0:
+        # Laplace-smoothed empirical failure probability
+        risk_score = (prior_failures + 1.0) / (prior_runs + 2.0)
+    else:
+        risk_score = 0.20
+
+    recurring_errors = [eh for eh, cnt in err_counts.items() if cnt >= 2]
+    if recurring_errors:
+        risk_score = min(0.99, risk_score + 0.15)
+
+    risk_score = round(min(max(risk_score, 0.0), 0.99), 3)
+
+    if risk_score >= 0.65:
+        recommended_model_tier = "pro"
+    elif risk_score >= 0.35:
+        recommended_model_tier = "inherit"
+    else:
+        recommended_model_tier = "flash"
+
+    enable_withheld_holdout = risk_score >= 0.45
+    enable_counterexample_ratchet = risk_score >= 0.50
+
+    if prior_runs == 0:
+        reason = "no prior failure history; defaulting to fast tier"
+    elif recurring_errors:
+        reason = (
+            f"{prior_failures}/{prior_runs} prior failures with {len(recurring_errors)} recurring error cluster(s); "
+            f"escalating to {recommended_model_tier} with holdout+ratchet guards"
+        )
+    else:
+        reason = f"{prior_failures}/{prior_runs} prior failures -> risk={risk_score:.3f}, tier={recommended_model_tier}"
+
+    return {
+        "slice_id": slice_id,
+        "risk_score": risk_score,
+        "recommended_model_tier": recommended_model_tier,
+        "enable_withheld_holdout": enable_withheld_holdout,
+        "enable_counterexample_ratchet": enable_counterexample_ratchet,
+        "prior_runs": prior_runs,
+        "prior_failures": prior_failures,
+        "recurring_error_hashes": sorted(recurring_errors),
+        "reason": reason,
+    }

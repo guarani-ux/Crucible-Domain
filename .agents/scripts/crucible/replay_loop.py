@@ -52,6 +52,11 @@ try:
 except ImportError:
     cg = None
 
+try:
+    import ram_ml_engine as rml
+except ImportError:
+    rml = None
+
 
 ORPHAN_EXCLUDED_FILENAMES = frozenset(
     {
@@ -1226,6 +1231,7 @@ def run_autonomous_campaign(
     cache_path: Path | None = None,
     trace_path: Path | None = None,
     ledger_path: Path | None = None,
+    ml_history_path: Path | None = None,
 ) -> dict[str, Any]:
     """Compile & optimize a CampaignSpec, enforce LoopStateMachine + ErrorCircuitBreaker, and surface only replay-verified diffs."""
     root = Path(repo_root).resolve()
@@ -1256,6 +1262,7 @@ def run_autonomous_campaign(
     fsm = LoopStateMachine()
     breaker = ErrorCircuitBreaker(max_consecutive_failures=3)
     diffs: list[VerifiedDiff] = []
+    slice_advisories: dict[str, dict[str, Any]] = {}
     halted_reason = ""
 
     if ledger_path is not None:
@@ -1288,6 +1295,16 @@ def run_autonomous_campaign(
             fsm.reset()
             fsm.plan(effective_spec.name, node.id)
 
+            advisory: dict[str, Any] | None = None
+            if ml_history_path is not None and rml is not None:
+                advisory = rml.advise_slice_strategy(
+                    root,
+                    node.id,
+                    node.target_paths,
+                    history_path=ml_history_path,
+                )
+                slice_advisories[node.id] = advisory
+
             t_slice = time.perf_counter()
             apply_fn = apply_map.get(node.id) if apply_map else None
             verify_fn = verify_map.get(node.id) if verify_map else None
@@ -1314,6 +1331,16 @@ def run_autonomous_campaign(
                 commit_sha = _current_commit_sha(root, diff.after_sha256)
                 fsm.commit(commit_sha)
                 fsm.cache()
+                if ml_history_path is not None and rml is not None:
+                    rml.record_loop_outcome(
+                        root,
+                        node.id,
+                        node.target_paths,
+                        passed=True,
+                        model_tier=(advisory or {}).get("recommended_model_tier", "inherit"),
+                        seconds=elapsed_sec,
+                        out_path=ml_history_path,
+                    )
                 if ledger_path is not None:
                     append_ratchet_ledger(
                         ledger_path,
@@ -1331,6 +1358,17 @@ def run_autonomous_campaign(
             else:
                 bstate = breaker.record_failure(diff.error or "slice verification failed")
                 ratchet_status = "TRIPPED" if bstate.tripped else "REVERT"
+                if ml_history_path is not None and rml is not None:
+                    rml.record_loop_outcome(
+                        root,
+                        node.id,
+                        node.target_paths,
+                        passed=False,
+                        error_sha256=bstate.error_sha256 or "",
+                        model_tier=(advisory or {}).get("recommended_model_tier", "inherit"),
+                        seconds=elapsed_sec,
+                        out_path=ml_history_path,
+                    )
                 if ledger_path is not None:
                     append_ratchet_ledger(
                         ledger_path,
@@ -1363,6 +1401,7 @@ def run_autonomous_campaign(
         "breaker_reason": breaker.trip_reason,
         "rounds_used": checkpoint.rounds_used,
         "skipped_slices": [ps.node.id for ps in compiled.skipped_slices],
+        "slice_advisories": slice_advisories,
         "all_diffs": [d.to_dict() for d in diffs],
         "verified_diffs": verified_diffs,
     }
