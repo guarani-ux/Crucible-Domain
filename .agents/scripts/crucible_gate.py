@@ -1266,10 +1266,56 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | test-validity | inspect | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "test-validity":
+        rae = _resolve_crucible_submodule("root_axis_engine")
+        res = rae.verify_test_validity(root)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            status = "PASS" if res["ok"] else "BLOCKED"
+            ont = res["ontology"]
+            print(
+                f"3-Axis Test-Validity & L0-L4 Ontology Proof ({status}) in {res['elapsed_ms']:.1f}ms: "
+                f"ontology=L0({ont['l0_count']})->L1({ont['l1_count']})->L2({ont['l2_count']})->L3({ont['l3_count']})->L4({ont['l4_count']}) | "
+                f"red_counterexamples={res['counterexamples_caught']}/{res['counterexamples_total']} | "
+                f"golden={res['golden_passed']}/{res['golden_total']}"
+            )
+            for ce in res["counterexample_details"]:
+                tag = "CAUGHT" if ce["caught"] else "MISSED"
+                print(f"  [{tag}] {ce['axis_id']} / {ce['engine_id']} ({ce['form_id']}): expected={ce['expected_probe']} got={ce['failed_probes']}")
+            if ont.get("errors"):
+                print(f"  Ontology errors: {ont['errors']}")
+            if res.get("golden_failures"):
+                print(f"  Golden failures: {res['golden_failures']}")
+        return 0 if res["ok"] else 1
+
+    if action == "inspect":
+        rat = _resolve_crucible_submodule("outcome_ratchet")
+        res = rat.build_outcome_matrix(root)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"3-Axis Outcome & Ratchet Dashboard: forms={res['forms_tracked']} | "
+                f"experiments={res['total_experiments']} | promoted={res['total_promoted_lessons']} | "
+                f"quarantined={res['total_quarantined_lessons']} | bottleneck={res['top_bottleneck']}"
+            )
+            for fid, f in res["forms"].items():
+                lat = f["latest_axes"]
+                dlt = f["net_deltas"]
+                print(
+                    f"  - {fid:<18} runs={f['runs']} sign_offs={f['sign_offs']} | "
+                    f"I={lat['axis_1_integrity']:.2f}({dlt['axis_1_integrity']:+.2f}) "
+                    f"II={lat['axis_2_rhetorical_force']:.2f}({dlt['axis_2_rhetorical_force']:+.2f}) "
+                    f"III={lat['axis_3_executability']:.2f}({dlt['axis_3_executability']:+.2f}) | "
+                    f"promoted={f['promoted_count']} quar={f['quarantined_count']} weak_eng={f['top_weakest_engine']}"
+                )
+        return 0
 
     if action == "judge":
         if len(parts) < 3:

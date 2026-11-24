@@ -933,8 +933,10 @@ def run_workload_bench(
                                     pass
                             merged_rules = list(dict.fromkeys(form_lever_rules + list(mastery_ctx.get("learned_rules", []))))
                             from .judgment_panel import load_judgment_lessons
+                            from .outcome_ratchet import get_active_promoted_lessons
 
-                            j_lessons = load_judgment_lessons(root, form_id)
+                            ratchet_lessons = get_active_promoted_lessons(root, form_id)
+                            j_lessons = ratchet_lessons or load_judgment_lessons(root, form_id)
                             prompt = (
                                 _build_agy_worker_prompt(
                                     eff_proj,
@@ -1036,6 +1038,7 @@ def run_workload_bench(
                         # Gate 2: Independent Adversarial Judgment Panel (runs ONLY after Gate 1 passes)
                         if pub_ok and hold_ok and proj.mode == "agy_live" and enable_judgment_gate:
                             from .judgment_panel import run_adversarial_judgment
+                            from .outcome_ratchet import record_paired_outcome
 
                             j_worker = judge_worker_fn or worker
                             _safe_progress(f"    -> Gate 2 adversarial judgment panel ({form_id})...")
@@ -1059,23 +1062,38 @@ def run_workload_bench(
                                 pub_ok = False
                                 fail_cat = "judgment_panel_unavailable"
                                 err_detail = jv.raw_error
-                            elif not jv.ok:
-                                pub_ok = False
-                                fail_cat = f"judgment_panel_{jv.verdict.lower()}"
-                                err_detail = (
-                                    f"Gate 2 {jv.verdict} (j_score={jv.judgment_score:.2f}): "
-                                    f"objection='{jv.top_executive_objection[:120]}' | cut='{jv.required_cut[:80]}' | fix='{jv.actionable_fix[:120]}'"
-                                )
-                                diagnosis = f"{diagnosis} | GATE2={jv.verdict}({jv.judgment_score:.2f}): {jv.top_executive_objection[:100]}"
                             else:
-                                diag_score = round(
-                                    0.30 * diag.overall_score
-                                    + 0.20 * diag.flow_score
-                                    + 0.20 * diag.board_score
-                                    + 0.30 * jv.judgment_score,
-                                    3,
-                                )
-                                diagnosis = f"{diagnosis} | GATE2=SIGN_OFF({jv.judgment_score:.2f})"
+                                with state_lock:
+                                    r_ev = record_paired_outcome(
+                                        root,
+                                        form_id=form_id,
+                                        use_case_id=uc_id or proj.id,
+                                        axis_scores=jv.axis_scores,
+                                        verdict=jv.verdict,
+                                        weakest_engine=jv.weakest_engine,
+                                        proposed_lesson=jv.reusable_judgment_lesson,
+                                    )
+                                if r_ev.get("action") in ("PROMOTED", "QUARANTINED"):
+                                    _safe_progress(
+                                        f"    -> A/B Ratchet {r_ev['action']} lesson for {form_id} ({r_ev.get('target_axis')}): {str(r_ev.get('lesson', ''))[:90]}"
+                                    )
+                                if not jv.ok:
+                                    pub_ok = False
+                                    fail_cat = f"judgment_panel_{jv.verdict.lower()}"
+                                    err_detail = (
+                                        f"Gate 2 {jv.verdict} (j={jv.judgment_score:.2f} axes={jv.axis_scores}): "
+                                        f"objection='{jv.top_executive_objection[:120]}' | cut='{jv.required_cut[:80]}' | fix='{jv.actionable_fix[:120]}'"
+                                    )
+                                    diagnosis = f"{diagnosis} | GATE2={jv.verdict}({jv.judgment_score:.2f} eng={jv.weakest_engine}): {jv.top_executive_objection[:90]}"
+                                else:
+                                    diag_score = round(
+                                        0.30 * diag.overall_score
+                                        + 0.20 * diag.flow_score
+                                        + 0.20 * diag.board_score
+                                        + 0.30 * jv.judgment_score,
+                                        3,
+                                    )
+                                    diagnosis = f"{diagnosis} | GATE2=SIGN_OFF({jv.judgment_score:.2f} axes={jv.axis_scores})"
 
                         verify_ms += (time.perf_counter() - t_ver) * 1000.0
                         if pub_ok and hold_ok:

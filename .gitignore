@@ -13,6 +13,7 @@ Thumbs.db
 .agents/ml_bandit_state.json
 .agents/ml_learned_policies.json
 .agents/ml_judgment_lessons.json
+.agents/ml_outcome_ratchet.json
 .agents/doc_ml_model.json
 .agents/bench_lever_log.jsonl
 .agents/bench_trial_state.json

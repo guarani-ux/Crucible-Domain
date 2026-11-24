@@ -461,6 +461,17 @@ projects:
     - re-sequencing under hold
     tools:
     - Knowledge/Media Agency/Skills and Workflows/practice-exercises.md (Exercise 3)
+  - id: four-platform-native-content-plan
+    intent: 'Source-audited 4-platform content plan with genuinely distinct native adaptations for YouTube (browse/retention), Instagram (muted/captions-first scroll), LinkedIn (professional/civic insight), and Facebook (local community utility) plus Newsletter and a Milestone CH-04 exposure table grounded in Calgary Public Library/GROUND_TRUTH.md.'
+    target_audience: Marketing Manager, Communications Director, and Content Management
+    skills:
+    - source provenance audit for content planning
+    - 4-platform native copy (YouTube, Instagram, LinkedIn, Facebook)
+    - capture-once portfolio economics
+    - non-vanity patron behavior measurement
+    tools:
+    - Calgary Public Library/GROUND_TRUTH.md
+    - Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md (CH-04, CH-06)
 - id: cpl-production-brief-mastery
   domain: cpl_research
   mode: agy_live

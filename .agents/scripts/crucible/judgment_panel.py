@@ -30,6 +30,8 @@ class JudgmentVerdict:
     ok: bool
     verdict: str  # SIGN_OFF | REVISE | KILL | UNAVAILABLE
     judgment_score: float
+    axis_scores: dict[str, float] = field(default_factory=dict)
+    weakest_engine: str = ""
     weakest_quote: str = ""
     top_executive_objection: str = ""
     required_cut: str = ""
@@ -143,6 +145,11 @@ def build_adversarial_judge_prompt(
         lines.append(f"Assigned Use Case: {use_case_intent}")
     lines.append(f"#1 AI Trap to Watch For: {ai_trap}")
     lines.append("")
+    lines.append("=== 3 ROOT AXES (Institutional Sensemaking & Action Design — ALL 3 MUST CLEAR >= 0.82) ===")
+    lines.append("- axis_1_integrity: Epistemic & Strategic Integrity (primary source provenance, causal rigor, 2027-2030 Strategic Plan + service promises, opportunity cost, equity/reconciliation/political stewardship).")
+    lines.append("- axis_2_rhetorical_force: Cognitive & Rhetorical Force (3s hook & tension, A/B/C story weave in scripts, ethos/logos/pathos & objection preemption, authentic brand voice, native platform physics across YouTube/Instagram/LinkedIn/Facebook).")
+    lines.append("- axis_3_executability: Operational & Portfolio Executability (shootability, clock/WPM math, capture-once content planning, CH-04/CHG-01 custody, cold-receiver zero-email usability, verifiable behavioral outcome).")
+    lines.append("")
     lines.append("=== CROSS-CUTTING ORGANIZATIONAL, POLITICAL & BRAND VOICE CRITERIA ===")
     for item in cross:
         lines.append(f"- {item['id']}: {item['criterion']}")
@@ -157,6 +164,8 @@ def build_adversarial_judge_prompt(
             "{",
             '  "verdict": "SIGN_OFF" | "REVISE" | "KILL",',
             '  "judgment_score": <float 0.00 to 1.00>,',
+            '  "axis_scores": {"axis_1_integrity": <0.0-1.0>, "axis_2_rhetorical_force": <0.0-1.0>, "axis_3_executability": <0.0-1.0>},',
+            '  "weakest_engine": "<problem_transduction_and_source_epistemology | institutional_legitimacy_and_stewardship | attention_tension_and_narrative_architecture | rhetoric_psychology_and_medium_physics | content_planning_and_operational_realism>",',
             '  "weakest_quote": "<exact short quote from the draft that is weakest or risks pushback>",',
             '  "top_executive_objection": "<the #1 concrete objection a buyer in the room would raise>",',
             '  "required_cut": "<one concrete sentence/bullet/detail to CUT for subtractive craft, or none>",',
@@ -167,9 +176,9 @@ def build_adversarial_judge_prompt(
             "}",
             "",
             "Rules for verdict:",
-            "- SIGN_OFF only if judgment_score >= 0.82 AND org_voice_flags is empty AND zero serious executive/feasibility objections remain.",
-            "- REVISE if salvageable with targeted changes (score 0.50-0.81 or minor org/voice/logic gap).",
-            "- KILL if fundamentally unconvincing, unshootable, politically risky, off-voice, or AI slop (score < 0.50).",
+            "- SIGN_OFF only if judgment_score >= 0.82 AND EVERY axis in axis_scores >= 0.82 AND org_voice_flags is empty AND zero serious executive/feasibility objections remain.",
+            "- REVISE if salvageable with targeted changes (any axis 0.50-0.81 or minor org/voice/logic gap).",
+            "- KILL if fundamentally unconvincing, unshootable, politically risky, off-voice, or AI slop (any axis < 0.50).",
             "",
             "=== CANDIDATE DOCUMENT ===",
             text.strip()[:8000],
@@ -231,14 +240,30 @@ def parse_judge_response(raw_output: str) -> JudgmentVerdict:
             except (TypeError, ValueError):
                 continue
 
-    # Enforce strict SIGN_OFF invariant even if the critic was overly lenient
-    if verdict == "SIGN_OFF" and (score < 0.82 or bool(flags)):
+    axis_raw = parsed.get("axis_scores") or {}
+    axis_scores: dict[str, float] = {}
+    for ax_key in ("axis_1_integrity", "axis_2_rhetorical_force", "axis_3_executability"):
+        val = axis_raw.get(ax_key) if isinstance(axis_raw, dict) else None
+        if val is not None:
+            try:
+                axis_scores[ax_key] = max(0.0, min(1.0, round(float(val), 3)))
+            except (TypeError, ValueError):
+                axis_scores[ax_key] = score
+        else:
+            axis_scores[ax_key] = score
+
+    min_axis = min(axis_scores.values()) if axis_scores else score
+
+    # Enforce non-masking SIGN_OFF invariant: NO strong axis can mask a failing axis or org/voice flag
+    if verdict == "SIGN_OFF" and (score < 0.82 or min_axis < 0.82 or bool(flags)):
         verdict = "REVISE"
 
     return JudgmentVerdict(
         ok=(verdict == "SIGN_OFF"),
         verdict=verdict,
         judgment_score=score,
+        axis_scores=axis_scores,
+        weakest_engine=str(parsed.get("weakest_engine", "")).strip(),
         weakest_quote=str(parsed.get("weakest_quote", "")).strip(),
         top_executive_objection=str(parsed.get("top_executive_objection", "")).strip(),
         required_cut=str(parsed.get("required_cut", "")).strip(),

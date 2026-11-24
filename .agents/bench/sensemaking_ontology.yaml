@@ -1,0 +1,317 @@
+# Canonical 5-Tier Vertical Ontology: L0 (Root) -> L1 (3 Axes) -> L2 (5 Engines) -> L3 (12 Sub-Disciplines) -> L4 (36 Atomic Primitives)
+# Zero orphans, zero dangling edges; verified mechanically by `crucible_gate.py bench test-validity`.
+version: "1.0"
+
+L0_root:
+  id: L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN
+  title: Institutional Sensemaking & Action Design
+  definition: "Converting verified reality into a medium-native artifact that moves specific human stakeholders—under finite resources and institutional legitimacy—from their current mental state to a concrete decision or action."
+  governs_l1:
+    - L1:AXIS_1_INTEGRITY
+    - L1:AXIS_2_RHETORICAL_FORCE
+    - L1:AXIS_3_EXECUTABILITY
+
+L1_axes:
+  - id: L1:AXIS_1_INTEGRITY
+    parent_l0: L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN
+    title: "Axis I — Epistemic & Strategic Integrity"
+    core_question: "Is it true, legitimate, and worth doing over alternatives?"
+    governs_l2:
+      - L2:ENG_1_EPISTEMOLOGY_TRANSDUCTION
+      - L2:ENG_2_INSTITUTIONAL_LEGITIMACY
+
+  - id: L1:AXIS_2_RHETORICAL_FORCE
+    parent_l0: L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN
+    title: "Axis II — Cognitive & Rhetorical Force"
+    core_question: "Does it actually move the target human mind in this medium?"
+    governs_l2:
+      - L2:ENG_3_ATTENTION_NARRATIVE
+      - L2:ENG_4_RHETORIC_MEDIUM_PHYSICS
+
+  - id: L1:AXIS_3_EXECUTABILITY
+    parent_l0: L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN
+    title: "Axis III — Operational & Portfolio Executability"
+    core_question: "Can real people actually produce, govern, and measure it under real constraints?"
+    governs_l2:
+      - L2:ENG_5_CONTENT_PLANNING_EXECUTION
+
+L2_engines:
+  - id: L2:ENG_1_EPISTEMOLOGY_TRANSDUCTION
+    parent_l1: L1:AXIS_1_INTEGRITY
+    title: "Problem-to-Vessel Transduction & Source Epistemology"
+    governs_l3:
+      - L3:SOURCE_PROVENANCE_AND_EVIDENCE
+      - L3:PROBLEM_TO_VESSEL_TRANSDUCTION
+      - L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+
+  - id: L2:ENG_2_INSTITUTIONAL_LEGITIMACY
+    parent_l1: L1:AXIS_1_INTEGRITY
+    title: "Equity, Reconciliation, Accessibility & Political Stewardship"
+    governs_l3:
+      - L3:EQUITY_RECONCILIATION_ACCESSIBILITY
+      - L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY
+
+  - id: L2:ENG_3_ATTENTION_NARRATIVE
+    parent_l1: L1:AXIS_2_RHETORICAL_FORCE
+    title: "Attention, Tension & Narrative Architecture"
+    governs_l3:
+      - L3:HOOK_AND_TENSION_MECHANICS
+      - L3:MULTI_TRACK_STORY_ARCHITECTURE
+      - L3:PRIORITY_COMPRESSION_AND_SUBTRACTION
+
+  - id: L2:ENG_4_RHETORIC_MEDIUM_PHYSICS
+    parent_l1: L1:AXIS_2_RHETORICAL_FORCE
+    title: "Rhetoric, Buy-In Psychology & Medium Physics"
+    governs_l3:
+      - L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+      - L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+
+  - id: L2:ENG_5_CONTENT_PLANNING_EXECUTION
+    parent_l1: L1:AXIS_3_EXECUTABILITY
+    title: "Content Planning, Portfolio Economics & Field Execution"
+    governs_l3:
+      - L3:PORTFOLIO_PLANNING_AND_ECONOMICS
+      - L3:FIELD_FEASIBILITY_AND_CUSTODY
+
+L3_sub_disciplines:
+  - id: L3:SOURCE_PROVENANCE_AND_EVIDENCE
+    parent_l2: L2:ENG_1_EPISTEMOLOGY_TRANSDUCTION
+    definition: "Distinguishing verified primary records from secondary hearsay, inference, or unconfirmed assumptions."
+  - id: L3:PROBLEM_TO_VESSEL_TRANSDUCTION
+    parent_l2: L2:ENG_1_EPISTEMOLOGY_TRANSDUCTION
+    definition: "Translating raw patron or organizational friction into the exact thesis, concept, or brief structure that solves it."
+  - id: L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+    parent_l2: L2:ENG_1_EPISTEMOLOGY_TRANSDUCTION
+    definition: "Grounding work in the active strategic plan, mission, vision, service promises, and explicit opportunity cost."
+  - id: L3:EQUITY_RECONCILIATION_ACCESSIBILITY
+    parent_l2: L2:ENG_2_INSTITUTIONAL_LEGITIMACY
+    definition: "Upholding patron dignity, cultural permissions (HOLD-04), Intellectual Freedom, and plain-language/muted accessibility."
+  - id: L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY
+    parent_l2: L2:ENG_2_INSTITUTIONAL_LEGITIMACY
+    definition: "Respecting internal role boundaries (CD-01, G01-G06, Asana read-only) and protecting institutional reputation."
+  - id: L3:HOOK_AND_TENSION_MECHANICS
+    parent_l2: L2:ENG_3_ATTENTION_NARRATIVE
+    definition: "Opening an unresolved cognitive/visual gap early and sustaining rising stakes across beats."
+  - id: L3:MULTI_TRACK_STORY_ARCHITECTURE
+    parent_l2: L2:ENG_3_ATTENTION_NARRATIVE
+    definition: "Weaving A-story (external action), B-story (human shift), and C-story (institutional/service truth) into one payoff."
+  - id: L3:PRIORITY_COMPRESSION_AND_SUBTRACTION
+    parent_l2: L2:ENG_3_ATTENTION_NARRATIVE
+    definition: "Ordering information by decision velocity and cutting zero-value prose, filler, and throat-clearing."
+  - id: L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+    parent_l2: L2:ENG_4_RHETORIC_MEDIUM_PHYSICS
+    definition: "Balancing ethos, logos, pathos, authentic brand voice, and preemptive answers to stakeholder resistance."
+  - id: L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+    parent_l2: L2:ENG_4_RHETORIC_MEDIUM_PHYSICS
+    definition: "Matching cognitive and physical medium constraints across YouTube, Instagram, LinkedIn, Facebook, and spoken A/V."
+  - id: L3:PORTFOLIO_PLANNING_AND_ECONOMICS
+    parent_l2: L2:ENG_5_CONTENT_PLANNING_EXECUTION
+    definition: "Source-audited topic selection, capture-once adaptation economics, portfolio mix, and behavioral measurement beyond views."
+  - id: L3:FIELD_FEASIBILITY_AND_CUSTODY
+    parent_l2: L2:ENG_5_CONTENT_PLANNING_EXECUTION
+    definition: "Physical clock/WPM/coverage feasibility, cold-receiver zero-email usability, named-owner holds, and CHG-01 recut custody."
+
+L4_atomic_primitives:
+  # Under L3:SOURCE_PROVENANCE_AND_EVIDENCE (3)
+  - id: L4:PRIM_PRIMARY_SOURCE_CITATION
+    parent_l3: L3:SOURCE_PROVENANCE_AND_EVIDENCE
+    measurement_mode: both
+    probe: source_and_charter_integrity
+    forms: [production_brief, leadership_report, research_note, content_calendar]
+  - id: L4:PRIM_OBSERVED_BEFORE_HYPOTHESIS
+    parent_l3: L3:SOURCE_PROVENANCE_AND_EVIDENCE
+    measurement_mode: gate1_deterministic
+    probe: epistemic_order
+    forms: [research_note]
+  - id: L4:PRIM_TRANSFER_LIMITS_AND_FALSIFIABILITY
+    parent_l3: L3:SOURCE_PROVENANCE_AND_EVIDENCE
+    measurement_mode: both
+    probe: research_falsifiability_scaffold
+    forms: [research_note, leadership_report]
+
+  # Under L3:PROBLEM_TO_VESSEL_TRANSDUCTION (3)
+  - id: L4:PRIM_CORE_PROBLEM_SPINE
+    parent_l3: L3:PROBLEM_TO_VESSEL_TRANSDUCTION
+    measurement_mode: gate2_adversarial
+    probe: decision_clarity_and_opportunity_cost
+    forms: [production_brief, treatment, research_note, av_script]
+  - id: L4:PRIM_NON_OBVIOUS_INSIGHT_DENSITY
+    parent_l3: L3:PROBLEM_TO_VESSEL_TRANSDUCTION
+    measurement_mode: gate2_adversarial
+    probe: non_obvious_insight_density
+    forms: [research_note, leadership_report]
+  - id: L4:PRIM_REPEATABLE_CONCEPT_ENGINE
+    parent_l3: L3:PROBLEM_TO_VESSEL_TRANSDUCTION
+    measurement_mode: gate2_adversarial
+    probe: distinctive_repeatable_premise
+    forms: [treatment]
+
+  # Under L3:STRATEGIC_CHARTER_AND_TRADEOFFS (4)
+  - id: L4:PRIM_MANDATE_VS_LENS_SEPARATION
+    parent_l3: L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+    measurement_mode: gate1_deterministic
+    probe: source_and_charter_integrity
+    forms: [production_brief, leadership_report, research_note, av_script, content_calendar]
+  - id: L4:PRIM_ACTIVE_STRATEGIC_PLAN_CURRENCY
+    parent_l3: L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+    measurement_mode: gate1_deterministic
+    probe: source_and_charter_integrity
+    forms: [production_brief, leadership_report, research_note, av_script]
+  - id: L4:PRIM_SERVICE_PROMISE_AND_VISION_GUARD
+    parent_l3: L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+    measurement_mode: both
+    probe: source_and_charter_integrity
+    forms: [production_brief, leadership_report, av_script, content_calendar]
+  - id: L4:PRIM_OPPORTUNITY_COST_EXPLICIT
+    parent_l3: L3:STRATEGIC_CHARTER_AND_TRADEOFFS
+    measurement_mode: gate2_adversarial
+    probe: decision_clarity_and_opportunity_cost
+    forms: [production_brief, leadership_report]
+
+  # Under L3:EQUITY_RECONCILIATION_ACCESSIBILITY (3)
+  - id: L4:PRIM_PATRON_AGENCY_AND_DIGNITY
+    parent_l3: L3:EQUITY_RECONCILIATION_ACCESSIBILITY
+    measurement_mode: both
+    probe: stewardship_boundary
+    forms: [production_brief, av_script, leadership_report, research_note, treatment, call_sheet, shot_list, content_calendar]
+  - id: L4:PRIM_CULTURAL_PERMISSION_HOLD04
+    parent_l3: L3:EQUITY_RECONCILIATION_ACCESSIBILITY
+    measurement_mode: gate2_adversarial
+    probe: reconciliation_cultural_posture
+    forms: [production_brief, av_script, treatment, call_sheet, content_calendar]
+  - id: L4:PRIM_PLAIN_LANGUAGE_AND_MUTED_ACCESSIBILITY
+    parent_l3: L3:EQUITY_RECONCILIATION_ACCESSIBILITY
+    measurement_mode: gate2_adversarial
+    probe: accessibility_plain_language
+    forms: [production_brief, av_script, leadership_report, research_note, treatment, call_sheet, shot_list, content_calendar]
+
+  # Under L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY (2)
+  - id: L4:PRIM_G06_AND_ASANA_AUTHORITY_CUSTODY
+    parent_l3: L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY
+    measurement_mode: gate1_deterministic
+    probe: stewardship_boundary
+    forms: [production_brief, leadership_report, research_note, av_script, call_sheet, content_calendar]
+  - id: L4:PRIM_ROLE_BOUNDARY_AND_REPUTATION_SHIELD
+    parent_l3: L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY
+    measurement_mode: gate2_adversarial
+    probe: institutional_political_stewardship
+    forms: [production_brief, leadership_report, research_note, treatment, content_calendar]
+
+  # Under L3:HOOK_AND_TENSION_MECHANICS (2)
+  - id: L4:PRIM_OPENING_HOOK_CURIOSITY_GAP
+    parent_l3: L3:HOOK_AND_TENSION_MECHANICS
+    measurement_mode: both
+    probe: narrative_tension_and_counterpoint
+    forms: [av_script, treatment, content_calendar]
+  - id: L4:PRIM_RETENTION_RESET_AND_RISING_STAKES
+    parent_l3: L3:HOOK_AND_TENSION_MECHANICS
+    measurement_mode: both
+    probe: narrative_tension_and_counterpoint
+    forms: [av_script, treatment]
+
+  # Under L3:MULTI_TRACK_STORY_ARCHITECTURE (3)
+  - id: L4:PRIM_A_STORY_EXTERNAL_ACTION
+    parent_l3: L3:MULTI_TRACK_STORY_ARCHITECTURE
+    measurement_mode: both
+    probe: a_b_c_story_weave
+    forms: [av_script, treatment]
+  - id: L4:PRIM_B_STORY_HUMAN_EMOTIONAL_SHIFT
+    parent_l3: L3:MULTI_TRACK_STORY_ARCHITECTURE
+    measurement_mode: both
+    probe: a_b_c_story_weave
+    forms: [av_script, treatment]
+  - id: L4:PRIM_C_STORY_INSTITUTIONAL_SERVICE_TRUTH
+    parent_l3: L3:MULTI_TRACK_STORY_ARCHITECTURE
+    measurement_mode: both
+    probe: a_b_c_story_weave
+    forms: [av_script, treatment]
+
+  # Under L3:PRIORITY_COMPRESSION_AND_SUBTRACTION (2)
+  - id: L4:PRIM_DECISION_POSITION_TOP_QUARTER
+    parent_l3: L3:PRIORITY_COMPRESSION_AND_SUBTRACTION
+    measurement_mode: gate1_deterministic
+    probe: priority_hierarchy_decision_first
+    forms: [production_brief, leadership_report]
+  - id: L4:PRIM_SUBTRACTIVE_CUT_ECONOMY
+    parent_l3: L3:PRIORITY_COMPRESSION_AND_SUBTRACTION
+    measurement_mode: gate2_adversarial
+    probe: subtractive_economy
+    forms: [production_brief, leadership_report, research_note, av_script, treatment]
+
+  # Under L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY (4)
+  - id: L4:PRIM_ETHOS_INSTITUTIONAL_CREDIBILITY
+    parent_l3: L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+    measurement_mode: gate2_adversarial
+    probe: authentic_brand_voice
+    forms: [production_brief, leadership_report, research_note, av_script, content_calendar]
+  - id: L4:PRIM_LOGOS_CAUSAL_PROOF
+    parent_l3: L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+    measurement_mode: gate2_adversarial
+    probe: causal_evidentiary_rigor
+    forms: [production_brief, leadership_report, research_note]
+  - id: L4:PRIM_PATHOS_SENSORY_HUMAN_STAKES
+    parent_l3: L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+    measurement_mode: gate2_adversarial
+    probe: concrete_visual_sonic_world
+    forms: [av_script, treatment, content_calendar]
+  - id: L4:PRIM_EXECUTIVE_OBJECTION_PREEMPTION
+    parent_l3: L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY
+    measurement_mode: gate2_adversarial
+    probe: intellectual_honesty_counterarguments
+    forms: [production_brief, leadership_report, research_note, treatment]
+
+  # Under L3:PLATFORM_AND_AV_MEDIUM_PHYSICS (4)
+  - id: L4:PRIM_SPOKEN_EAR_MOUTH_SHAPE_AND_WPM
+    parent_l3: L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+    measurement_mode: both
+    probe: physical_timing_and_wpm
+    forms: [av_script]
+  - id: L4:PRIM_AV_COUNTERPOINT_NON_REDUNDANCY
+    parent_l3: L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+    measurement_mode: both
+    probe: narrative_tension_and_counterpoint
+    forms: [av_script]
+  - id: L4:PRIM_FOUR_PLATFORM_COPY_DIVERGENCE
+    parent_l3: L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+    measurement_mode: both
+    probe: platform_native_divergence
+    forms: [content_calendar]
+  - id: L4:PRIM_ZERO_PRINT_SLOP_VOICE
+    parent_l3: L3:PLATFORM_AND_AV_MEDIUM_PHYSICS
+    measurement_mode: gate1_deterministic
+    probe: rhetoric_zero_slop
+    forms: [production_brief, av_script, leadership_report, research_note, treatment, call_sheet, shot_list, content_calendar]
+
+  # Under L3:PORTFOLIO_PLANNING_AND_ECONOMICS (3)
+  - id: L4:PRIM_CONTENT_PLAN_SOURCE_ORIGIN
+    parent_l3: L3:PORTFOLIO_PLANNING_AND_ECONOMICS
+    measurement_mode: gate2_adversarial
+    probe: source_provenance_for_planning
+    forms: [content_calendar, production_brief]
+  - id: L4:PRIM_CAPTURE_ONCE_ADAPT_NATIVELY
+    parent_l3: L3:PORTFOLIO_PLANNING_AND_ECONOMICS
+    measurement_mode: gate2_adversarial
+    probe: realistic_sequencing_and_chg01
+    forms: [content_calendar, production_brief]
+  - id: L4:PRIM_NON_VANITY_BEHAVIORAL_OUTCOME
+    parent_l3: L3:PORTFOLIO_PLANNING_AND_ECONOMICS
+    measurement_mode: both
+    probe: verifiable_patron_funnel
+    forms: [content_calendar, research_note, production_brief, leadership_report]
+
+  # Under L3:FIELD_FEASIBILITY_AND_CUSTODY (3)
+  - id: L4:PRIM_CLOCK_TIMECODE_AND_RUNTIME_MATH
+    parent_l3: L3:FIELD_FEASIBILITY_AND_CUSTODY
+    measurement_mode: both
+    probe: physical_timing_and_wpm
+    forms: [av_script, call_sheet]
+  - id: L4:PRIM_EDITORIAL_CUTABILITY_AND_TRIAGE
+    parent_l3: L3:FIELD_FEASIBILITY_AND_CUSTODY
+    measurement_mode: both
+    probe: operational_table_executability
+    forms: [shot_list, call_sheet]
+  - id: L4:PRIM_NAMED_OWNER_HOLD_AND_CHG01_CUSTODY
+    parent_l3: L3:FIELD_FEASIBILITY_AND_CUSTODY
+    measurement_mode: gate1_deterministic
+    probe: owned_holds_actionable
+    forms: [production_brief, leadership_report, research_note, av_script, treatment, call_sheet, shot_list, content_calendar]

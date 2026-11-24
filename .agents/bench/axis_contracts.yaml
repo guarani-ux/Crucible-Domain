@@ -1,0 +1,129 @@
+# Component 1: Explicit 3-Axis -> 5-Engine Test Contracts (WHAT, HOW, WHY + Red-Capable Counterexamples)
+# Every contract declares what is tested, why it matters, how Gate 1 & Gate 2 verify it,
+# and a subtle failure counterexample proving the test itself can turn RED.
+version: "1.0"
+
+root_discipline: "Institutional Sensemaking & Action Design"
+
+axes:
+  axis_1_integrity:
+    title: "Axis I — Epistemic & Strategic Integrity"
+    core_question: "Is it true, legitimate, and worth doing over alternatives?"
+    min_signoff_score: 0.82
+    engines:
+      - id: problem_transduction_and_source_epistemology
+        title: "Problem-to-Vessel Transduction & Source Epistemology"
+        what_is_tested: "Distinguishing primary local evidence/audits from hypotheses, citing exact source provenance, aligning to the active 2027-2030 Strategic Plan + service promises, and framing opportunity cost/trade-offs."
+        why_it_matters: "Directors and CEOs reject proposals built on uncited assumptions, stale 2023-2026 plans, internal lenses mislabeled as official mandates, or ignored opportunity cost."
+        how_gate1_tests: "Checks primary citation count, observed-before-hypothesis order, official 2027-2030 mandate & service-promise alignment, zero stale-plan/lens/Vision-2040 traps, and trade-off/alternative cues."
+        how_gate2_tests: "Adversarial panel audits whether evidence actually supports the recommendation, whether sources are primary vs hearsay, and whether opportunity cost vs doing nothing is addressed."
+        red_capable_counterexample:
+          form_id: production_brief
+          expected_failing_probe: "source_and_charter_integrity"
+          text: |
+            # Episode 1 Brief
+            ## Decision Request
+            Approve our exciting new video project right away under our current strategic plan, Everyone Belongs at the Library (2023-2026), advancing official mandates Grow and Books & Reading.
+            ## Context
+            Everyone knows video is great for awareness and our single-video KPI target is three in four Calgarians choosing the Library.
+            ## Deliverables
+            | Asset | Format | Owner |
+            | --- | --- | --- |
+            | Video | MP4 | Producer |
+            ## Open Holds
+            - [UNKNOWN — OWNER TO CONFIRM] Branch booking — Owner: Producer
+
+      - id: institutional_legitimacy_and_stewardship
+        title: "Equity, Reconciliation, Accessibility & Political Stewardship"
+        what_is_tested: "Patron agency & dignity, HOLD-04 cultural/community permission posture, plain-language accessibility, and strict adherence to G01-G06 / CD-01 / Asana read-only boundaries."
+        why_it_matters: "A technically sharp brief still fails in a public institution if it overclaims G06 release, steps on Service Owners, or uses patronizing/extractive framing."
+        how_gate1_tests: "Checks zero unauthorized release/Asana claims, named accountable owners on >=75% of holds, and absence of patronizing/charity clichés."
+        how_gate2_tests: "Evaluates 5 cross-cutting org/political/equity/reconciliation/accessibility/brand-voice standards; any org_voice_flag blocks SIGN_OFF."
+        red_capable_counterexample:
+          form_id: leadership_report
+          expected_failing_probe: "stewardship_boundary"
+          text: |
+            # Executive Summary
+            ## Decision
+            Approved for release and Asana updated today for our needy patrons under Experiences mandate.
+            ## Evidence
+            Grounded in `Calgary Public Library/GROUND_TRUTH.md`.
+            ## Open Holds
+            - [UNKNOWN — OWNER TO CONFIRM] Final review
+
+  axis_2_rhetorical_force:
+    title: "Axis II — Cognitive & Rhetorical Force"
+    core_question: "Does it actually move the target human mind in this medium?"
+    min_signoff_score: 0.82
+    engines:
+      - id: attention_tension_and_narrative_architecture
+        title: "Attention, Tension & Narrative Architecture (Hooks + A/B/C Story)"
+        what_is_tested: "Opening hook tension in lines 1-3 / Beat 1, rising stakes & retention resets, and multi-track A-story (external action/problem) + B-story (human/emotional shift) + C-story (institutional/service truth) in long-form scripts and treatments."
+        why_it_matters: "Viewers drop off in 3 seconds without tension, and 3m-5m stories collapse into brochures without A/B/C narrative convergence."
+        how_gate1_tests: "Checks hook/premise position, audio-video counterpoint overlap <=0.45, retention reset intervals <=90s, and A/B/C narrative track signals (external task/problem + human character/emotion + library/service payoff)."
+        how_gate2_tests: "Evaluates 3-second hook strength, mouth-shape spoken authenticity, A/B/C story weave, and whether the piece earns its emotional and cognitive turn."
+        red_capable_counterexample:
+          form_id: av_script
+          target_duration_s: 180
+          expected_failing_probe: "narrative_tension_and_counterpoint"
+          text: |
+            # 3-Minute Facility Overview
+            Aligned with official 2027-2030 Experiences and Technology mandates (`MW-04`).
+            | Timecode | Audio | Video |
+            | --- | --- | --- |
+            | 00:00-01:40 | Welcome to our facility overview where we list building features and hours of operation in a monotone lecture. | Welcome to our facility overview where we list building features and hours of operation in a monotone lecture. |
+            | 01:40-03:00 | Here are more general building features and hours of operation for general information. | Here are more general building features and hours of operation for general information. |
+            ## Holds
+            - [UNKNOWN — OWNER TO CONFIRM] Clearance — Owner: Producer
+
+      - id: rhetoric_psychology_and_medium_physics
+        title: "Rhetoric, Buy-In Psychology & 4-Platform Medium Physics"
+        what_is_tested: "Ethos/logos/pathos balance, executive objection preemption, zero print slop, and genuine platform-native adaptation across YouTube, Instagram, LinkedIn, and Facebook (never recycled copy)."
+        why_it_matters: "Copy-pasting YouTube text onto Instagram, LinkedIn, or Facebook fails platform psychology; ignoring executive counterarguments kills buy-in in the room."
+        how_gate1_tests: "Computes pairwise lexical overlap across YouTube/Instagram/LinkedIn/Facebook sections (fails copy-paste if overlap > 0.55), checks print-slop count == 0, and checks counterargument/limit cues on strategic docs."
+        how_gate2_tests: "Audits whether each platform version obeys its native consumption physics (browse vs muted scroll vs professional insight vs local share) and preempts the room's #1 objection."
+        red_capable_counterexample:
+          form_id: content_calendar
+          expected_failing_probe: "platform_native_divergence"
+          text: |
+            # Multi-Platform Content Plan
+            Goal: Drive immediate patron action to book a free VHS digitization slot.
+            ## YouTube
+            Bring your old family VHS tapes to Central Library this weekend and digitize every cherished memory for free with your Calgary Public Library card.
+            ## Instagram
+            Bring your old family VHS tapes to Central Library this weekend and digitize every cherished memory for free with your Calgary Public Library card.
+            ## LinkedIn
+            Bring your old family VHS tapes to Central Library this weekend and digitize every cherished memory for free with your Calgary Public Library card.
+            ## Facebook
+            Bring your old family VHS tapes to Central Library this weekend and digitize every cherished memory for free with your Calgary Public Library card.
+            | Week | Channel | Deliverable | Owner | Status |
+            | --- | --- | --- | --- | --- |
+            | Week 1 | YouTube | Master | Producer | Hold: G06 |
+            | Week 1 | Instagram | Reel | Digital Marketing | Draft |
+            | Week 1 | LinkedIn | Post | Communications | Draft |
+            | Week 1 | Facebook | Post | Digital Marketing | Draft |
+
+  axis_3_executability:
+    title: "Axis III — Operational & Portfolio Executability"
+    core_question: "Can real people actually produce, govern, and measure it under real constraints?"
+    min_signoff_score: 0.82
+    engines:
+      - id: content_planning_and_operational_realism
+        title: "Content Planning, Portfolio Economics & Field Execution"
+        what_is_tested: "Shootable WPM/runtime math, realistic shoot-day clocks & coverage triage, source-audited content planning with capture-once economics, CH-04/CHG-01 dependency custody, and non-vanity behavioral measurement."
+        why_it_matters: "Brilliant strategy fails if a host must speak at 220 WPM, a shot list cannot cut together, or a content calendar ignores lead times and real patron behavior."
+        how_gate1_tests: "Checks contiguous timecodes, WPM <= 155 avg / <= 175 beat, runtime within +/-20% of target, operational table completeness, owned holds >= 75%, and non-vanity outcome/action cues."
+        how_gate2_tests: "Verifies physical clock/crew feasibility, priority triage under a 30-minute loss, capture-once adaptation economics, and cold-receiver zero-email usability."
+        red_capable_counterexample:
+          form_id: av_script
+          target_duration_s: 30
+          expected_failing_probe: "physical_timing_and_wpm"
+          text: |
+            # 30s Script
+            Aligned with official 2027-2030 Technology mandate (`MW-04`).
+            | Timecode | Audio | Video |
+            | --- | --- | --- |
+            | 00:00-00:10 | Today we are going to explain every single step of the entire library digitization reservation software interface including account registration password recovery branch floor maps parking directions cable selection audio gain calibration and export settings in ten seconds flat without breathing once. | ECU dusty cardboard box opening; hands lift 1994 VHS tape. |
+            | 00:10-00:30 | Grab your library card and reserve a free slot online today. | CU USB drive blinks green on studio desk. |
+            ## Holds
+            - [UNKNOWN — OWNER TO CONFIRM] Talent release — Owner: Producer

@@ -35,10 +35,12 @@ forms:
 
   av_script:
     buying_room: [Media Production Manager, Marketing Manager, Communications Strategist, Communications Director]
-    ai_trap: "Passes <=150 WPM and low word overlap, yet reads stiffly aloud like a press release and pairs lines with generic B-roll ('patron smiling at screen')."
+    ai_trap: "Passes <=150 WPM and low word overlap, yet reads stiffly aloud like a press release, lacks A/B/C story weave on long-form, and pairs lines with generic B-roll ('patron smiling at screen')."
     criteria:
       - id: hook_and_retention_architecture
         criterion: "Does Beat 1 create immediate visual/curiosity tension? For 3m/5m scripts, does every 60-90s beat reset attention and earn its payoff?"
+      - id: a_b_c_story_weave
+        criterion: "On 1m/3m/5m scripts, do A-story (external action/problem), B-story (human/emotional shift), and C-story (library/service truth) converge instead of reading like a brochure?"
       - id: spoken_ear_authenticity
         criterion: "Read aloud (mouth-shape test), does it sound like a real person talking warmly to one viewer rather than print prose chopped into short lines?"
       - id: true_visual_audio_counterpoint
@@ -109,11 +111,13 @@ forms:
 
   content_calendar:
     buying_room: [Marketing Manager, Marketing & Engagement Director, Communications Director]
-    ai_trap: "Recycles identical copy across YouTube, Instagram, and Newsletter with impossible same-day cut/review/caption/publish turnaround."
+    ai_trap: "Recycles identical copy across YouTube, Instagram, LinkedIn, and Facebook with weak source justification and impossible same-day cut/review/caption/publish turnaround."
     criteria:
-      - id: true_platform_native_adaptation
-        criterion: "Are YouTube, Instagram, and Newsletter genuinely written for how each audience consumes (browse vs. muted scroll vs. inbox)?"
+      - id: source_provenance_for_planning
+        criterion: "Are content topics clearly justified by evaluated primary sources (patron demand, 213-video audit, active 2027-2030 mandates) rather than generic guesses?"
+      - id: true_four_platform_native_adaptation
+        criterion: "Are YouTube (browse/retention), Instagram (muted scroll), LinkedIn (professional/civic insight), and Facebook (local community utility) genuinely written for each platform's psychology—never recycled copy?"
       - id: realistic_sequencing_and_chg01
-        criterion: "Do review, captioning, and cutdown lead times reflect real operational cadence and properly halt downstream posts on recut?"
+        criterion: "Do review, captioning, capture-once adaptation, and cutdown lead times reflect real operational cadence and properly halt downstream posts on recut?"
       - id: verifiable_patron_funnel
-        criterion: "Every post drives one concrete, verifiable patron action rather than dead-end awareness."
+        criterion: "Every post drives one concrete, verifiable patron behavior indicator rather than dead-end awareness or vanity views."
