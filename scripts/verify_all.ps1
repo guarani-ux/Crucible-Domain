@@ -1,66 +1,42 @@
 #!/usr/bin/env pwsh
-<#
-.SYNOPSIS
-    Parallel single-command terminal verification floor for Crucible Domain Hub + registered spokes.
-#>
-$ErrorActionPreference = "Continue"
 $HubRoot = Split-Path -Parent $PSScriptRoot
-$SpokeRoot = "C:/crucible-spokes/story-lane"
-
-$steps = @(
-    @{ Name = "Hub Gate (--strict)"; Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "check", "--strict") },
-    @{ Name = "Hub Doctor";          Cwd = $HubRoot; Cmd = @("python", ".agents/scripts/crucible_gate.py", "doctor") },
-    @{ Name = "Hub Pytest";          Cwd = $HubRoot; Cmd = @("pytest", ".agents/scripts/tests", "-q") },
-    @{ Name = "Story-Lane Pytest";   Cwd = $SpokeRoot; Cmd = @("python", "-m", "pytest", "-q") }
-)
-
-$jobs = @()
-foreach ($s in $steps) {
-    $job = Start-Job -ScriptBlock {
-        param($Name, $Cwd, $Cmd)
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        Push-Location $Cwd
-        $exe = $Cmd[0]
-        $argsList = $Cmd[1..($Cmd.Length - 1)]
-        $out = & $exe @argsList 2>&1
-        $ec = $LASTEXITCODE
-        Pop-Location
-        $sw.Stop()
-        [PSCustomObject]@{
-            Name    = $Name
-            Exit    = $ec
-            Output  = $out
-            Seconds = [math]::Round($sw.Elapsed.TotalSeconds, 2)
-        }
-    } -ArgumentList $s.Name, $s.Cwd, $s.Cmd
-    $jobs += $job
-}
-
-$null = Wait-Job -Job $jobs
-$results = @()
-$failed = 0
-
-foreach ($j in $jobs) {
-    $res = Receive-Job -Job $j
-    Remove-Job -Job $j -Force
-    $status = if ($res.Exit -eq 0) { "PASS" } else { "FAIL" }
-    if ($res.Exit -ne 0) {
-        $failed++
-        Write-Host "`n--- FAILED: $($res.Name) (exit $($res.Exit)) ---" -ForegroundColor Red
-        $res.Output | ForEach-Object { Write-Host $_ }
-    }
-    $results += [PSCustomObject]@{
-        Check   = $res.Name
-        Status  = $status
-        Seconds = $res.Seconds
-    }
-}
-
-Write-Host "`n=== Crucible Terminal Verification Summary (Parallel) ===" -ForegroundColor Cyan
-$results | Format-Table -AutoSize
-if ($failed -gt 0) {
-    Write-Host "RESULT: $failed check(s) FAILED" -ForegroundColor Red
-    exit 1
-}
-Write-Host "RESULT: ALL $($results.Count) CHECKS PASSED" -ForegroundColor Green
-exit 0
+$py = @'
+import concurrent.futures, subprocess, sys, time
+HUB = sys.argv[1]
+SPOKE = "C:/crucible-spokes/story-lane"
+STEPS = [
+    ("Hub Gate (--strict)", HUB,   ["python", ".agents/scripts/crucible_gate.py", "check", "--strict"]),
+    ("Hub Doctor",          HUB,   ["python", ".agents/scripts/crucible_gate.py", "doctor"]),
+    ("Hub Pytest",          HUB,   ["pytest", ".agents/scripts/tests", "-q"]),
+    ("Story-Lane Pytest",   SPOKE, ["python", "-m", "pytest", "tests/test_storylane_spoke_mcp.py", "tests/test_storylane_fuzz_and_replay.py", "-q"]),
+]
+def run_step(item):
+    name, cwd, cmd = item
+    t0 = time.perf_counter()
+    try:
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=60)
+        return name, p.returncode, time.perf_counter() - t0, (p.stdout + p.stderr).strip()
+    except subprocess.TimeoutExpired as exc:
+        return name, 124, time.perf_counter() - t0, f"TIMEOUT after 60s: {exc}"
+t_all = time.perf_counter()
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    results = list(pool.map(run_step, STEPS))
+wall = time.perf_counter() - t_all
+failed = 0
+print("\n=== Crucible Terminal Verification Summary (Parallel) ===")
+print(f"{'Check':<22} {'Status':<8} {'Seconds':>7}")
+print(f"{'-'*22} {'-'*8} {'-'*7}")
+for name, rc, secs, out in results:
+    status = "PASS" if rc == 0 else "FAIL"
+    print(f"{name:<22} {status:<8} {secs:>7.2f}")
+    if rc != 0:
+        failed += 1
+        print(f"\n--- FAILED: {name} (exit {rc}) ---\n{out}\n")
+print(f"\nWall-clock: {wall:.2f}s")
+if failed:
+    print(f"RESULT: {failed} check(s) FAILED")
+    sys.exit(1)
+print(f"RESULT: ALL {len(results)} CHECKS PASSED")
+'@
+$py | python - $HubRoot
+exit $LASTEXITCODE

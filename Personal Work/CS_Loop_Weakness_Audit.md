@@ -56,4 +56,4 @@ depends_on:
 - **W2** (Canonical volatile-token error hashing in `campaign_ir.py`): **RESOLVED** (`b857c43`)
 - **W3** (`ast` local-import dependency hashing in `campaign_ir.py`): **RESOLVED** (Round 03/12)
 - **W4** (Parallel DAG `execution_waves` in `campaign_ir.py`): **RESOLVED** (Round 03/12)
-- **W6** (Parallel `scripts/verify_all.ps1`): **RESOLVED** (Round 03/12)
+- **W6** (Parallel `scripts/verify_all.ps1` via Python `ThreadPoolExecutor` + scoped spoke tests): **RESOLVED** (Round 04/12)
