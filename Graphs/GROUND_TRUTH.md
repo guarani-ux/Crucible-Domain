@@ -11,4 +11,5 @@
    - [01_System_Topology_and_Runtime.md](./01_System_Topology_and_Runtime.md) — **Target System Architecture** & **Reference Process Model** (actual hook chains, RAM index, and storage boundaries).
    - [02_Coupling_and_Reachability_Audit.md](./02_Coupling_and_Reachability_Audit.md) — **Outcome Map** & **Capability Inventory** (what is over-coupled, what is under-coupled, and what is misplaced).
    - [03_Neon_Refactoring_Plan.md](./03_Neon_Refactoring_Plan.md) — **Planning Decision Flow** & **Plan Dependency Graph** (ordered, decoupled slices for Neon).
+   - [04_InRAM_ML_and_Control_Plane_Architecture.md](./04_InRAM_ML_and_Control_Plane_Architecture.md) — **Target System Architecture** & **Machine-Readable Control Plane Manifest** (`crucible_gate.py`, in-RAM ML daemon, parallel verifier, and 4 MCP spokes).
 3. **Verify before handoff:** Run `python ".agents/scripts/crucible_gate.py" check` and `python ".agents/scripts/crucible_gate.py" doctor` after edits.

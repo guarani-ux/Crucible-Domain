@@ -4,11 +4,14 @@ status: active
 depends_on:
   - Personal Work/GROUND_TRUTH.md
   - Knowledge/Testing_Philosophy.md
+depends_on_sha256:
+  Personal Work/GROUND_TRUTH.md: 2fed8f09aecaeb1f012d4abb54fb719cfdc2f0fd01a1ea46c5cfada28bcaba09
+  Knowledge/Testing_Philosophy.md: 20f4c10237a94d563a8d221e67c513cecee487721e284199f04adbb33cd664ab
 ---
 
 # Crucible Domain — Code Process Validity & Engineering Maturity Scorecard
 
-> **Purpose:** Reusable operational scorecard for measuring the validity, determinism, fault isolation, spoke portability, verification rigor, and formal bounds of `Crucible Domain` as a **sovereign systems-engineering platform (`PW-01`)** across waves. Domain capabilities (`Calgary Public Library`, `Story-Lane`, `Writer's Room`, `Meeting Prep`) are plug-in features exercised on top of this engine and tracked separately from systems-builder maturity.
+> **Purpose:** Reusable operational scorecard for measuring the validity, determinism, fault isolation, spoke portability, verification rigor, and formal bounds of `Crucible Domain` as a **sovereign systems-engineering platform (`PW-01`)** across waves. Domain capabilities (`Calgary Public Library`, `Story-Lane`, `Writer's Room`, `Meeting Prep`, `Crucible Observatory`) are plug-in features exercised on top of this engine and tracked separately from systems-builder maturity.
 > **Rule (`K-TEST-01` / `G5`):** Scores require observable code mechanisms, measured non-vanity metrics (`outcome_ledger.py`), and explicit bottleneck/ceiling disclosure—never commit counts, LOC, or unverified claims.
 
 ---

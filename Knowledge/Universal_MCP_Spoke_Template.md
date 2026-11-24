@@ -1,6 +1,6 @@
 # Universal MCP Spoke Template (`K-MCP-01`)
 
-> **Purpose:** 1-page blueprint for spinning up any new deterministic domain spoke (e.g., `Story-Lane`, CPL Marketing/Comms, Live-Ops) under `C:\crucible-spokes\<spoke>\` and plugging it into `C:\crucible-domain` in minutes without bloating the `<50ms` Hub kernel.
+> **Purpose:** 1-page blueprint for spinning up any new deterministic domain spoke (e.g., `Story-Lane`, CPL Marketing/Comms, Live-Ops) as a sibling directory (`../crucible-spokes/<spoke>/`) and plugging it into `Crucible Domain` cleanly without bloating the `<50ms` Hub kernel.
 
 ---
 
@@ -18,7 +18,7 @@ Every spoke exposes a zero-dependency stdlib stdio JSON-RPC 2.0 MCP server (`pyt
 
 ## 2. The 3-File Hub Plugin Drop-In
 
-Register the spoke inside `C:\crucible-domain\.agents\plugins\<spoke>\` with three lightweight files:
+Register the spoke inside `.agents/plugins/<spoke>/` with three lightweight files (using portable relative paths per `CD-W19` — zero hardcoded host drive letters):
 
 1. **`plugin.json`**
    ```json
@@ -37,10 +37,10 @@ Register the spoke inside `C:\crucible-domain\.agents\plugins\<spoke>\` with thr
        "<spoke>": {
          "command": "python",
          "args": ["-m", "<pkg>", "mcp"],
-         "cwd": "C:/crucible-spokes/<spoke>",
+         "cwd": "../crucible-spokes/<spoke>",
          "env": {
-           "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain",
-           "CRUCIBLE_ALLOWED_ROOTS": "C:/crucible-domain;C:/crucible-spokes/<spoke>"
+           "CRUCIBLE_DOMAIN_ROOT": "../../crucible-domain",
+           "CRUCIBLE_ALLOWED_ROOTS": "../../crucible-domain;."
          }
        }
      }

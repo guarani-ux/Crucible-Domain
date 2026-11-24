@@ -1,15 +1,15 @@
 {
   "schema": "crucible-capability-map/v1",
-  "total": 146,
+  "total": 127,
   "counts_by_kind": {
-    "doc": 9,
+    "doc": 13,
     "exhibit": 10,
-    "knowledge": 9,
+    "knowledge": 11,
     "primitive": 13,
     "procedure": 55,
     "project": 10,
     "role": 12,
-    "skill": 28
+    "skill": 3
   },
   "entries": [
     {
@@ -396,11 +396,11 @@
       "id": "CPL-PILOT-MAPS",
       "kind": "doc",
       "title": "Crucible x CPL Pilot & Calendar Maps (Planning Reference)",
-      "path": "Project/Inner Gravity/overnight_mvp/cpl_pilot_maps.md",
+      "path": "Archive/overnight_mvp/cpl_pilot_maps.md",
       "line": 1,
       "domain": "core-doc",
       "reachability": "local",
-      "summary": "Historical planning reference for CPL pilot and content calendar maps inside Inner Gravity."
+      "summary": "Historical planning reference for CPL pilot and content calendar maps archived from Inner Gravity."
     },
     {
       "id": "CRUCIBLE-ATLAS",
@@ -421,6 +421,36 @@
       "domain": "core-doc",
       "reachability": "local",
       "summary": "Over-coupled, under-coupled, and misplaced component ledger across Crucible Domain."
+    },
+    {
+      "id": "CRUCIBLE-ML-ARCH",
+      "kind": "doc",
+      "title": "Crucible Unified CS + In-RAM ML Control Plane Architecture",
+      "path": "Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Machine- and human-readable architecture manifest of the control plane CLI, in-RAM ML daemon, parallel verifier, and 4 MCP spokes."
+    },
+    {
+      "id": "CS-ARCH",
+      "kind": "doc",
+      "title": "Crucible CS & Engineering Architecture Manual",
+      "path": "Personal Work/CS_Opportunity_Map.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Physical CS/CE/SE mapping, verified vertical slices #1-#12, hardware concurrency budget, and open systems-builder frontiers."
+    },
+    {
+      "id": "CS-SCORECARD",
+      "kind": "doc",
+      "title": "Code Process Validity & Engineering Maturity Scorecard",
+      "path": "Personal Work/CS_Process_Validity_Scorecard.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Per-wave systems-builder validity rubric, observed metrics, and honest bottleneck/ceiling tracking."
     },
     {
       "id": "IG-OBS",
@@ -447,7 +477,7 @@
       "kind": "knowledge",
       "title": "A saved checkpoint can record failure. An isolated cognitive-os probe resumed past a failed prerequisite and reported completion. The pinned",
       "path": "Knowledge/Knowledge_Register.md",
-      "line": 24,
+      "line": 26,
       "domain": "knowledge",
       "reachability": "local",
       "summary": "A saved checkpoint can record failure. An isolated cognitive-os probe resumed past a failed prerequisite and reported completion. The pinned unit suite also passed. · A run can resume after a failed, held, or interrupted step. · Confirm the last verified completion separately from the latest saved state. Include a fail"
@@ -457,7 +487,7 @@
       "kind": "knowledge",
       "title": "Keep neutral retrieval results. SAMSARA's limited paired case found no clear incremental chapter advantage. The sidecar comparison recovered",
       "path": "Knowledge/Knowledge_Register.md",
-      "line": 25,
+      "line": 27,
       "domain": "knowledge",
       "reachability": "local",
       "summary": "Keep neutral retrieval results. SAMSARA's limited paired case found no clear incremental chapter advantage. The sidecar comparison recovered more specific precedent while producing identical import outputs. · A new retrieval layer or briefing method is proposed for recurring work. · Record retrieval and outcome changes"
@@ -467,7 +497,7 @@
       "kind": "knowledge",
       "title": "Keep operation scope and evidence together. The inspected Kageyoni release language, qualification record, and later Actions result did not ",
       "path": "Knowledge/Knowledge_Register.md",
-      "line": 26,
+      "line": 28,
       "domain": "knowledge",
       "reachability": "local",
       "summary": "Keep operation scope and evidence together. The inspected Kageyoni release language, qualification record, and later Actions result did not support the same claim. · Evidence from a prior revision or a passing stage is being used to qualify a new release or live workflow. · Bind the claim to the exact revision, run, en"
@@ -481,6 +511,16 @@
       "domain": "knowledge",
       "reachability": "local",
       "summary": "Label advisory evidence and blocking dependencies differently. The installed graph skill's two fresh-worker exercises distinguished an optional missing reference from a required confirmation and kept approval bound to its recorded version. · A collaborator needs to know what can start after a blocker, or what remains a"
+    },
+    {
+      "id": "K-MCP-01",
+      "kind": "knowledge",
+      "title": "Keep Crucible as the single Orchestrator-Producer control plane over deterministic MCP spokes. Paired qualification (the-writers-room@ef2d06",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 20,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Keep Crucible as the single Orchestrator-Producer control plane over deterministic MCP spokes. Paired qualification (the-writers-room@ef2d065 × Crucible-Domain@f27f829) established four rules: (1) Selection != Craft—raw lexical route missed MW-04 on timed scripts and matched MP-09 on call sheets, so the spoke must reco"
     },
     {
       "id": "K-SIDECAR-01",
@@ -501,6 +541,16 @@
       "domain": "knowledge",
       "reachability": "local",
       "summary": "Resume from verified state with a bounded proof claim. Story-Lane's README reports 18 outputs verified from saved transcripts after an interrupted extraction resumed in an isolated copy. Separate native CI used synthetic speech. · A run stops at an uncertain point or evidence from one operation is being used to support"
+    },
+    {
+      "id": "K-TEST-01",
+      "kind": "knowledge",
+      "title": "Verify tests by 4 Evidence Rungs and Red-First / Mutation Kills, never raw pass counts. A passing test proves nothing unless it fails red wh",
+      "path": "Knowledge/Knowledge_Register.md",
+      "line": 19,
+      "domain": "knowledge",
+      "reachability": "local",
+      "summary": "Verify tests by 4 Evidence Rungs and Red-First / Mutation Kills, never raw pass counts. A passing test proves nothing unless it fails red when the underlying failure occurs, pairs allow/deny on the exact seam, and separates mechanical plumbing (Rungs 1–2) from planted-defect judgment evals (Rung 3) and real human recei"
     },
     {
       "id": "K-WOS-01",
@@ -970,7 +1020,7 @@
       "line": 12,
       "domain": "project",
       "reachability": "local",
-      "summary": "Crucible Domain · Active work to connect project history, evidence, knowledge, and graphs across the portfolio. First 10 exhibits (A01–A10), local RAM routing/forge/sieve (cruciblegate.py), atomic primitive registry (PRIM-01..PRIM-13), and 43-repo GitHub inventory are live. · Complete GROUNDTRUTH.md domain intake befor"
+      "summary": "Crucible Domain · Active sovereign AI systems-engineering platform & single control plane (PW-01, Personal Work/GROUNDTRUTH.md). Builds and evolves deterministic RAM capability routing, AST gap discovery & replay-verified worktree execution (replayloop.py), unified CS-first-principles story/editorial engine (storyengin"
     },
     {
       "id": "P-KNOWLEDGE-SIDECAR",
@@ -1173,6 +1223,16 @@
       "summary": "Turn a specific assignment into a verified deliverable. Select the required craft for this job, such as scripting, directing, camera or sound, photography, editing, motion, or live technical support. Use this role when the output needs specialist execution or expert diagnosis. Authority. An assigned"
     },
     {
+      "id": "TEST-PHIL",
+      "kind": "doc",
+      "title": "Testing Philosophy & 4 Evidence Rungs",
+      "path": "Knowledge/Testing_Philosophy.md",
+      "line": 1,
+      "domain": "core-doc",
+      "reachability": "local",
+      "summary": "Four Evidence Rungs, 3 Non-Negotiable Test Laws, red-first/mutation kills, and Rung-3 planted-defect evals (K-TEST-01)."
+    },
+    {
       "id": "WOS-GRAPH",
       "kind": "doc",
       "title": "Work Operating System Graph Catalog (7 Graph Types)",
@@ -1191,146 +1251,6 @@
       "domain": "core-doc",
       "reachability": "local",
       "summary": "Plan, delegate, execute, and review digital work across roles and forks."
-    },
-    {
-      "id": "av-craft",
-      "kind": "skill",
-      "title": "av-craft",
-      "path": "C:/Users/flowe/.gemini/config/skills/av-craft/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Shared vocabulary, storytelling principles, cinematography rules, and anti-inclination checkpoints for Audio-Video (A/V) scriptwriting. Use whenever planning, writing, editing, or reviewing an A/V script, documentary treatment, YouTube script, interview guide, or paper edit."
-    },
-    {
-      "id": "av-flow",
-      "kind": "skill",
-      "title": "av-flow",
-      "path": "C:/Users/flowe/.gemini/config/skills/av-flow/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "slash_only",
-      "summary": "Ask which A/V scriptwriting skill or flow fits your situation. Router over the skills in av-story-skills."
-    },
-    {
-      "id": "av-review",
-      "kind": "skill",
-      "title": "av-review",
-      "path": "C:/Users/flowe/.gemini/config/skills/av-review/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Review an A/V script or Paper Edit along two independent axes using parallel sub-agents: Craft Smells (does it pass spoken-ear, counterpoint, grounding, and camera standards?) and Brief & Custody (does it fulfill the quarry/spine requirements and preserve source/interview integrity?). Use when reviewing script.md or pa"
-    },
-    {
-      "id": "av-scriptwriting",
-      "kind": "skill",
-      "title": "av-scriptwriting",
-      "path": "C:/Users/flowe/.gemini/config/skills/av-scriptwriting/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Audio-Video (A/V) scriptwriting, documentary pre-shoot scripting, YouTube script development, and paper-edit system. Actively counterbalances LLM print-prose biases through Visual-First Subtraction, the Print-to-Speech Mouth-Shape Pass, Dual-Channel Grounding (Requires -> Grounds), Physical Bridge Transitions, and clea"
-    },
-    {
-      "id": "cl-craft",
-      "kind": "skill",
-      "title": "cl-craft",
-      "path": "C:/Users/flowe/.gemini/config/skills/cl-craft/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Shared vocabulary, 20-second hiring manager triage mechanics, Selection Regime calibration (Mandate vs. Institutional Rubric), 4-Sentence Transduction rules, and the 12 LLM Cover Letter Anti-Smells. Use whenever decoding a JD, pitching angles, drafting, or reviewing a cover letter."
-    },
-    {
-      "id": "cl-flow",
-      "kind": "skill",
-      "title": "cl-flow",
-      "path": "C:/Users/flowe/.gemini/config/skills/cl-flow/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "slash_only",
-      "summary": "Router over the cover-letter-builder skill cartridge (cl-vault, cl-decode, cl-angles, cl-draft, cl-craft, cl-review, cl-retro) and its handoffs to Cognitive OS core."
-    },
-    {
-      "id": "cl-review",
-      "kind": "skill",
-      "title": "cl-review",
-      "path": "C:/Users/flowe/.gemini/config/skills/cl-review/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Cover letter 2-axis parallel review: spawn 2 sub-agents to audit cover-letter.md along Hiring Manager 20-Second Scan & Slop (Axis 1) and JD Mandate & Proof Custody (Axis 2), then run export_cover_letter.py."
-    },
-    {
-      "id": "cos-craft",
-      "kind": "skill",
-      "title": "cos-craft",
-      "path": "C:/Users/flowe/.gemini/config/skills/cos-craft/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Shared constitutional principles, Collaborator-Model authority tiers, provenance syntax, domain isolation rules, and anti-bloat checkpoints for the Cognitive OS. Use whenever capturing, briefing, deciding, approving, reconciling, or curating inside cognitive-os."
-    },
-    {
-      "id": "council-reversibility-agent",
-      "kind": "skill",
-      "title": "council-reversibility-agent",
-      "path": "C:/Users/flowe/.gemini/config/skills/council-reversibility-agent/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Sovereign Domain Expansion & Council Governance Agent. Enforces the 3-Tier Reversibility Matrix, eliminates Authorization Fatigue, allows autonomous local test/code iteration, and strictly gates irreversible thermodynamic/external mutations."
-    },
-    {
-      "id": "diagnosing-bugs",
-      "kind": "skill",
-      "title": "diagnosing-bugs",
-      "path": "C:/Users/flowe/.gemini/config/skills/diagnosing-bugs/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
-    },
-    {
-      "id": "domain-expansion",
-      "kind": "skill",
-      "title": "domain-expansion",
-      "path": "C:/Users/flowe/.gemini/config/skills/domain-expansion/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Cognitive meta-layer for domain expansion, capability discovery, and representation calibration. Preserves the direct path when adequate, treats the six levers as optional sensitivities rather than compulsory steps, and decouples generative thought from consequential execution."
-    },
-    {
-      "id": "generative_ui",
-      "kind": "skill",
-      "title": "generative_ui",
-      "path": "C:/Users/flowe/.gemini/config/skills/generative_ui/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Comprehensive design system and interactive component library for rendering rich, responsive Generative UI widgets and standalone artifacts. Features 4 distinct style archetypes, adaptive auto-tile grid topologies, executable API cards, live telemetry terminals, and anti-slop craft standards."
-    },
-    {
-      "id": "grilling",
-      "kind": "skill",
-      "title": "grilling",
-      "path": "C:/Users/flowe/.gemini/config/skills/grilling/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
-    },
-    {
-      "id": "idea-crucible",
-      "kind": "skill",
-      "title": "idea-crucible",
-      "path": "C:/Users/flowe/.gemini/config/skills/idea-crucible/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Compresses and hardens Elijah's rapid ideas before any code or new directory is created. Use whenever a new system, tool, folder, or feature spark is proposed so ideation becomes a structured card in IDEAS.md, passes 3 hardening checks, and converts into one bounded vertical slice."
     },
     {
       "id": "ig-discover-method",
@@ -1361,116 +1281,6 @@
       "domain": "agent-skill",
       "reachability": "local",
       "summary": "Recover the controlling version and next permitted action when resuming work, changing hosts, or encountering conflicting synced records or uncertain effects."
-    },
-    {
-      "id": "impeccable",
-      "kind": "skill",
-      "title": "impeccable",
-      "path": "C:/Users/flowe/.gemini/config/skills/impeccable/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Use when the user wants to design, redesign, shape, critique, audit, polish, simplify, harden, animate, or otherwise improve a frontend interface: websites, landing pages, dashboards, product UI, components, forms, settings, onboarding, empty states, and native iOS or Android screens. Handles UX review, hierarchy, layo"
-    },
-    {
-      "id": "mode-forensic",
-      "kind": "skill",
-      "title": "mode-forensic",
-      "path": "C:/Users/flowe/.gemini/config/skills/mode-forensic/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Mode 3 — Cold-Start Forensic Audit. Activate when inspecting, auditing, or assessing an unfamiliar or partially built repo/folder. Strictly non-mutating; runs C:/Users/flowe/.gemini/config/scripts/code_graph.py --forensic to separate Wired Code from Hollow Stubs and Unverified Claims."
-    },
-    {
-      "id": "mode-quarry",
-      "kind": "skill",
-      "title": "mode-quarry",
-      "path": "C:/Users/flowe/.gemini/config/skills/mode-quarry/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Mode 2 — Quarry & Mechanism Research. Activate when reverse-engineering external repos, videos, games/RPGs, papers, or narrative/technical domains. Spawns 1 parallel research subagent per source and extracts structured Mechanism Cards (including Narrative & Consequence Mechanics)."
-    },
-    {
-      "id": "mode-reframe",
-      "kind": "skill",
-      "title": "mode-reframe",
-      "path": "C:/Users/flowe/.gemini/config/skills/mode-reframe/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Mode 1 — Reframe, Paradigm & Mobilization Modulator. Activate when the user is exploring a problem, instinct, process, or architecture before committing to execution. Zero file creation; dynamically identifies the governing discipline(s), flags missing information, compares 3 genuinely distinct paradigms with pitfalls,"
-    },
-    {
-      "id": "mode-worktree-build",
-      "kind": "skill",
-      "title": "mode-worktree-build",
-      "path": "C:/Users/flowe/.gemini/config/skills/mode-worktree-build/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Mode 4 — Graph & Worktree Build. Activate when writing, fixing, or refactoring code, UI, or creative/canon artifacts. Enforces the 5-Line Pre-Flight Contract, Red-Capable command gates on bugs, the 'Push Right' law, Workspace=\"share\" worktree subagents, the 4-Point Visual Screenshot Gate, Commit-Cited Memory, and 2 Par"
-    },
-    {
-      "id": "negative-space",
-      "kind": "skill",
-      "title": "negative-space",
-      "path": "C:/Users/flowe/.gemini/config/skills/negative-space/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Interrogation and discovery protocol for architectural audits, new feature proposals, and discovering omitted constraints. Inverts positive-space feature bias into subtractive rigor, mechanical boundary enforcement, cross-platform portability, and sovereign operator custody."
-    },
-    {
-      "id": "recursive-meta-calibration",
-      "kind": "skill",
-      "title": "recursive-meta-calibration",
-      "path": "C:/Users/flowe/.gemini/config/skills/recursive-meta-calibration/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Cognitive calibration and self-correction meta-skill for synthesis, strategy, architecture, and non-trivial planning. Enforces the 3-Layer Depth Test, intercepts encyclopedia slop and Hercule mode, strips empty adjectives and pseudo-math, and forces first-principles state machines."
-    },
-    {
-      "id": "visual-asset-craft",
-      "kind": "skill",
-      "title": "visual-asset-craft",
-      "path": "C:/Users/flowe/.gemini/config/skills/visual-asset-craft/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Use when the user needs to create, design, extract, or render graphics, visual overlays, title cards, diagrams, or scene assets for a video, screen recording, presentation, or campaign from a photo, video clip, screen capture, or brief. Manages deterministic programmatic rendering (transparent PNG/SVG overlays), genera"
-    },
-    {
-      "id": "visual-reflex",
-      "kind": "skill",
-      "title": "visual-reflex",
-      "path": "C:/Users/flowe/.gemini/config/skills/visual-reflex/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Physical reflex engine for agents creating, editing, auditing, or reviewing visual designs, frontend UI, web layouts, HTML, Tailwind CSS, graphics, slides, or motion. Enforces the 4 physical invariants (Light dynamic range, Spatial tension, Typographic mass, Kinetic inertia) via closed-loop state-machine transforms to "
-    },
-    {
-      "id": "wait-what",
-      "kind": "skill",
-      "title": "wait-what",
-      "path": "C:/Users/flowe/.gemini/config/skills/wait-what/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "slash_only",
-      "summary": "Stop. That last message did not land: re-pitch it."
-    },
-    {
-      "id": "zero-trust-architect",
-      "kind": "skill",
-      "title": "zero-trust-architect",
-      "path": "C:/Users/flowe/.gemini/config/skills/zero-trust-architect/SKILL.md",
-      "line": 1,
-      "domain": "agent-skill",
-      "reachability": "host_global",
-      "summary": "Architectural patterns and procedural guidance for high-assurance software engineering tasks. Covers candidate isolation, deterministic evidence-bound verification, bounded repair iteration, and procedural separation of duties."
     }
   ]
 }

@@ -282,7 +282,8 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             data = json.loads(proc.stdout)
             msg = data["injectSteps"][0]["systemMessage"]["systemMessage"]
-            self.assertIn("Spokes: writers-room, story-lane, crucible-observatory", msg)
+            self.assertIn("Spokes: writers-room, story-lane, crucible-observatory, meeting-prep", msg)
+            self.assertIn("Engine (0 LLM): discover | ast-scan", msg)
             self.assertIn("Verify: scripts/verify_all.ps1", msg)
 
     def test_pre_tool_blocks_destructive_and_grant_tampering_run_command(self) -> None:

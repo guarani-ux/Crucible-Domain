@@ -3,7 +3,7 @@ graph_id: G-ARCH-04
 graph_type: target_system_architecture
 secondary_type: reference_process_model
 status: observed_live
-last_verified_commit: 69e7c60
+last_verified_commit: a3b9f4a
 ---
 
 # 04 — Crucible Domain: Unified CS + In-RAM ML Control Plane Architecture
@@ -23,7 +23,7 @@ flowchart TD
         GATE["crucible_gate.py (CLI + Hooks)"]
         ML["ram_ml_engine.py (AST + IR + Supervised LogisticRegression + IsolationForest)"]
         DAEMON["ram_ml_daemon.py (127.0.0.1 Hot RAM Daemon, ~3-15ms)"]
-        VERIFY["scripts/verify_all.ps1 (14-Check Parallel Pool)"]
+        VERIFY["scripts/verify_all.ps1 (22-Check Parallel Pool + 5/5 Mutation Kills)"]
         LEDGER[(".agents/ml_history.jsonl + ml_curated.jsonl (5W1H + Resolution)")]
     end
 
@@ -86,7 +86,7 @@ sequenceDiagram
     Note over Agent,Ledger: 4. VERIFY & LEARN (Supervised Accountability)
     Agent->>Verify: pwsh -File scripts/verify_all.ps1
     Verify->>ML: rank_tests_for_changes (AST + Co-Change + TF-IDF + LogisticRegression)
-    Verify->>Verify: Run 14 checks in parallel (impacted first)
+    Verify->>Verify: Run 22 checks in parallel (impacted first)
     Verify-->>Ledger: Log live (changed_files, check, pass/fail)
 ```
 
@@ -97,7 +97,7 @@ sequenceDiagram
 ```json
 {
   "system": "Crucible Domain",
-  "role": "Agentic Control Plane & Hub-and-Spoke MCP Orchestrator",
+  "role": "Sovereign AI Systems-Engineering Platform & Single Control Plane (PW-01)",
   "llm_calls_in_control_plane": 0,
   "commands": {
     "session_start": {
@@ -135,7 +135,35 @@ sequenceDiagram
     },
     "verify_all": {
       "cmd": "pwsh -File scripts/verify_all.ps1",
-      "purpose": "ML-ranked 14-check parallel verification suite with live outcome logging"
+      "purpose": "ML-ranked 22-check parallel verification suite + 5/5 mutation kills with live outcome logging"
+    },
+    "ast_scan": {
+      "cmd": "python .agents/scripts/crucible_gate.py ast-scan [--import-root <dir>] [--json]",
+      "purpose": "Pure-Python in-RAM cross-repo AST call-edge scanner"
+    },
+    "discover": {
+      "cmd": "python .agents/scripts/crucible_gate.py discover [--import-root <dir>] [--emit-campaign <spec.json>] [--json]",
+      "purpose": "Discover AST/contract/MCP/drift/TQ gaps in RAM and synthesize disjoint CampaignSpec JSON"
+    },
+    "campaign": {
+      "cmd": "python .agents/scripts/crucible_gate.py campaign {compile|plan|run|ledger} <target> [--worktree] [--replay-out <trace.jsonl>] [--json]",
+      "purpose": "Compile/plan/run DAG slices in RAM or detached git worktree with double-run replay and fault rollback"
+    },
+    "story": {
+      "cmd": "python .agents/scripts/crucible_gate.py story {recognize|select|chg01|mcp} ...",
+      "purpose": "Deterministic form grammars, DP story-arc clip selection, CHG-01 invalidation, and K-MCP-01 stdio RPC"
+    },
+    "g5_check": {
+      "cmd": "python .agents/scripts/crucible_gate.py g5-check [--file <path>] [--target 10] [--json]",
+      "purpose": "Verify 10 non-commit-counting material improvements against evidence SHA-256"
+    },
+    "kernel": {
+      "cmd": "python .agents/scripts/crucible_gate.py kernel \"<outcome>\" [--autofix] [--json]",
+      "purpose": "Salsa dirty-closure, SHA-256 grant verification, EVOI escalation, and Lyapunov potential convergence"
+    },
+    "mutation_gate": {
+      "cmd": "python .agents/scripts/mutation_gate.py [--json]",
+      "purpose": "Inject 5 controlled gate regressions in temp copies and verify 5/5 test kills"
     }
   },
   "spokes": [

@@ -4,7 +4,7 @@ depends_on:
   - Graphs/00_System_Atlas_and_Neon_Handoff.md
   - Knowledge/Knowledge_Register.md
 depends_on_sha256:
-  Graphs/00_System_Atlas_and_Neon_Handoff.md: 7a8a7d3fd2e21c9f14877c12080af561c72dada587138e7ffb414bd510479fe2
+  Graphs/00_System_Atlas_and_Neon_Handoff.md: ab6c2ba16712fa79081e297f4c2a4444b0d2066825cafec3f801494b8bd2c374
 ---
 
 # Crucible Domain — Computer Science & Engineering Architecture Manual
@@ -49,10 +49,10 @@ Integrates the 17 CS2023 knowledge areas, Master's systems/verification/AI track
 | :--- | :--- | :--- |
 | **1. Algorithms & Complexity** *(CS2023 `AL`, `MSF`; Master's Track 1)* | Graph reachability, cycle detection, Kahn's topological sort (O(V+E)), levelized wave partitioning, and asymptotic vs. empirical cost separation. | `campaign_ir.py` (`compile_campaign`, `_topological_order`) detects dependency cycles pre-execution and partitions independent slices into parallel `execution_waves`. |
 | **2. Data Structures & Graphs** *(CS2023 `AL`, `DM`; Master's Track 8)* | Adjacency lists, typed edge tables (`-->` blocking vs. `-.->` advisory), content-addressable hash maps, and in-RAM flat indexing (~30ms reads vs. cold disk scans). | `router.py` / `indexer.py` serve capability routing in RAM (~30ms); `receipt_cache.json` keys memoized slice outputs by `compute_slice_input_sha256`; `crucible_gate.py` checks `depends_on_sha256` before `mtime`. |
-| **3. Operating Systems & Concurrency** *(CS2023 `OS`, `AR`, `SF`, `PDC`; Master's Track 2)* | Memory hierarchy gap (nanosecond L1/RAM vs. millisecond NTFS metadata and process forks), Copy-on-Write Git worktrees, thread pools, and crash-recovery idempotency. | `verify_all.ps1` runs 11 subprocesses concurrently via `ThreadPoolExecutor`; `slice-worker` executes in isolated `Workspace="share"` CoW directories so parallel writes cannot race on a shared working tree. |
+| **3. Operating Systems & Concurrency** *(CS2023 `OS`, `AR`, `SF`, `PDC`; Master's Track 2)* | Memory hierarchy gap (nanosecond L1/RAM vs. millisecond NTFS metadata and process forks), Copy-on-Write Git worktrees, thread pools, and crash-recovery idempotency. | `verify_all.ps1` runs 22 subprocesses concurrently via `ThreadPoolExecutor`; `slice-worker` executes in isolated `Workspace="share"` CoW directories so parallel writes cannot race on a shared working tree. |
 | **4. Databases & ACID / CAS** *(CS2023 `DM`, `PDC`; Master's Track 2 & 8)* | In-RAM Copy-on-Write overlay, atomic file swap (`tempfile.mkstemp` + `os.replace()`), `before_bytes` rollback, optimistic Compare-And-Swap, and append-only WAL. | `tx_patch.py` (`TransactionBuffer`) guarantees all-or-nothing multi-file disk commits; `campaign_ir.py` (`save_receipt_cache_cas`, `file_sha256`, `_path_lock`, `merge_receipt_cache`) prevents lost updates via `CacheConflictError`; `append_ratchet_ledger` logs immutable TSV rows to `results.tsv`. |
 | **5. Compilers & AST / IR** *(CS2023 `FPL`; Master's Track 3)* | Static typed Intermediate Representation, schema validation, Python bytecode syntax checking (`compile(..., "exec")`), and AST traversal prior to execution. | `campaign_ir.py` lowers JSON specs into typed `CampaignSpec`, `SliceNode`, `PlannedSlice`, and `CompiledCampaign` dataclasses (`CampaignCompileError`); `tx_patch.py` runs `compile()` and `test_quality_gate.py` AST rules in RAM before touching disk. |
-| **6. Networks & IPC** *(CS2023 `NC`, `PDC`; Master's Track 2)* | Process-isolated stdio JSON-RPC 2.0 message passing across domain spokes; timeout-as-unknown-outcome semantics requiring state reconciliation prior to retry. | Hub coordinates `.agents/plugins/` spokes (`writers-room`, `crucible-observatory`, `story-lane`) over bounded stdio IPC, keeping third-party parsers out of the Hub process heap. |
+| **6. Networks & IPC** *(CS2023 `NC`, `PDC`; Master's Track 2)* | Process-isolated stdio JSON-RPC 2.0 message passing across domain spokes; timeout-as-unknown-outcome semantics requiring state reconciliation prior to retry. | Hub coordinates `.agents/plugins/` spokes (`writers-room`, `crucible-observatory`, `story-lane`, `meeting-prep`) over bounded stdio IPC, keeping third-party parsers out of the Hub process heap. |
 | **7. Security & Capabilities** *(CS2023 `SEC`, `SEP`; Master's Track 7)* | Least-privilege object-capability containment, canonical path resolution rejecting directory traversal, and strict separation of untrusted text from capability-bearing code. | `TransactionBuffer._resolve` enforces `is_relative_to(self.root)`; `compile_campaign` enforces `_resolve_allowed_roots` / `_is_within_any`; Asana remains strictly read-only; external/destructive mutations require Tier 1/2 operator gates. |
 | **8. Information Theory & Neural Inference** *(CS2023 `AI`, `HCI`; Master's Track 4 & 5)* | Transformer attention dilution over long contexts ("Lost in the Middle"), KV-cache token budgets, matched-arm evaluation, and holding out by task family. | `build_slice_worker_prompt` strips multi-round history and injects only the bounded slice spec, `target_paths`, and `verify_cmd`, preserving token signal-to-noise and separating model proposals from deterministic gate enforcement. |
 | **9. Formal Methods & Verification** *(CS2023 `MSF`, `FPL`, `SE`; Master's Track 3 & PhD)* | Deterministic Finite State Machines, safety invariants vs. progress conditions, property-based fuzzing, mutation testing, and falsifiable replication traces. | `LoopStateMachine` rejects illegal round transitions (`StateTransitionError`); `test_property_fuzz_crucible_gate.py` fuzzes 220+ frontmatter states; `mutation_gate.py` and `ErrorCircuitBreaker` verify defect detection and halt duplicate failure loops. |
@@ -110,7 +110,7 @@ Prevents stochastic retry loops from burning quota on identical failures:
 | Observed Symptom | CS Root Cause | Physical Code Fix & Exact Mechanism |
 | :--- | :--- | :--- |
 | **Model drift & context rot across rounds** | Unbounded autoregressive context growth dilutes attention over stale history and unrelated files; unconstrained loop phases allow ad-hoc re-planning mid-edit. | `slice-worker` executes fresh-context single-slice prompts from `campaign_ir.py` (`build_slice_worker_prompt`) under `LoopStateMachine` (`PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE`). |
-| **Slow sub-agents & verification stalls** | Serial disk I/O roundtrips per file edit and sequential subprocess execution (`check` -> `doctor` -> `pytest` -> spoke tests) compound process-fork overhead. | `tx_patch.py` batches edits in RAM via `TransactionBuffer`; `scripts/verify_all.ps1` runs all `11` verification checks concurrently via `ThreadPoolExecutor` (`12.86s`); `campaign_ir.py` schedules independent slices in parallel `execution_waves`. |
+| **Slow sub-agents & verification stalls** | Serial disk I/O roundtrips per file edit and sequential subprocess execution (`check` -> `doctor` -> `pytest` -> spoke tests) compound process-fork overhead. | `tx_patch.py` batches edits in RAM via `TransactionBuffer`; `scripts/verify_all.ps1` runs all `22` verification checks concurrently via `ThreadPoolExecutor` (`~86s` with `mutation_gate.py`, `~15-27s` without); `campaign_ir.py` schedules independent slices in parallel `execution_waves`. |
 | **Partial commits & half-written files on failure** | Non-atomic direct writes leave mutated files on disk if a later file fails validation or process execution aborts mid-batch. | `tx_patch.py` (`TransactionBuffer.commit`) runs `validate()` in RAM, stages temp files with atomic `os.replace()`, and executes full `before_bytes` rollback on any exception. |
 | **Lost cache keys under concurrent slice workers** | Uncoordinated read-modify-write updates to `receipt_cache.json` drop earlier workers' entries when two slices finish concurrently. | `campaign_ir.py` (`save_receipt_cache_cas`, `_path_lock`, `merge_receipt_cache`) verifies the prior cache `file_sha256` before atomic write and raises `CacheConflictError` on mismatch. |
 | **False staleness & wasted re-runs after Git checkout** | Filesystem `mtime` timestamps reset on `git checkout` or `git clone`, causing wall-clock dependency checks to flag unchanged upstream files as modified. | `crucible_gate.py` checks `depends_on_sha256` content digests before falling back to `mtime`, and `campaign_ir.py` (`compute_slice_input_sha256`, `optimize_campaign`) hashes target/dependency contents to skip unchanged slices at `0` tokens. |
@@ -118,9 +118,9 @@ Prevents stochastic retry loops from burning quota on identical failures:
 
 ---
 
-## 6. Verified Vertical Slices (#1–#6) & Open CS Frontiers
+## 6. Verified Vertical Slices (#1–#12) & Open Systems-Builder Frontiers
 
-### Verified Vertical Slices (#1–#6)
+### Verified Vertical Slices (#1–#12)
 
 | Rank | Vertical Slice | CS Primitives Combined | Why Build It First | Status & Verified Commits |
 | :---: | :--- | :--- | :--- | :--- |
@@ -137,11 +137,11 @@ Prevents stochastic retry loops from burning quota on identical failures:
 | **#11** | **Unified CS-First-Principles Story Engine (`story_engine.py`)** | `Form Grammars` + `DP Story-Arc Clip Selection` + `CHG-01 SHA-256` | Re-invents `writers-room` + `story-lane` capabilities from CS first principles with exact `OPEN -> DEVELOP -> PAYOFF_CLOSE` DP selection, `CHG-01` invalidation, and `K-MCP-01` compatibility. | **WAVE 4.5** — `story_engine.py` + `storylane_spoke` |
 | **#12** | **Cross-Repo Portability & G5 Ledger (`CD-W19` / `CD-W20`)** | `Relative MCP Paths` + `Non-Vanity G5 Outcome Ledger` | Eliminates hardcoded drive-letter paths across all 4 `.agents/plugins/*/mcp_config.json` files and verifies 10 compounding non-commit-counting improvements (`g5-check`). | **WAVE 4.5** — `doctor.py` + `outcome_ledger.py` |
 
-### Open CS Frontiers (Unbuilt Domains)
+### Open Systems-Builder Frontiers (Next Engineering Targets)
 
-1. **Spoke Design-by-Contract (`Formal Pre/Postconditions & Runtime Invariants`)**
-   * Enforce machine-checkable preconditions, postconditions, and frame invariants (`requires` / `ensures` / `unchanged_roots`) across every MCP spoke ABI call (`recognize`, `prepare`, `deliver`), turning spoke contracts into runtime-verified assertions rather than prose rules.
-2. **BM25 + Graph-Walk Retrieval in `router.py` (`IR + Relational Traversal`)**
-   * Combine ranked lexical BM25 scoring with bounded `k`-hop traversal over capability/dependency edges in `router.py`, enabling synonym-tolerant and structural queries (filtering by domain, authority tier, and execution stage) inside the sub-100ms RAM budget.
-3. **SAT/SMT Constraint Solving (`Automated Schedule, Authority & Path Feasibility`)**
-   * Encode slice resource locks, disjoint `target_paths`, domain-isolation policies, and authority holds as Boolean/linear constraints solved via SAT/SMT before execution, proving plan feasibility and zero-conflict parallel scheduling prior to spawning workers.
+1. **Parallel Mutation Gate & Expanded Mutant Coverage (`mutation_gate.py`)**
+   * Parallelize the 5 sequential pytest passes in `mutation_gate.py` (`~86s` -> `~25s` wall-clock) and add targeted mutant suites covering `replay_loop.py` rollback and `story_engine.py` `CHG-01`/interval invariants.
+2. **Closed-Loop Deterministic Autofixers (`replay_loop.py` + `crucible_gate.py`)**
+   * Wire deterministic autofix handlers (stale `depends_on_sha256` refresh, `00_System_Atlas` module registration, `mcp_config.json` path normalization) directly into `discover` -> `campaign run --worktree --replay-out`.
+3. **Standalone Cross-Platform Spoke Packaging (`K-MCP-01` / `CD-W19`)**
+   * Eliminate the co-located sibling directory assumption (`../crucible-spokes/...`, `../the-writers-room`) via installable/discovered spoke locators when deploying across separate machines or CI containers.

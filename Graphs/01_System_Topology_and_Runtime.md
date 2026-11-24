@@ -45,34 +45,32 @@ sequenceDiagram
 
 ---
 
-## 2. Modular Package Architecture (`crucible/` + Thin Shim)
+## 2. Modular Package Architecture (`crucible/` + Control Plane + Spokes)
 
-Following Wave 1 (`de90370`) and Wave 2 (`97a5b61`, `13152ec`), the former 2,552-line `crucible_index.py` monolith is split into focused acyclic modules under [`.agents/scripts/crucible/`](../.agents/scripts/crucible/__init__.py) behind a 102-line backwards-compatible shim at [`crucible_index.py`](../.agents/scripts/crucible_index.py), while [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) (805L) imports it via `_resolve_index_module()`.
+Following Waves 1–4.5 (`de90370` -> `a3b9f4a`), the former `crucible_index.py` monolith is split into **13 focused modules** under [`.agents/scripts/crucible/`](../.agents/scripts/crucible/__init__.py) behind a backwards-compatible shim at [`crucible_index.py`](../.agents/scripts/crucible_index.py), while [`crucible_gate.py`](../.agents/scripts/crucible_gate.py) serves as the unified CLI/hook control plane. Offline research/mining (`forge`, `sieve`, `exporter`, `ledger`) runs inside the `crucible-observatory` MCP spoke.
 
 ```mermaid
 flowchart LR
-    GATE["crucible_gate.py (805L)<br/>Hooks + Contract + CLI Dispatch"] -->|"_resolve_index_module()"| SHIM["crucible_index.py (102L)<br/>Backwards-compatible shim"]
+    GATE["crucible_gate.py<br/>Hooks + CLI (discover, campaign, story, g5-check, kernel)"] -->|"_resolve_index_module()"| SHIM["crucible_index.py<br/>Backwards-compatible shim"]
 
-    subgraph PKG[".agents/scripts/crucible/ (8 Modular Files)"]
-        MOD["models.py (575L)<br/>Dataclasses, constants, CORE_ENTRY_DOCS"]
-        IDX["indexer.py (545L)<br/>build_index (~32-37ms RAM) + primitive validation"]
-        RTR["router.py (178L)<br/>route_query, lexical/ID scoring"]
-        FRG["forge.py (403L)<br/>forge_brief domain synthesis"]
-        DOC["doctor.py (443L)<br/>run_doctor, links, [INFO] portability"]
-        SIV["sieve.py (489L · Standalone)<br/>fetch_github_repos, melt-diff, melt-scan"]
-        EXP["exporter.py (88L)<br/>write_capability_map -> capability_map.json"]
+    subgraph PKG[".agents/scripts/crucible/ (13 Modular Files)"]
+        CORE["__init__.py, models.py, indexer.py, router.py, doctor.py"]
+        EXEC["tx_patch.py, campaign_ir.py, contracts.py, solver.py"]
+        AUTO["ast_scanner.py, replay_loop.py, story_engine.py, outcome_ledger.py"]
+    end
+
+    subgraph ENGINE["Control Plane & Verification Scripts (.agents/scripts/)"]
+        KERN["crucible_kernel.py + ram_ml_engine.py + ram_ml_daemon.py"]
+        VER["verify_all.py (22 parallel checks) + mutation_gate.py (5/5 kills) + test_quality_gate.py"]
     end
 
     SHIM --> PKG
-    IDX -->|"Data types & maps"| MOD
-    RTR -->|"Data types & stopwords"| MOD
-    FRG -->|"Domain cues + scoring"| RTR
-    DOC -->|"Index + primitive checks"| IDX
-    DOC -.->|"Optional Path.home()/.gemini/config"| HOST["Host Global Config ([INFO] when absent)"]
-    SIV -.->|"Shells out to gh api (network)"| GH["GitHub API (guarani-ux)"]
-    EXP -->|"Writes 146 capabilities"| MAP["Graphs/capability_map.json"]
+    GATE --> ENGINE
+    GATE --> PKG
+    CORE -.->|"Optional Path.home()/.gemini/config"| HOST["Host Global Config ([INFO] when absent)"]
+    OBS["crucible-observatory MCP Spoke<br/>(forge, sieve, exporter -> capability_map.json)"] -.->|"Imports crucible.indexer"| CORE
 ```
 
 ### Why this matters for runtime & maintenance
-- **Cold-start speed stays ~32–37 ms** because `build_index()` only parses local Markdown and JSON files.
-- **Clean boundaries:** Networked GitHub sieving (`sieve.py`), portability-aware diagnostics (`doctor.py`), heuristic synthesis (`forge.py`), and JSON map export (`exporter.py`) are decoupled from core parsing (`indexer.py`).
+- **Cold-start speed stays ~33–37 ms** because `build_index()` only parses local Markdown and JSON files.
+- **Clean separation:** Heavy offline mining (`forge`/`sieve`/`exporter` in `crucible-observatory`) stays out of the hot `<50ms` path while `tx_patch.py`, `campaign_ir.py`, `solver.py`, `ast_scanner.py`, `replay_loop.py`, `story_engine.py`, and `outcome_ledger.py` stay deterministic and 0-LLM inside `.agents/scripts/crucible/`.

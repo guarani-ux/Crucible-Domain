@@ -161,6 +161,21 @@ CORE_ENTRY_DOCS: dict[str, tuple[str, str, str]] = {
         "Knowledge/Testing_Philosophy.md",
         "Four Evidence Rungs, 3 Non-Negotiable Test Laws, red-first/mutation kills, and Rung-3 planted-defect evals (K-TEST-01).",
     ),
+    "CRUCIBLE-ML-ARCH": (
+        "Crucible Unified CS + In-RAM ML Control Plane Architecture",
+        "Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md",
+        "Machine- and human-readable architecture manifest of the control plane CLI, in-RAM ML daemon, parallel verifier, and 4 MCP spokes.",
+    ),
+    "CS-ARCH": (
+        "Crucible CS & Engineering Architecture Manual",
+        "Personal Work/CS_Opportunity_Map.md",
+        "Physical CS/CE/SE mapping, verified vertical slices #1-#12, hardware concurrency budget, and open systems-builder frontiers.",
+    ),
+    "CS-SCORECARD": (
+        "Code Process Validity & Engineering Maturity Scorecard",
+        "Personal Work/CS_Process_Validity_Scorecard.md",
+        "Per-wave systems-builder validity rubric, observed metrics, and honest bottleneck/ceiling tracking.",
+    ),
 }
 
 CANONICAL_LOCAL_FIRST_FILES = (
@@ -171,10 +186,13 @@ CANONICAL_LOCAL_FIRST_FILES = (
     "Knowledge/Testing_Philosophy.md",
     "Calgary Public Library/GROUND_TRUTH.md",
     "Personal Work/GROUND_TRUTH.md",
+    "Personal Work/CS_Opportunity_Map.md",
+    "Personal Work/CS_Process_Validity_Scorecard.md",
     "Project/Project_Register.md",
     "Archive/README.md",
     "Graphs/GROUND_TRUTH.md",
     "Graphs/00_System_Atlas_and_Neon_Handoff.md",
+    "Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md",
 )
 
 EXHIBIT_LESSON_LINKS: dict[str, tuple[str, ...]] = {

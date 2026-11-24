@@ -10,11 +10,12 @@ flowchart LR
     GATE -->|"session-start (<15ms hot / <50ms cold)"| CTX["Context Compiler (AST + ML + Git)"]
     GATE -->|"ml-preflight"| PF["Outcome Clarity Gate (REALIGNMENT_REQUIRED / READY)"]
     GATE -->|"pre-commit"| RISK["Adaptive Risk Engine (P(break) -> auto --strict)"]
-    GATE -->|"verify_all.ps1"| VER["14-Check Parallel Pool (ML-Ranked Tests)"]
-    VER -.->|"Live Pass/Fail + 5W1H Ledger"| ML["ram_ml_engine.py + Hot Daemon (0 LLM calls)"]
+    GATE -->|"discover / ast-scan / campaign run"| LOOP["AST Discovery + Worktree Replay Loop + Story Engine"]
+    GATE -->|"verify_all.ps1"| VER["22-Check Parallel Pool + 5/5 Mutation Kills"]
+    VER -.->|"Live Pass/Fail + 5W1H + G5 Ledger"| ML["ram_ml_engine.py + outcome_ledger.py (0 LLM calls)"]
     ML -.-> CTX
     ML -.-> RISK
-    GATE -->|"K-MCP-01 Commissions"| SPOKES["MCP Spokes: writers-room | story-lane | meeting-prep | observatory"]
+    GATE -->|"K-MCP-01 Capabilities"| SPOKES["MCP Spokes: writers-room | story-lane | meeting-prep | observatory"]
 ```
 
 > **Full Machine-Readable Architecture & Capability Manifest:** See [04_InRAM_ML_and_Control_Plane_Architecture.md](Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md) and [capability_map.json](Graphs/capability_map.json).
@@ -25,7 +26,11 @@ flowchart LR
 | :--- | :--- | :--- | :--- |
 | **Orient at session start** | `python .agents/scripts/crucible_gate.py session-start` | Context Compiler (`ram_ml_daemon.py` / `crucible_gate.py`) | Active domain, changed AST symbols, priority tests, watch blockers |
 | **Verify task clarity before coding** | `python .agents/scripts/crucible_gate.py ml-preflight "<outcome>"` | Outcome Clarity Gate (`ram_ml_engine.py`) | `REALIGNMENT_REQUIRED` (names gaps) or `READY` + 3-step plan |
-| **Run fast-fail tests & full verification** | `pwsh -File scripts/verify_all.ps1` | ML Test-Ranker + 14-Check Parallel Pool | ML-ordered pytest + `--strict` gate + live outcome logging |
+| **Run fast-fail tests & full verification** | `pwsh -File scripts/verify_all.ps1` | ML Test-Ranker + 22-Check Parallel Pool + Mutation Gate | ML-ordered pytest + `--strict` gate + 5/5 mutation kills + live logging |
+| **Discover structural/contract gaps** | `python .agents/scripts/crucible_gate.py discover [--emit-campaign]` | AST Call-Edge Scanner (`ast_scanner.py`) + `replay_loop.py` | RAM scan of units/edges, drift, stale SHA-256, `TQ` & MCP checks |
+| **Run replay-verified worktree slices** | `python .agents/scripts/crucible_gate.py campaign run <spec.json> --worktree --replay-out` | Campaign IR (`campaign_ir.py`) + `replay_loop.py` | Isolated worktree execution, double-run replay, automatic fault rollback |
+| **Run deterministic story-arc & CHG-01 engine** | `python .agents/scripts/crucible_gate.py story {recognize\|select\|chg01\|mcp}` | Unified CS Story Engine (`story_engine.py`) | Form grammars, DP clip selection, `CHG-01` invalidation, zero NLE creep |
+| **Verify G5 outcomes & kernel convergence** | `python .agents/scripts/crucible_gate.py g5-check` / `kernel` | Outcome Ledger (`outcome_ledger.py`) + `crucible_kernel.py` | 10 non-vanity improvements (`g5-check`) & Lyapunov DAG closure |
 | **Review a diff for risk & missing tests** | `python .agents/scripts/crucible_gate.py ml-review` | `IsolationForest` + AST CC + Co-Change + `5W1H` History | Ranked review priority, missing co-change partners, past fixes |
 | **Commit with adaptive risk gating** | `python .agents/scripts/crucible_gate.py pre-commit` | Adaptive Risk Engine (`assess_commit_risk`) | Auto-escalates `--strict` when staged `P(break) >= 0.55` |
 | **Curate & retrain local ML** | `crucible_gate.py ml-curate` then `ml-train` | Deterministic Curation + 5-Fold CV (`LogisticRegression`) | Balanced `.agents/ml_curated.jsonl` + held-out Precision/Recall/F1 |
@@ -37,7 +42,7 @@ flowchart LR
 
 ## Start here
 
-- **How does Crucible run domain tools (`Writer's Room`, `Story-Lane`)?** Read [Role: Orchestrator-Producer Hub & MCP Spokes](#role-orchestrator-producer-hub--mcp-spokes) below, [AGENTS.md](AGENTS.md) (`Section 4`), and [`K-MCP-01`](Knowledge/Knowledge_Register.md).
+- **How does Crucible run domain tools (`Writer's Room`, `Story-Lane`)?** Read [Role: Single Control Plane & Plug-In MCP Spokes](#role-single-control-plane--plug-in-mcp-spokes) below, [AGENTS.md](AGENTS.md) (`Section 4`), and [`K-MCP-01`](Knowledge/Knowledge_Register.md).
 - **What exists and what is underway?** Open the [Project Register](Project/Project_Register.md) *([Drive](https://drive.google.com/file/d/1hejOpxES0oMfwcZHxAgxb7cvvnUcLm3i/view?usp=drivesdk))*. It distinguishes reviewed projects, conversation leads, and repositories that still need inspection.
 - **What did we learn or get wrong?** Open the [Knowledge Register](Knowledge/Knowledge_Register.md) *([Drive](https://drive.google.com/file/d/1XwzOf6ifYPTq0NDlnU9luciRQMPkjxH-/view?usp=drivesdk))*. It links findings, failures, and tested practices to evidence and shows when they apply.
 - **How do we prove changes work instead of writing "made-to-pass" tests?** Open [Testing Philosophy](Knowledge/Testing_Philosophy.md) (`K-TEST-01` — 4 Evidence Rungs, 3 Test Laws, Red-First & Rung-3 planted-defect evals).
@@ -46,16 +51,16 @@ flowchart LR
 - **Which media procedure or role applies?** Open [Media Agency skills and workflows](Knowledge/Media%20Agency/Skills%20and%20Workflows/README.md) (55 numbered procedures) or [Media work routing](Knowledge/Media%20Agency/Media_Work_Routing.md).
 - **How does this connect?** Keep a project graph with its project. Use [Graphs](Graphs) *([Drive](https://drive.google.com/drive/folders/1h02pFvfRZbjk796qQp9-7O7_kvZiA_kL))* for views spanning projects or domains. Link the same project and knowledge IDs across views.
 - **Where does the current work live?** Follow the register to the controlling artifact. Use [Calgary Public Library](Calgary%20Public%20Library) *([Drive](https://drive.google.com/drive/folders/1MfKl4RU-9fPmyKPmwMk_8zoxd8OD9qbw))* for authorized Library project material, [Personal Work](Personal%20Work) *([Drive](https://drive.google.com/drive/folders/125LCIJs0LtkvL9-Aitqa9BC32moPTY71))* for personal work, and [Project](Project) *([Drive](https://drive.google.com/drive/folders/1OjT4JloI0IaYmzgnQDgJQ_7lDOtRC6eE))* for shared systems such as the [Work Operating System](Project/Work%20Operating%20System/README.md) *([Drive](https://drive.google.com/drive/folders/1Wa4YCSoXhpfuv01dfgVysKEg-g_bP6ZT))* and [Inner Gravity](Project/Inner%20Gravity/README.md).
-- **Route, forge, sieve, or check workspace health in local RAM:** Run `python ".agents/scripts/crucible_gate.py" route "<task or ID>"`, `forge "<problem>"`, `melt-diff`, `melt-scan <repo...>`, or `doctor`.
+- **Route, discover, run replay campaigns, verify G5, or check workspace health in local RAM:** Run `python ".agents/scripts/crucible_gate.py"` with `route "<task or ID>"`, `doctor`, `discover`, `ast-scan`, `campaign`, `story`, `g5-check`, or `kernel`. Offline prior-art `forge`, GitHub `melt-diff`/`melt-scan`, and `export-map` run via the [Crucible Observatory MCP spoke](.agents/plugins/crucible-observatory/skills/crucible-observatory/SKILL.md).
 
-## Role: Orchestrator-Producer Hub & MCP Spokes
+## Role: Single Control Plane & Plug-In MCP Spokes
 
-Crucible operates as the **Orchestrator-Producer Hub** on the bridge, delegating specialized domain execution to lightweight MCP spokes registered under `.agents/plugins/<spoke>/` with zero heavy Hub glue scripts (`K-MCP-01`):
+Crucible Domain operates as a **sovereign systems-engineering / capacity-amplification platform (`PW-01`)** and **single control plane**, delegating specialized domain workflows to lightweight MCP spokes registered under `.agents/plugins/<spoke>/` (`K-MCP-01`):
 
 | Layer | Role & What It Owns | What It Never Does |
 | --- | --- | --- |
-| **Crucible Domain (Orchestrator-Producer Hub)** | Frames the assignment and recipient task; resolves local `GROUND_TRUTH.md` sources, project history, and approval gates; supplies non-evidentiary craft playbooks (`MW-*`, `MP-*`); orchestrates subagents; judges whether the deliverable works for the human recipient. | Re-implement domain-specific parsers/renderers inside Hub scripts, or treat craft procedures as factual evidence or release authority. |
-| **Domain MCP Spokes** (`.agents/plugins/<spoke>/`, e.g., [`writers-room`](.agents/plugins/writers-room/skills/writers-room/SKILL.md), future `Story-Lane`) | Recognize domain forms/artifacts; attach at most one form-pinned Crucible craft excerpt (`role: "method"`, `use: "craft"`) or abstain (`null`); enforce fast deterministic domain floors (cut-authority holds, section/table shape, `timed_av` math); render/export deliverables (`.md`, `.docx`, clip selects). | Act as a competing second control plane, consume raw lexical `route` ranks blindly, or trap exploratory creative prose (`treatment`, `production_brief`) in multi-round forensic churn over unlogged art-direction details. |
+| **Crucible Domain (Control Plane & Engine)** | Evolves the deterministic RAM/AST/DAG/Z3/ML/replay runtime (`PW-01`); frames domain assignments; resolves local `GROUND_TRUTH.md` and approval gates; supplies non-evidentiary craft playbooks (`MW-*`, `MP-*`); orchestrates subagents; judges recipient fit. | Re-implement external heavy NLE/LLM pipelines inside Hub gates, or treat craft procedures as factual evidence or release authority. |
+| **Domain MCP Spokes** (`.agents/plugins/<spoke>/`: [`writers-room`](.agents/plugins/writers-room/skills/writers-room/SKILL.md), [`story-lane`](.agents/plugins/story-lane/skills/story-lane/SKILL.md), [`meeting-prep`](.agents/plugins/meeting-prep/skills/meeting-prep/SKILL.md), [`crucible-observatory`](.agents/plugins/crucible-observatory/skills/crucible-observatory/SKILL.md)) | Recognize domain forms/artifacts; attach at most one form-pinned Crucible craft excerpt (`role: "method"`, `use: "craft"`) or abstain (`null`); enforce fast deterministic domain floors (cut-authority holds, section/table shape, `timed_av` math, `0 <= start < end` clip boundaries); render/export deliverables (`.md`, `.docx`, clip selects). | Act as a competing second control plane, consume raw lexical `route` ranks blindly, or trap exploratory creative prose (`treatment`, `production_brief`) in multi-round forensic churn over unlogged art-direction details. |
 
 ## Rule for representing work
 

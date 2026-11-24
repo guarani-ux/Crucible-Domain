@@ -174,7 +174,8 @@ def _fast_session_context_line(root: Path) -> str:
 def cmd_session_start(root: Path = ROOT) -> int:
     lines = [
         _build_system_map(root),
-        "Spokes: writers-room, story-lane, crucible-observatory | Verify: scripts/verify_all.ps1",
+        "Spokes: writers-room, story-lane, crucible-observatory, meeting-prep | Verify: scripts/verify_all.ps1",
+        "Engine (0 LLM): discover | ast-scan | campaign {compile|plan|run --worktree --replay-out} | story {recognize|select|chg01} | g5-check | kernel | ml-preflight",
         _fast_session_context_line(root),
     ]
     system_map = "\n".join(lines)
@@ -318,7 +319,7 @@ def cmd_pre_tool(root: Path = ROOT) -> int:
 
 
 def _check_self_model_drift(root: Path = ROOT) -> list[str]:
-    """Verify active plugins and 5-piece crucible/ kernel modules match AGENTS.md and 00_System_Atlas."""
+    """Verify active plugins and modular crucible/ kernel modules match AGENTS.md and 00_System_Atlas."""
     agents_path = root / "AGENTS.md"
     atlas_path = root / "Graphs" / "00_System_Atlas_and_Neon_Handoff.md"
     if not agents_path.is_file() or not atlas_path.is_file():

@@ -1,7 +1,7 @@
 ---
 title: Crucible Loop — Forensic CS Weakness & Unleveraged-Domain Audit
-status: active
-branch: loop/cs-weakness-audit
+status: resolved
+branch: main
 depends_on:
   - .agents/scripts/crucible/tx_patch.py
   - .agents/scripts/crucible/campaign_ir.py
@@ -14,7 +14,7 @@ depends_on_sha256:
 
 # Crucible Loop — Forensic CS Weakness & Unleveraged-Domain Audit
 
-> **Scope:** Code-grounded audit of the live `crucible-loop` v3 stack (`tx_patch.py`, `campaign_ir.py`, `verify_all.ps1`, `SKILL.md`) to surface concrete physical weaknesses and unleveraged Computer Science primitives.
+> **Scope:** Historical code-grounded audit of the `crucible-loop` v3 stack (`tx_patch.py`, `campaign_ir.py`, `verify_all.ps1`) whose weaknesses (`W1`–`W6`) and previously unleveraged CS domains are now resolved across Waves 1–4.5 on `main` (see Section 2 and Section 4 below).
 
 ---
 
@@ -31,20 +31,20 @@ depends_on_sha256:
 
 ---
 
-## 2. Unleveraged CS Domains (Not Yet in the Loop)
+## 2. Previously Unleveraged CS Domains (Resolved in Waves 1–4.5)
 
 1. **Formal State Machines (Round Lifecycle Enforcement) — RESOLVED (`LoopStateMachine`, `7abe2f6`):**
-   - *Gap:* The `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` cycle is currently enforced by prompt prose in `SKILL.md`, not by code.
+   - *Gap:* The `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` cycle was enforced by prompt prose in `SKILL.md`, not by code.
    - *CS Primitive:* **Finite State Machine (FSM)** controller that rejects `COMMIT` unless `VERIFY` passed on the exact staged `after_sha256`.
-2. **Programming Languages (Design-by-Contract on Spoke Boundaries):**
-   - *Gap:* Hub <-> Spoke JSON-RPC calls lack machine-checked pre/post-condition contracts.
-   - *CS Primitive:* **Refinement Types / Runtime Contracts** validating `authority_scope`, path containment, and non-empty source hashes at the spoke boundary.
-3. **Information Retrieval (BM25 + Graph-Walk Orientation):**
-   - *Gap:* `crucible_gate.py route` uses basic lexical matching.
-   - *CS Primitive:* Zero-dependency local **BM25 + dependency-graph ranking** for sub-50ms exact procedure/knowledge retrieval.
+2. **Programming Languages (Design-by-Contract on Spoke Boundaries) — RESOLVED (`contracts.py`, Slice `#8`):**
+   - *Gap:* Hub <-> Spoke JSON-RPC calls lacked machine-checked pre/post-condition contracts.
+   - *CS Primitive:* **Refinement Types / Runtime Contracts** (`SpokeContract`, `verify_spoke_call`, `snapshot_roots`) validating preconditions, postconditions, and SHA-256 `unchanged_roots` frame invariants at the spoke boundary.
+3. **Information Retrieval (BM25 + Graph-Walk Orientation) — RESOLVED (`router.py`, Slice `#7`, `ee42caa`):**
+   - *Gap:* `crucible_gate.py route` used basic lexical matching.
+   - *CS Primitive:* Zero-dependency local **BM25 + bounded `k`-hop dependency-graph ranking** in `router.py` inside the sub-100ms RAM budget.
 4. **Distributed Systems (Append-Only Event Sourcing / Ratchet Ledger) — RESOLVED (`append_ratchet_ledger`, `7abe2f6`):**
-   - *Gap:* Receipts are overwritten in `receipts.json` rather than appended as a replayable history.
-   - *CS Primitive:* **Append-Only JSONL Event Log** turning every real campaign round into an offline regression fixture.
+   - *Gap:* Receipts were overwritten in `receipts.json` rather than appended as a replayable history.
+   - *CS Primitive:* **Append-Only TSV/JSONL Event Log** (`results.tsv`, `replay_trace.jsonl`) turning every real campaign round into an offline regression fixture.
 
 ---
 
@@ -64,3 +64,6 @@ depends_on_sha256:
 - **W6** (Parallel `scripts/verify_all.ps1` via Python `ThreadPoolExecutor` + scoped spoke tests): **RESOLVED** (Round 04/12)
 - **Formal State Machines** (`LoopStateMachine` enforcing `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` in `campaign_ir.py`): **RESOLVED** (`7abe2f6`, Round 01/12)
 - **Append-Only Ratchet Ledger** (`append_ratchet_ledger` / `load_ratchet_ledger` TSV log in `campaign_ir.py` + `crucible_gate.py campaign ledger`): **RESOLVED** (`7abe2f6`, Round 01/12 + Round 02/12)
+- **BM25 + Graph-Walk Retrieval** (`route_query` in `router.py`, Slice `#7`): **RESOLVED** (`ee42caa`)
+- **Spoke Design-by-Contract** (`SpokeContract` / `verify_spoke_call` in `contracts.py`, Slice `#8`): **RESOLVED** (`test_contracts.py`)
+- **Z3 Wave Feasibility + Replay Loop + Unified Story Engine + CD-W19/20** (`solver.py`, `replay_loop.py`, `story_engine.py`, `doctor.py`, `outcome_ledger.py`): **RESOLVED** (`a3b9f4a`, Wave 4.5)
