@@ -402,3 +402,63 @@ def test_until_exit_mode_runs_continuously_escalates_and_stops_on_bench_stop(tmp
     learned = json.loads((tmp_path / "learned.json").read_text(encoding="utf-8"))
     assert learned["targets"]["p-brief-continuous"]["difficulty_level"] == 2
     assert len(learned["forms"]["production_brief"]["learned_rules"]) >= 1
+
+
+def test_progress_streaming_emits_start_banner_heartbeat_and_element_breakdown(tmp_path: Path) -> None:
+    import time as _time
+    from crucible import workload_bench as wb
+
+    manifest = load_workload_manifest(
+        {
+            "version": "1.0",
+            "defaults": {
+                "staging_dir": "runs",
+                "telemetry_file": "tel.jsonl",
+                "ml_history_file": "ml.jsonl",
+                "bandit_state_file": "bandit.json",
+                "learned_policies_file": "learned.json",
+                "timeout_seconds": 15,
+                "max_retries": 0,
+            },
+            "projects": [
+                {
+                    "id": "p-stream",
+                    "domain": "cpl_research",
+                    "mode": "agy_live",
+                    "form": "research_note",
+                    "intent": "Draft a short CPL research_note.",
+                    "deliverable": "note.md",
+                    "public_checks": {"required_sections": ["Observed Signal", "Hypothesis"]},
+                }
+            ],
+        }
+    )
+
+    events: list[str] = []
+
+    def slow_worker(_prompt: str, _root: Path, _timeout_s: float) -> tuple[bool, str]:
+        _time.sleep(0.15)
+        return (
+            True,
+            "## Observed Signal\n2026-11-24 `Calgary Public Library/GROUND_TRUTH.md` 213-video audit.\n"
+            "## Hypothesis\nTest patron barrier; transfer limit and next check pending owner.\n",
+        )
+
+    orig_hb = wb._run_with_heartbeat
+    wb._run_with_heartbeat = lambda fn, pfn, lbl, to, interval_s=0.05: orig_hb(fn, pfn, lbl, to, interval_s=0.05)
+    try:
+        res = run_workload_bench(
+            tmp_path,
+            manifest,
+            mode_filter="all",
+            rounds=1,
+            progress_fn=events.append,
+            agy_worker_fn=slow_worker,
+        )
+    finally:
+        wb._run_with_heartbeat = orig_hb
+
+    assert res["ok"] is True
+    assert any("START p-stream" in line for line in events)
+    assert any("still waiting on agy" in line for line in events)
+    assert any("style=" in line and "stake=" in line and "weak=" in line for line in events)

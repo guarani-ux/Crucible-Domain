@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -508,36 +509,73 @@ def _build_agy_worker_prompt(
 
 
 def _default_agy_worker(prompt: str, root: Path, timeout_s: float) -> tuple[bool, str]:
-    """Invoke headless `agy --print` in sandbox mode with a hard wall-clock timeout."""
+    """Invoke headless `agy --print` in sandbox mode with hard timeout and clean Ctrl+C termination."""
     agy_bin = shutil.which("agy") or shutil.which("agy.exe")
     if not agy_bin:
         return False, "AGY_UNAVAILABLE: 'agy' CLI not found on PATH"
+    proc = subprocess.Popen(
+        [
+            agy_bin,
+            "--print",
+            prompt,
+            "--sandbox",
+            "--print-timeout",
+            f"{int(max(5, round(timeout_s)))}s",
+        ],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     try:
-        proc = subprocess.run(
-            [
-                agy_bin,
-                "--print",
-                prompt,
-                "--sandbox",
-                "--print-timeout",
-                f"{int(max(5, round(timeout_s)))}s",
-            ],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_s + 10.0,
-            check=False,
-        )
+        stdout, stderr = proc.communicate(timeout=timeout_s + 10.0)
     except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
         return False, f"AGY_TIMEOUT: exceeded {timeout_s}s"
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.communicate(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+        raise
 
-    out = proc.stdout.strip()
+    out = (stdout or "").strip()
     if proc.returncode != 0 or not out:
-        err = proc.stderr.strip() or f"exit_code={proc.returncode}"
+        err = (stderr or "").strip() or f"exit_code={proc.returncode}"
         return False, f"AGY_FAILED: {err[:240]}"
     return True, out
+
+
+def _run_with_heartbeat(
+    fn: Callable[[], tuple[bool, str]],
+    progress_fn: Callable[[str], None] | None,
+    label: str,
+    timeout_s: float,
+    interval_s: float = 10.0,
+) -> tuple[bool, str]:
+    """Run worker fn while emitting periodic elapsed heartbeat messages if progress_fn is set."""
+    if progress_fn is None or interval_s <= 0:
+        return fn()
+    done = threading.Event()
+    t0 = time.monotonic()
+
+    def _beat() -> None:
+        while not done.wait(interval_s):
+            elapsed = int(round(time.monotonic() - t0))
+            progress_fn(f"    ... {label} still waiting on agy ({elapsed}s / {int(timeout_s)}s)")
+
+    th = threading.Thread(target=_beat, daemon=True)
+    th.start()
+    try:
+        return fn()
+    finally:
+        done.set()
+        th.join(timeout=0.5)
 
 
 def _append_bench_telemetry(path: Path, receipt: ProjectRunReceipt) -> None:
@@ -758,6 +796,11 @@ def run_workload_bench(
                     )
                     persisted_diag = prior_diagnosis_by_proj.get(proj.id) or str(mastery_ctx.get("last_diagnosis", ""))
 
+                    if progress_fn is not None:
+                        progress_fn(
+                            f"  [r{round_idx}] START {proj.id} ({form_id} L{cur_level} | arm={arm_id} | mode={proj.mode}) ..."
+                        )
+
                     retries_used = 0
                     max_attempts = 1 + (manifest.defaults.max_retries if proj.mode == "agy_live" else 0)
                     execute_ms = 0.0
@@ -779,6 +822,10 @@ def run_workload_bench(
                     for attempt in range(max_attempts):
                         if attempt > 0:
                             retries_used += 1
+                            if progress_fn is not None:
+                                progress_fn(
+                                    f"    -> repair retry ({attempt}/{max_attempts - 1}) after '{fail_cat}'..."
+                                )
                         t_exec = time.perf_counter()
                         if proj.mode == "hybrid":
                             ok_gen = True
@@ -795,7 +842,12 @@ def run_workload_bench(
                                 )
                                 + feedback_suffix
                             )
-                            ok_gen, candidate_text = worker(prompt, root, manifest.defaults.timeout_seconds)
+                            ok_gen, candidate_text = _run_with_heartbeat(
+                                lambda p=prompt: worker(p, root, manifest.defaults.timeout_seconds),
+                                progress_fn,
+                                f"[r{round_idx}] {proj.id}",
+                                manifest.defaults.timeout_seconds,
+                            )
                         execute_ms += (time.perf_counter() - t_exec) * 1000.0
 
                         if not ok_gen:
@@ -937,14 +989,22 @@ def run_workload_bench(
                     if receipt.planted_total:
                         progress_fn(
                             f"  [r{round_idx}] {receipt.project_id}: "
-                            f"{'PASS' if receipt.passed else 'FAIL'} [canaries {receipt.planted_caught}/{receipt.planted_total}]"
+                            f"{'PASS' if receipt.passed else 'FAIL'} in {receipt.total_ms:.0f}ms [canaries {receipt.planted_caught}/{receipt.planted_total}]"
                         )
                     else:
-                        esc_note = f" ESCALATED->L{receipt.escalated_to}" if receipt.escalated_to else ""
+                        esc_note = f" ESC->L{receipt.escalated_to}" if receipt.escalated_to else ""
+                        el = receipt.element_scores or {}
+                        el_str = (
+                            f"style={el.get('style', 0):.2f} aud={el.get('audience', 0):.2f} "
+                            f"purp={el.get('purpose', 0):.2f} fmt={el.get('formatting', 0):.2f} "
+                            f"stake={el.get('stakeholder_connection', 0):.2f}"
+                        )
+                        deliv_note = f" -> {receipt.deliverable_path}" if receipt.deliverable_path else ""
+                        err_note = f" ({receipt.error_summary[:100]})" if (not receipt.passed and receipt.error_summary) else ""
                         progress_fn(
                             f"  [r{round_idx}] {receipt.project_id} ({receipt.form_id} L{receipt.difficulty_level}): "
-                            f"{'PASS' if receipt.passed else 'FAIL'} score={receipt.diagnostic_score:.2f} "
-                            f"weak_el={receipt.weakest_element} arm={receipt.craft_arm}{esc_note}"
+                            f"{'PASS' if receipt.passed else 'FAIL'} in {receipt.total_ms / 1000.0:.1f}s | "
+                            f"score={receipt.diagnostic_score:.2f} [{el_str}] weak={receipt.weakest_element}{esc_note}{deliv_note}{err_note}"
                         )
 
             rounds_completed = round_idx

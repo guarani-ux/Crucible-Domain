@@ -1318,7 +1318,8 @@ def cmd_bench(
         print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"BENCH VALID: {len(manifest.projects)} workloads in {yaml_path.name}")
         return 0
 
-    stream_progress = (lambda msg: print(msg, flush=True)) if (until_exit and not as_json) else None
+    should_stream = (not as_json) and (until_exit or bench_mode in ("all", "agy_live") or rounds > 1)
+    stream_progress = (lambda msg: print(msg, flush=True)) if should_stream else None
     if until_exit and not as_json:
         print("Crucible Workload Bench: starting continuous loop (press Ctrl+C or run 'crucible_gate.py bench stop' in another terminal to exit cleanly)...", flush=True)
 
@@ -1343,7 +1344,7 @@ def cmd_bench(
             f"adaptive={adaptive} | rounds={res['rounds_completed']} | stop={res['stopped_reason']} | "
             f"passed={res['passed_count']}/{res['executed_count']} | skipped={res['skipped_count']}"
         )
-        if not until_exit:
+        if not should_stream:
             for r in res["receipts"]:
                 if r["skipped"]:
                     continue
