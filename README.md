@@ -1,6 +1,39 @@
 # Crucible Domain
 
-Crucible Domain is both the **Orchestrator-Producer Hub (single control plane)** for commissioning real work and the canonical memory connecting projects, GitHub repositories, skills, graphs, and evidence. Rather than acting only as an archive or a place to build standalone tools, Crucible defines the assignment, resolves local ground truth and authority, supplies craft methods, and drives specialized **domain MCP spokes** (such as [The Writer's Room](.agents/plugins/writers-room/skills/writers-room/SKILL.md), with the same lightweight floor extending to systems like `Story-Lane`).
+Crucible Domain is both the **Orchestrator-Producer Hub (single control plane)** for commissioning real work and the canonical memory connecting projects, GitHub repositories, skills, graphs, deterministic gates, and an **in-RAM supervised ML nervous system**. Rather than acting only as an archive or a place to build standalone tools, Crucible defines the assignment, resolves local ground truth and authority, supplies craft methods, drives specialized **domain MCP spokes** ([Writer's Room](.agents/plugins/writers-room/skills/writers-room/SKILL.md), [Story-Lane](.agents/plugins/story-lane/skills/story-lane/SKILL.md), [Meeting Prep](.agents/plugins/meeting-prep/skills/meeting-prep/SKILL.md), [Crucible Observatory](.agents/plugins/crucible-observatory/skills/crucible-observatory/SKILL.md)), and verifies every outcome with zero-LLM local gates.
+
+## System Architecture at a Glance
+
+```mermaid
+flowchart LR
+    OP["Operator / LLM Agent"] --> GATE["crucible_gate.py (Control Plane)"]
+    GATE -->|"session-start (<15ms hot / <50ms cold)"| CTX["Context Compiler (AST + ML + Git)"]
+    GATE -->|"ml-preflight"| PF["Outcome Clarity Gate (REALIGNMENT_REQUIRED / READY)"]
+    GATE -->|"pre-commit"| RISK["Adaptive Risk Engine (P(break) -> auto --strict)"]
+    GATE -->|"verify_all.ps1"| VER["14-Check Parallel Pool (ML-Ranked Tests)"]
+    VER -.->|"Live Pass/Fail + 5W1H Ledger"| ML["ram_ml_engine.py + Hot Daemon (0 LLM calls)"]
+    ML -.-> CTX
+    ML -.-> RISK
+    GATE -->|"K-MCP-01 Commissions"| SPOKES["MCP Spokes: writers-room | story-lane | meeting-prep | observatory"]
+```
+
+> **Full Machine-Readable Architecture & Capability Manifest:** See [04_InRAM_ML_and_Control_Plane_Architecture.md](Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md) and [capability_map.json](Graphs/capability_map.json).
+
+## Use-Case Routing Matrix (For AI Agents & Humans)
+
+| Use Case | Entry Point / Command | Spoke or Engine | Output & Verification Gate |
+| :--- | :--- | :--- | :--- |
+| **Orient at session start** | `python .agents/scripts/crucible_gate.py session-start` | Context Compiler (`ram_ml_daemon.py` / `crucible_gate.py`) | Active domain, changed AST symbols, priority tests, watch blockers |
+| **Verify task clarity before coding** | `python .agents/scripts/crucible_gate.py ml-preflight "<outcome>"` | Outcome Clarity Gate (`ram_ml_engine.py`) | `REALIGNMENT_REQUIRED` (names gaps) or `READY` + 3-step plan |
+| **Run fast-fail tests & full verification** | `pwsh -File scripts/verify_all.ps1` | ML Test-Ranker + 14-Check Parallel Pool | ML-ordered pytest + `--strict` gate + live outcome logging |
+| **Review a diff for risk & missing tests** | `python .agents/scripts/crucible_gate.py ml-review` | `IsolationForest` + AST CC + Co-Change + `5W1H` History | Ranked review priority, missing co-change partners, past fixes |
+| **Commit with adaptive risk gating** | `python .agents/scripts/crucible_gate.py pre-commit` | Adaptive Risk Engine (`assess_commit_risk`) | Auto-escalates `--strict` when staged `P(break) >= 0.55` |
+| **Curate & retrain local ML** | `crucible_gate.py ml-curate` then `ml-train` | Deterministic Curation + 5-Fold CV (`LogisticRegression`) | Balanced `.agents/ml_curated.jsonl` + held-out Precision/Recall/F1 |
+| **Keep ML hot in RAM (`<15ms`)** | `python .agents/scripts/crucible_gate.py ml-daemon start` | Localhost TCP Daemon (`127.0.0.1`) | Hot AST/TF-IDF/ML serving (`min ~3.3ms`, `0 LLM calls`) |
+| **Draft/revise scripts & deliverables** | `writersroom_recognize` $\rightarrow$ `prepare` $\rightarrow$ `deliver` | [Writer's Room MCP](.agents/plugins/writers-room/skills/writers-room/SKILL.md) | Form-pinned `.md`/`.docx` + anchor checks + `ig-evidence-review` |
+| **Select transcript clips deterministically** | `storylane_recognize` $\rightarrow$ `prepare` $\rightarrow$ `deliver` | [Story-Lane MCP](.agents/plugins/story-lane/skills/story-lane/SKILL.md) | Validated timestamp clip manifest (`0 <= start < end`) |
+| **Prepare for a high-stakes meeting** | `meetingprep_recognize` $\rightarrow$ `prepare` $\rightarrow$ `deliver` | [Meeting Prep MCP](.agents/plugins/meeting-prep/skills/meeting-prep/SKILL.md) | $\le$ 350-word Live Room Cockpit + verified quotes + Z3/sensitivity gate |
+| **Audit repos or forge prior art** | `observatory_recognize` $\rightarrow$ `prepare` $\rightarrow$ `deliver` | [Crucible Observatory MCP](.agents/plugins/crucible-observatory/skills/crucible-observatory/SKILL.md) | Offline prior-art forge, `melt-diff`, `melt-scan`, capability map |
 
 ## Start here
 
