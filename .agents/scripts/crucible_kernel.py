@@ -224,6 +224,22 @@ class IncrementalDAG:
                         if upstream and upstream != rel_mod:
                             self.edges[upstream].add(rel_mod)
 
+        # 3. Static config, verification, and CI dependency edges
+        static_edges = {
+            "requirements.txt": (
+                ".github/workflows/crucible-ci.yml",
+                ".agents/scripts/tests/test_portable_verify.py",
+            ),
+            ".agents/scripts/verify_all.py": (
+                "scripts/verify_all.ps1",
+                ".github/workflows/crucible-ci.yml",
+            ),
+        }
+        for upstream, downstreams in static_edges.items():
+            for downstream in downstreams:
+                if (self.root / downstream).is_file():
+                    self.edges[upstream].add(downstream)
+
     def dirty_closure(self, changed: list[str]) -> list[str]:
         """BFS propagation from changed upstream nodes to exact downstream affected closure."""
         seen: set[str] = set()
@@ -506,4 +522,149 @@ def run_kernel(
         "counterexamples": counterexamples,
         "capability_denials": capability_denials,
         "evoi": evoi,
+    }
+
+
+_INTAKE_DOMAIN_SIGNALS: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
+    "crucible_engine": tuple(
+        (label, re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", re.IGNORECASE))
+        for label, pattern in (
+            ("crucible_kernel", r"crucible[_ -]?kernel"),
+            ("crucible_gate", r"crucible[_ -]?gate"),
+            ("crucible_index", r"crucible[_ -]?index"),
+            ("crucible_engine", r"crucible[_ -]?engine"),
+            ("crucible-ci", r"crucible[_ -]?ci"),
+            ("verify_all", r"verify[_ -]?all"),
+            ("dirty_closure", r"dirty[_ -]?closure"),
+            ("tx_patch", r"tx[_ -]?patch"),
+            ("campaign_ir", r"campaign[_ -]?ir"),
+            ("ram_ml_engine", r"ram[_ -]?ml[_ -]?engine"),
+            ("pytest", r"pytest"),
+            ("kernel", r"kernel"),
+            ("dag", r"dag"),
+            ("capability_token", r"capability[_ -]?tokens?"),
+            ("cegis", r"cegis"),
+            ("lyapunov", r"lyapunov"),
+            ("evoi", r"evoi"),
+            ("worktree", r"worktrees?"),
+            ("pre-commit", r"pre[_ -]?commit"),
+            ("dependency_graph", r"dependency[_ -]?graph"),
+            ("requirements.txt", r"requirements\.txt"),
+            ("ci", r"ci"),
+        )
+    ),
+    "writers_room": tuple(
+        (label, re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", re.IGNORECASE))
+        for label, pattern in (
+            ("writers_room", r"writers[_ -]?room"),
+            ("cover_letter", r"cover[_ -]?letters?"),
+            ("documentary", r"documentar(?:y|ies)"),
+            ("treatment", r"treatments?"),
+            ("scriptwriting", r"scriptwriting"),
+            ("paper_edit", r"paper[_ -]?edits?"),
+            ("production_brief", r"production[_ -]?briefs?"),
+            ("manuscript", r"manuscripts?"),
+            ("prose", r"prose"),
+            ("draft", r"drafts?"),
+            ("outline", r"outlines?"),
+            ("copyedit", r"copyedit(?:ing)?"),
+            ("memo", r"memos?"),
+            ("narrative", r"narratives?"),
+            ("editorial", r"editorial"),
+            ("chapter", r"chapters?"),
+            ("essay", r"essays?"),
+            ("docx", r"docx"),
+            ("script", r"scripts?"),
+        )
+    ),
+    "story_lane": tuple(
+        (label, re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", re.IGNORECASE))
+        for label, pattern in (
+            ("story_lane", r"story[_ -]?lane"),
+            ("transcript", r"transcripts?"),
+            ("timecode", r"timecodes?"),
+            ("timestamp", r"timestamps?"),
+            ("clip_selection", r"clip[_ -]?selections?"),
+            ("clip_manifest", r"clip[_ -]?manifests?"),
+            ("cut_approval", r"cut[_ -]?approvals?"),
+            ("video_clip", r"video[_ -]?clips?"),
+            ("b-roll", r"b[_ -]?roll"),
+            ("soundbite", r"soundbites?"),
+            ("caption", r"captions?"),
+            ("subtitles", r"subtitles?"),
+            ("rough_cut", r"rough[_ -]?cuts?"),
+            ("fine_cut", r"fine[_ -]?cuts?"),
+            ("footage", r"footage"),
+            ("interview_clip", r"interview[_ -]?clips?"),
+        )
+    ),
+    "meeting_prep": tuple(
+        (label, re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", re.IGNORECASE))
+        for label, pattern in (
+            ("meeting_prep", r"meeting[_ -]?prep"),
+            ("live_room_cockpit", r"live[_ -]?room[_ -]?cockpit"),
+            ("cold-start_shield", r"cold[_ -]?start[_ -]?shield"),
+            ("pre-read", r"pre[_ -]?reads?"),
+            ("agenda", r"agendas?"),
+            ("stakeholder", r"stakeholders?"),
+            ("meeting", r"meetings?"),
+            ("attendees", r"attendees"),
+            ("talking_points", r"talking[_ -]?points"),
+            ("briefing_packet", r"briefing[_ -]?packets?"),
+            ("standup", r"standups?"),
+            ("board_meeting", r"board[_ -]?meetings?"),
+            ("committee", r"committees?"),
+        )
+    ),
+    "observatory": tuple(
+        (label, re.compile(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", re.IGNORECASE))
+        for label, pattern in (
+            ("observatory", r"observatory"),
+            ("prior-art", r"prior[_ -]?art"),
+            ("melt-diff", r"melt[_ -]?diff"),
+            ("melt-scan", r"melt[_ -]?scan"),
+            ("outcome_ledger", r"outcome[_ -]?ledger"),
+            ("capability_map", r"capability[_ -]?map"),
+            ("telemetry", r"telemetry"),
+            ("observability", r"observability"),
+            ("causal_trace", r"causal[_ -]?trace"),
+            ("benchmark", r"benchmarks?"),
+            ("audit_trail", r"audit[_ -]?trail"),
+            ("archaeology", r"archaeology"),
+            ("repo_scan", r"repo[_ -]?scan"),
+        )
+    ),
+}
+
+
+def classify_intake_intent(task_text: str) -> dict[str, Any]:
+    """Score domain signals and abstain as ambiguous on empty or tied intake prompts."""
+    text = task_text.strip() if isinstance(task_text, str) else ""
+    scores: dict[str, int] = {}
+    matched_by_domain: dict[str, list[str]] = {}
+    for dom, patterns in _INTAKE_DOMAIN_SIGNALS.items():
+        hits = [label for label, regex in patterns if regex.search(text)]
+        scores[dom] = len(hits)
+        matched_by_domain[dom] = hits
+
+    ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
+    top_domain, top_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0
+    total_score = sum(scores.values())
+
+    ambiguous = (top_score == 0) or (top_score == second_score)
+    if ambiguous:
+        domain = "ambiguous"
+        confidence = 0.0
+    else:
+        domain = top_domain
+        confidence = round((top_score - second_score) / total_score, 4)
+
+    matched_signals = sorted({sig for hits in matched_by_domain.values() for sig in hits})
+    return {
+        "domain": domain,
+        "ambiguous": ambiguous,
+        "confidence": confidence,
+        "matched_signals": matched_signals,
+        "scores": scores,
     }
