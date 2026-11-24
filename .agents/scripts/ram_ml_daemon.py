@@ -8,10 +8,13 @@ IsolationForest models hot in RAM over 127.0.0.1 JSON-lines TCP.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import secrets
 import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -27,13 +30,129 @@ import ram_ml_engine  # noqa: E402
 STATE_FILE_REL = Path(".agents") / ".ml_daemon.json"
 
 
+def _git_dir_paths(root: Path) -> list[Path]:
+    dotgit = root / ".git"
+    if dotgit.is_dir():
+        return [dotgit]
+    if dotgit.is_file():
+        try:
+            txt = dotgit.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            return []
+        if txt.startswith("gitdir:"):
+            gd = Path(txt.split(":", 1)[1].strip())
+            if not gd.is_absolute():
+                gd = (root / gd).resolve()
+            out = [gd]
+            cd = gd / "commondir"
+            if cd.is_file():
+                try:
+                    cpath = Path(cd.read_text(encoding="utf-8", errors="replace").strip())
+                    if not cpath.is_absolute():
+                        cpath = (gd / cpath).resolve()
+                    out.append(cpath)
+                except OSError:
+                    pass
+            return out
+    return []
+
+
+def _tree_stat_sig(root: Path) -> tuple[int, int, int, tuple[tuple[str, int, int], ...]]:
+    """Fast <10ms stat signature used to detect working-tree or git-ref mutations."""
+    count = 0
+    mtime_acc = 0
+    size_acc = 0
+    stack = [str(root)]
+    while stack:
+        d = stack.pop()
+        try:
+            with os.scandir(d) as it:
+                for entry in it:
+                    name = entry.name
+                    if name in (".git", "__pycache__", ".pytest_cache", "node_modules", ".ml_daemon.json"):
+                        continue
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        else:
+                            st = entry.stat(follow_symlinks=False)
+                            count += 1
+                            mtime_acc ^= st.st_mtime_ns
+                            size_acc += st.st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+    git_meta: list[tuple[str, int, int]] = []
+    git_dirs = _git_dir_paths(root)
+    for gd in git_dirs:
+        for rel in ("HEAD", "index", "packed-refs"):
+            p = gd / rel
+            try:
+                if p.is_file():
+                    st = p.stat()
+                    git_meta.append((str(p), st.st_mtime_ns, st.st_size))
+            except OSError:
+                continue
+        head = gd / "HEAD"
+        try:
+            if head.is_file():
+                htxt = head.read_text(encoding="utf-8", errors="replace").strip()
+                if htxt.startswith("ref:"):
+                    ref = htxt.split(":", 1)[1].strip()
+                    for base in git_dirs:
+                        rp = base / ref
+                        if rp.is_file():
+                            st = rp.stat()
+                            git_meta.append((str(rp), st.st_mtime_ns, st.st_size))
+        except OSError:
+            continue
+    return (count, mtime_acc, size_acc, tuple(git_meta))
+
+
+def _repo_fingerprint(root: Path) -> str:
+    """Compute SHA-256 repo freshness fingerprint from git HEAD + working-tree status."""
+    resolved = root.resolve()
+    head_proc = subprocess.run(
+        ["git", "-C", str(resolved), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    status_proc = subprocess.run(
+        ["git", "-C", str(resolved), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if status_proc.returncode == 0:
+        head_val = head_proc.stdout.strip() if head_proc.returncode == 0 else "UNBORN"
+        payload = f"{head_val}\n{status_proc.stdout}"
+    else:
+        entries: list[str] = []
+        for p in sorted(resolved.rglob("*")):
+            if ".git" in p.parts or p.name == ".ml_daemon.json" or not p.is_file():
+                continue
+            try:
+                st = p.stat()
+                entries.append(f"{p.relative_to(resolved)}:{st.st_mtime_ns}:{st.st_size}")
+            except OSError:
+                continue
+        payload = "\n".join(entries)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 class _MLDaemonServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, server_address: tuple[str, int], root: Path) -> None:
+    def __init__(self, server_address: tuple[str, int], root: Path, auth_token: str | None = None) -> None:
         self.root = root.resolve()
+        self.auth_token = auth_token if auth_token is not None else secrets.token_hex(16)
         self.hot_state = ram_ml_engine.build_hot_state(self.root)
+        self.repo_fingerprint = _repo_fingerprint(self.root)
+        self._stat_sig = _tree_stat_sig(self.root)
         self.state_lock = threading.Lock()
         super().__init__(server_address, _MLRequestHandler)
 
@@ -51,11 +170,34 @@ class _MLRequestHandler(socketserver.StreamRequestHandler):
             self.wfile.write((json.dumps(resp) + "\n").encode("utf-8"))
             return
 
-        cmd = str(req.get("cmd") or "ping")
+        if not isinstance(req, dict):
+            resp = {"ok": False, "error": "invalid request: expected json object"}
+            self.wfile.write((json.dumps(resp) + "\n").encode("utf-8"))
+            return
+
         srv: _MLDaemonServer = self.server  # type: ignore[assignment]
+        provided_token = req.get("auth_token")
+        if not isinstance(provided_token, str) or not secrets.compare_digest(provided_token, srv.auth_token):
+            resp = {"ok": False, "error": "UNAUTHORIZED: invalid or missing daemon auth_token"}
+            resp["server_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
+            self.wfile.write((json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8"))
+            return
+
+        cmd = str(req.get("cmd") or "ping")
         shutdown_after = False
 
         with srv.state_lock:
+            refreshed = False
+            if cmd not in ("reload", "shutdown"):
+                cur_sig = _tree_stat_sig(srv.root)
+                if cur_sig != srv._stat_sig:
+                    cur_fp = _repo_fingerprint(srv.root)
+                    srv._stat_sig = cur_sig
+                    if cur_fp != srv.repo_fingerprint:
+                        srv.hot_state = ram_ml_engine.build_hot_state(srv.root)
+                        srv.repo_fingerprint = cur_fp
+                        refreshed = True
+
             state = srv.hot_state
             if cmd == "ping":
                 resp = {
@@ -65,6 +207,7 @@ class _MLRequestHandler(socketserver.StreamRequestHandler):
                     "training_rows": len(state["hist_rows"]),
                     "held_out_metrics": state["held_out_metrics"],
                     "built_ms": state["built_ms"],
+                    "repo_fingerprint": srv.repo_fingerprint,
                 }
             elif cmd == "rank":
                 files = req.get("changed_files")
@@ -87,12 +230,17 @@ class _MLRequestHandler(socketserver.StreamRequestHandler):
                 resp = {"ok": True, **ram_ml_engine.compile_session_context(srv.root, hot_state=state)}
             elif cmd == "reload":
                 srv.hot_state = ram_ml_engine.build_hot_state(srv.root)
+                srv.repo_fingerprint = _repo_fingerprint(srv.root)
+                srv._stat_sig = _tree_stat_sig(srv.root)
                 resp = {"ok": True, "reloaded": True, "built_ms": srv.hot_state["built_ms"]}
             elif cmd == "shutdown":
                 resp = {"ok": True, "shutting_down": True}
                 shutdown_after = True
             else:
                 resp = {"ok": False, "error": f"unknown cmd: {cmd}"}
+
+            if refreshed and resp.get("ok"):
+                resp["refreshed"] = True
 
         resp["server_ms"] = round((time.perf_counter() - t0) * 1000.0, 3)
         self.wfile.write((json.dumps(resp, ensure_ascii=False) + "\n").encode("utf-8"))
@@ -114,10 +262,13 @@ def query_daemon(root: Path, payload: dict[str, Any], timeout: float = 2.0) -> d
     info = read_daemon_info(root)
     if not info or not isinstance(info.get("port"), int):
         return None
+    req_payload = dict(payload)
+    if "auth_token" not in req_payload and isinstance(info.get("auth_token"), str):
+        req_payload["auth_token"] = info["auth_token"]
     t0 = time.perf_counter()
     try:
         with socket.create_connection(("127.0.0.1", int(info["port"])), timeout=timeout) as sock:
-            sock.sendall((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
+            sock.sendall((json.dumps(req_payload, ensure_ascii=False) + "\n").encode("utf-8"))
             chunks: list[bytes] = []
             while True:
                 data = sock.recv(65536)
@@ -141,9 +292,15 @@ def serve_forever(root: Path, port: int = 0) -> int:
     state_file = root / STATE_FILE_REL
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(
-        json.dumps({"pid": os.getpid(), "port": actual_port, "root": str(root)}, indent=2) + "\n",
+        json.dumps(
+            {"pid": os.getpid(), "port": actual_port, "root": str(root), "auth_token": srv.auth_token},
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
+    srv.repo_fingerprint = _repo_fingerprint(root)
+    srv._stat_sig = _tree_stat_sig(root)
     try:
         srv.serve_forever(poll_interval=0.1)
     finally:
