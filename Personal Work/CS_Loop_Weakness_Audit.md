@@ -6,6 +6,10 @@ depends_on:
   - .agents/scripts/crucible/tx_patch.py
   - .agents/scripts/crucible/campaign_ir.py
   - scripts/verify_all.ps1
+depends_on_sha256:
+  .agents/scripts/crucible/tx_patch.py: 857e9e127769200bd5e8950c75081f961ace38066f219bacbc5d99b7dc86d984
+  .agents/scripts/crucible/campaign_ir.py: f6079805d1de207e65f97ecb9d71635c0edb6178bab4167d1eb9acc196f34c6e
+  scripts/verify_all.ps1: b926d62181d41ef64a11d08b8fa20e998857f2500df6bbc0fc04695dfde51cc9
 ---
 
 # Crucible Loop — Forensic CS Weakness & Unleveraged-Domain Audit
