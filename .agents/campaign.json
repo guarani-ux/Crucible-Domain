@@ -1,0 +1,41 @@
+{
+  "name": "slices-8-9-contracts-and-solver",
+  "repo_root": ".",
+  "allowed_roots": [
+    ".agents/scripts/crucible",
+    ".agents/scripts/tests",
+    "Graphs"
+  ],
+  "max_rounds": 4,
+  "slices": [
+    {
+      "id": "slice-8-contracts",
+      "depends_on": [],
+      "target_paths": [
+        ".agents/scripts/crucible/contracts.py",
+        ".agents/scripts/tests/test_contracts.py"
+      ],
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_contracts.py -q"
+    },
+    {
+      "id": "slice-9-solver",
+      "depends_on": [],
+      "target_paths": [
+        ".agents/scripts/crucible/solver.py",
+        ".agents/scripts/tests/test_solver.py"
+      ],
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_solver.py -q"
+    },
+    {
+      "id": "register-atlas",
+      "depends_on": [
+        "slice-8-contracts",
+        "slice-9-solver"
+      ],
+      "target_paths": [
+        "Graphs/00_System_Atlas_and_Neon_Handoff.md"
+      ],
+      "verify_cmd": "pwsh -File scripts/verify_all.ps1"
+    }
+  ]
+}
