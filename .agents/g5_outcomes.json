@@ -1,0 +1,105 @@
+{
+  "schema_version": "crucible.g5_outcomes.v1",
+  "entries": [
+    {
+      "id": "IMP-01",
+      "weakness_id": "CD-W01",
+      "metric_name": "verify_all_parallel_checks_count",
+      "before_value": 1.0,
+      "after_value": 22.0,
+      "higher_is_better": true,
+      "verify_cmd": "pwsh -File scripts/verify_all.ps1",
+      "evidence_sha256": "508813c8beedf5c2c3a92a685a858bd2629132f574c8ac3b277b29dd9434841c"
+    },
+    {
+      "id": "IMP-02",
+      "weakness_id": "CD-W02",
+      "metric_name": "gate_mutation_kill_count",
+      "before_value": 0.0,
+      "after_value": 5.0,
+      "higher_is_better": true,
+      "verify_cmd": "python .agents/scripts/mutation_gate.py --json",
+      "evidence_sha256": "a355e094c139cfe81a93c981f13c6f648c496dda85d088fc1237b5cb30e6cab3"
+    },
+    {
+      "id": "IMP-03",
+      "weakness_id": "CD-W03",
+      "metric_name": "ml_ranker_average_precision",
+      "before_value": 0.903,
+      "after_value": 0.9908,
+      "higher_is_better": true,
+      "verify_cmd": "python .agents/scripts/crucible_gate.py ml-train --json",
+      "evidence_sha256": "d2f89acd9f8d18e3201eb41566cd732c4ac5b9680d0102fe13f5b2a6e3ec1b05"
+    },
+    {
+      "id": "IMP-04",
+      "weakness_id": "CD-W04",
+      "metric_name": "ram_indexed_capabilities_count",
+      "before_value": 0.0,
+      "after_value": 150.0,
+      "higher_is_better": true,
+      "verify_cmd": "python .agents/scripts/crucible_gate.py doctor --json",
+      "evidence_sha256": "2306e1e2455a2a0ef961b7e2d6694196b34b11f7d08f4c6c4bd8bffaf2caba6c"
+    },
+    {
+      "id": "IMP-05",
+      "weakness_id": "CD-W05",
+      "metric_name": "tq_ast_rules_enforced_count",
+      "before_value": 0.0,
+      "after_value": 5.0,
+      "higher_is_better": true,
+      "verify_cmd": "python .agents/scripts/test_quality_gate.py .agents/scripts/tests",
+      "evidence_sha256": "460071390f850234d424384b1fd8d0be2d933e5dd6b3de1f3cdb2e1b5030d7e1"
+    },
+    {
+      "id": "IMP-06",
+      "weakness_id": "CD-W08",
+      "metric_name": "z3_wave_constraint_families",
+      "before_value": 0.0,
+      "after_value": 3.0,
+      "higher_is_better": true,
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_solver.py -q",
+      "evidence_sha256": "f17dd17b58d543dc751a1e30b47fba38f27a30ccecd0830f0652c5ed3283afcc"
+    },
+    {
+      "id": "IMP-07",
+      "weakness_id": "CD-W18",
+      "metric_name": "route_summary_max_chars",
+      "before_value": 400.0,
+      "after_value": 160.0,
+      "higher_is_better": false,
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_crucible_index.py -q",
+      "evidence_sha256": "b0fd46d7da24d3a9ae7930cc732c7bd07e16eaaa43eab359b9d3a5cb137b7c64"
+    },
+    {
+      "id": "IMP-08",
+      "weakness_id": "CD-W19",
+      "metric_name": "mcp_config_hardcoded_drive_paths",
+      "before_value": 12.0,
+      "after_value": 0.0,
+      "higher_is_better": false,
+      "verify_cmd": "python .agents/scripts/crucible_gate.py doctor --json",
+      "evidence_sha256": "43c6167b17b3f0f4e6fca5a5fc1d85f84b6df1416041fba7970983e5381682f3"
+    },
+    {
+      "id": "IMP-09",
+      "weakness_id": "CD-W16",
+      "metric_name": "ast_discovery_cross_file_edges",
+      "before_value": 0.0,
+      "after_value": 492.0,
+      "higher_is_better": true,
+      "verify_cmd": "python .agents/scripts/crucible_gate.py discover --json",
+      "evidence_sha256": "035b47bac54ba43bb5d63a34c4d5bfc269b6b873dfd4bcf7e9f62c8416f66d48"
+    },
+    {
+      "id": "IMP-10",
+      "weakness_id": "CD-W20",
+      "metric_name": "story_engine_deterministic_suite_cases",
+      "before_value": 0.0,
+      "after_value": 5.0,
+      "higher_is_better": true,
+      "verify_cmd": "python -m pytest .agents/scripts/tests/test_story_engine.py -q",
+      "evidence_sha256": "e58f117c8d6a9d2bb58033aa538d0aee942c5e18450e7fbf02d071868c5a99be"
+    }
+  ]
+}

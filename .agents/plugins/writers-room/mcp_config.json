@@ -2,11 +2,16 @@
   "mcpServers": {
     "writers-room": {
       "command": "python",
-      "args": ["-m", "writersroom", "mcp"],
+      "args": [
+        "-m",
+        "writersroom",
+        "mcp"
+      ],
       "env": {
-        "PYTHONPATH": "C:/the-writers-room",
-        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain"
-      }
+        "PYTHONPATH": ".",
+        "CRUCIBLE_DOMAIN_ROOT": "../crucible-domain"
+      },
+      "cwd": "../the-writers-room"
     }
   }
 }

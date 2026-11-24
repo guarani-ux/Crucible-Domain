@@ -415,6 +415,106 @@ class TestCrucibleGate(unittest.TestCase):
             self.assertEqual(data2["status"], "HALT_MAX_ROUNDS")
             self.assertEqual(data2["rounds_used"], 1)
 
+    def test_ast_scan_discover_story_and_g5_cli_subcommands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _init_repo(Path(tmp))
+            (repo / ".agents" / "scripts" / "crucible").mkdir(parents=True, exist_ok=True)
+            (repo / ".agents" / "scripts" / "crucible" / "mod_a.py").write_text(
+                "def helper() -> int:\n    return 7\n",
+                encoding="utf-8",
+            )
+            (repo / ".agents" / "scripts" / "crucible" / "mod_b.py").write_text(
+                "from crucible.mod_a import helper\n\ndef run() -> int:\n    return helper()\n",
+                encoding="utf-8",
+            )
+
+            scan_proc = _run_gate(repo, "ast-scan", "--import-root", ".agents/scripts", "--json")
+            self.assertEqual(scan_proc.returncode, 0, scan_proc.stdout + scan_proc.stderr)
+            scan_data = json.loads(scan_proc.stdout)
+            self.assertGreaterEqual(scan_data["unit_count"], 2)
+            self.assertGreaterEqual(scan_data["edge_count"], 1)
+
+            # Negative: missing G5 ledger fails g5-check
+            g5_missing = _run_gate(repo, "g5-check", "--json")
+            self.assertEqual(g5_missing.returncode, 1)
+            self.assertFalse(json.loads(g5_missing.stdout)["passed"])
+
+            # Positive: story select + CHG-01 validation
+            transcript = repo / "clip_src.json"
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "segments": [
+                            {"id": "s1", "start": 0.0, "end": 4.0, "text": "library opening", "arc_hint": "OPEN"},
+                            {"id": "s2", "start": 4.0, "end": 9.0, "text": "library studio", "arc_hint": "DEVELOP"},
+                            {"id": "s3", "start": 9.0, "end": 13.0, "text": "library impact", "arc_hint": "PAYOFF_CLOSE"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            out_dir = repo / "story_out"
+            story_proc = _run_gate(
+                repo,
+                "story",
+                "select",
+                str(transcript),
+                "--terms",
+                "library",
+                "--max-duration",
+                "20",
+                "--output-dir",
+                str(out_dir),
+                "--json",
+            )
+            self.assertEqual(story_proc.returncode, 0, story_proc.stdout + story_proc.stderr)
+            story_data = json.loads(story_proc.stdout)
+            self.assertTrue(story_data["selection"]["story_arc_complete"])
+            manifest_file = Path(story_data["manifest_path"])
+            self.assertTrue(manifest_file.is_file())
+
+            chg_ok = _run_gate(repo, "story", "chg01", str(manifest_file), str(transcript), "--json")
+            self.assertEqual(chg_ok.returncode, 0, chg_ok.stdout + chg_ok.stderr)
+            self.assertFalse(json.loads(chg_ok.stdout)["stale"])
+
+            # Negative: 1-byte transcript change triggers CHG-01 invalidation
+            transcript.write_text(
+                transcript.read_text(encoding="utf-8").replace("impact", "impacts"),
+                encoding="utf-8",
+            )
+            chg_stale = _run_gate(repo, "story", "chg01", str(manifest_file), str(transcript), "--json")
+            self.assertEqual(chg_stale.returncode, 1)
+            self.assertTrue(json.loads(chg_stale.stdout)["stale"])
+
+            # Replay-verified campaign run with --replay-out
+            (repo / "verify_ok.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
+            py_exe = sys.executable if " " not in sys.executable else "python"
+            spec = {
+                "name": "replay-cli",
+                "repo_root": str(repo),
+                "max_rounds": 2,
+                "slices": [
+                    {
+                        "id": "s1",
+                        "target_paths": [".agents/scripts/crucible/mod_a.py"],
+                        "depends_on": [],
+                        "verify_cmd": f"{py_exe} verify_ok.py",
+                    }
+                ],
+            }
+            (repo / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+            rep_proc = _run_gate(repo, "campaign", "run", "spec.json", "--replay-out", "trace.jsonl", "--json")
+            self.assertEqual(rep_proc.returncode, 0, rep_proc.stdout + rep_proc.stderr)
+            rep_data = json.loads(rep_proc.stdout)
+            self.assertTrue(rep_data["ok"])
+            self.assertTrue(rep_data["replay_verified"])
+            self.assertTrue((repo / "trace.jsonl").is_file())
+
+            # Discover command runs cleanly and emits campaign JSON
+            disc_proc = _run_gate(repo, "discover", "--emit-campaign", "disc.json", "--json")
+            self.assertIn(disc_proc.returncode, (0, 1))
+            self.assertTrue((repo / "disc.json").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

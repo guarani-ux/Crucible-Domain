@@ -213,6 +213,49 @@ class TestPortableVerifyAndRequirements(unittest.TestCase):
             self.assertEqual(len(host_mcp_warns), 1)
             self.assertIn("missing_spoke_dir", host_mcp_warns[0].detail)
 
+            # Negative path 3: Unix home paths in cwd/args/env are also flagged, while relative cwd resolves against root.
+            sibling_spoke = tmp_path / "sibling-spoke"
+            sibling_spoke.mkdir(parents=True)
+            home_prefix = "/" + "home"
+            cfg_path.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "sample-spoke": {
+                                "command": "python",
+                                "args": ["-m", "sample_spoke", "--root=/Users/portable-check/domain"],
+                                "cwd": "../sibling-spoke",
+                                "env": {
+                                    "CUSTOM_HOME_ARG": f"{home_prefix}/portable-check/spoke",
+                                },
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rel_report = crucible_doctor.run_doctor(repo, global_config_dir=global_dir, execute_hooks=True)
+            self.assertEqual(rel_report.metrics["mcp_missing_cwds"], [])
+            self.assertEqual(len(rel_report.metrics["mcp_hardcoded_host_paths"]), 2)
+
+    def test_live_mcp_configs_are_portable_and_valid(self) -> None:
+        plugins_dir = REPO_ROOT / ".agents" / "plugins"
+        mcp_files = sorted(plugins_dir.glob("*/mcp_config.json"))
+        self.assertGreaterEqual(len(mcp_files), 4, "Expected at least 4 live plugin mcp_config.json files")
+
+        drive_re = re.compile(r"[A-Za-z]:[/\\]")
+        unix_home_re = re.compile(r"/(?:Users|home)/")
+        for mf in mcp_files:
+            raw = mf.read_text(encoding="utf-8")
+            parsed = json.loads(raw)
+            self.assertIsInstance(parsed, dict, f"{mf} must parse as a JSON object")
+            self.assertIsNone(drive_re.search(raw), f"{mf} must not contain hardcoded drive-letter paths")
+            self.assertIsNone(unix_home_re.search(raw), f"{mf} must not contain hardcoded /Users/ or /home/ paths")
+
+        report = crucible_doctor.run_doctor(REPO_ROOT, global_config_dir=None, execute_hooks=False)
+        self.assertEqual(report.metrics["mcp_invalid_configs"], [])
+        self.assertEqual(report.metrics["mcp_hardcoded_host_paths"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

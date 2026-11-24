@@ -7,9 +7,9 @@
         "observatory",
         "mcp"
       ],
-      "cwd": "C:/crucible-spokes/crucible-observatory",
+      "cwd": "../crucible-spokes/crucible-observatory",
       "env": {
-        "CRUCIBLE_DOMAIN_ROOT": "C:/crucible-domain"
+        "CRUCIBLE_DOMAIN_ROOT": "../../crucible-domain"
       }
     }
   }

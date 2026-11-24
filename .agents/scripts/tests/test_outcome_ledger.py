@@ -17,8 +17,12 @@ from crucible.outcome_ledger import (
     MaterialImprovementEntry,
     RecipientAcceptanceReceipt,
     evaluate_g5_graduation,
+    load_g5_ledger,
+    record_g5_improvement,
+    save_g5_ledger,
     validate_improvement_entry,
     validate_recipient_acceptance,
+    verify_g5_ledger_file,
 )
 
 
@@ -247,3 +251,41 @@ def test_g5_graduation_fails_under_10_and_passes_at_10_distinct_improvements() -
     assert res_ten["verified_count"] == 10
     assert res_ten["passed"] is True
     assert res_ten["rejected"] == []
+
+
+def test_g5_ledger_persistence_and_verification(tmp_path: Path) -> None:
+    ledger = tmp_path / ".agents" / "g5_outcomes.json"
+
+    # Negative: missing ledger returns passed=False
+    missing_res = verify_g5_ledger_file(tmp_path)
+    assert missing_res["exists"] is False
+    assert missing_res["passed"] is False
+
+    # Negative: commit-counting entry rejected by record_g5_improvement
+    bad = _make_improvement(99, metric_name="commit_velocity", before_value=1.0, after_value=3.0, higher_is_better=True)
+    ok_bad, reason_bad = record_g5_improvement(ledger, bad)
+    assert ok_bad is False
+    assert "rejected" in reason_bad.lower()
+
+    # Positive: persist 10 valid entries and verify roundtrip + graduation
+    entries = [_make_improvement(i) for i in range(1, 11)]
+    digest = save_g5_ledger(ledger, entries)
+    assert len(digest) == 64
+    loaded = load_g5_ledger(ledger)
+    assert len(loaded) == 10
+
+    res = verify_g5_ledger_file(tmp_path)
+    assert res["exists"] is True
+    assert res["verified_count"] == 10
+    assert res["passed"] is True
+    assert res["rejected"] == []
+
+
+def test_live_repo_g5_outcomes_ledger_passes_10_entries() -> None:
+    repo_root = SCRIPTS_DIR.parents[1]
+    live_ledger = repo_root / ".agents" / "g5_outcomes.json"
+    assert live_ledger.is_file(), "Expected live .agents/g5_outcomes.json G5 ledger"
+    res = verify_g5_ledger_file(repo_root, live_ledger, target=10)
+    assert res["passed"] is True, res["rejected"]
+    assert res["verified_count"] >= 10
+    assert res["rejected"] == []

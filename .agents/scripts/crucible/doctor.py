@@ -441,6 +441,11 @@ def _audit_duplicates_and_storage(
 
 
 WINDOWS_DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:[/\\]")
+HOST_PATH_RE = re.compile(r"(?:^|[=;\s]|:(?!//))(?:[A-Za-z]:[/\\]|/(?:Users|home)/)")
+
+
+def _has_hardcoded_host_path(value: str) -> bool:
+    return bool(WINDOWS_DRIVE_PATH_RE.match(value) or HOST_PATH_RE.search(value))
 
 
 def _audit_mcp_configs(
@@ -502,19 +507,27 @@ def _audit_mcp_configs(
             cwd_val = srv_cfg.get("cwd")
             if isinstance(cwd_val, str) and cwd_val.strip():
                 cwd_str = cwd_val.strip()
-                if WINDOWS_DRIVE_PATH_RE.match(cwd_str):
+                if _has_hardcoded_host_path(cwd_str):
                     hardcoded_paths.append(f"{rel}::{srv_name}.cwd={cwd_str}")
-                if not Path(cwd_str).is_dir():
+                cwd_path = Path(cwd_str) if Path(cwd_str).is_absolute() else (root / cwd_str)
+                if not cwd_path.is_dir():
                     missing_cwds.append(f"{rel}::{srv_name}={cwd_str}")
+
+            args_val = srv_cfg.get("args")
+            if isinstance(args_val, list):
+                for idx, arg in enumerate(args_val):
+                    if isinstance(arg, str) and arg.strip():
+                        arg_str = arg.strip()
+                        if _has_hardcoded_host_path(arg_str):
+                            hardcoded_paths.append(f"{rel}::{srv_name}.args[{idx}]={arg_str}")
 
             env_cfg = srv_cfg.get("env")
             if isinstance(env_cfg, dict):
-                for env_key in ("CRUCIBLE_DOMAIN_ROOT", "CRUCIBLE_ALLOWED_ROOTS", "PYTHONPATH"):
-                    raw_env = env_cfg.get(env_key)
+                for env_key, raw_env in env_cfg.items():
                     if isinstance(raw_env, str) and raw_env.strip():
                         for part in raw_env.split(";"):
                             item = part.strip()
-                            if item and WINDOWS_DRIVE_PATH_RE.match(item):
+                            if item and _has_hardcoded_host_path(item):
                                 hardcoded_paths.append(f"{rel}::{srv_name}.env.{env_key}={item}")
 
     if global_config_dir is None:

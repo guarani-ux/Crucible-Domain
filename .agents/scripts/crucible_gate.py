@@ -639,6 +639,15 @@ def _resolve_campaign_ir_module():
     return campaign_ir
 
 
+def _resolve_crucible_submodule(name: str):
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    import importlib
+
+    return importlib.import_module(f"crucible.{name}")
+
+
 def _resolve_cli_path(root: Path, raw_path: Path | str) -> Path:
     p = Path(raw_path)
     if p.is_absolute():
@@ -731,8 +740,18 @@ def _campaign_plan(cir, root: Path, target_path: Path, cache_path: Path | None, 
     return 0
 
 
-def _campaign_run(cir, root: Path, target_path: Path, cache_path: Path | None, as_json: bool) -> int:
+def _campaign_run(
+    cir,
+    root: Path,
+    target_path: Path,
+    cache_path: Path | None,
+    as_json: bool,
+    *,
+    use_worktree: bool = False,
+    replay_out: Path | None = None,
+) -> int:
     resolved_cache = _resolve_cli_path(root, cache_path) if cache_path is not None else None
+    resolved_replay = _resolve_cli_path(root, replay_out) if replay_out is not None else None
     try:
         spec = cir.load_campaign_spec(target_path)
         ordered = cir.compile_campaign(spec)
@@ -777,14 +796,14 @@ def _campaign_run(cir, root: Path, target_path: Path, cache_path: Path | None, a
 
     exit_code_box: dict[str, int | None] = {"code": None}
 
-    def _verify() -> tuple[bool, str]:
+    def _verify(exec_root: Path = repo_root) -> tuple[bool, str]:
         argv = shlex.split(node.verify_cmd, posix=(os.name != "nt"))
         if not argv:
             exit_code_box["code"] = 1
             return (False, "empty verify_cmd")
         proc = subprocess.run(
             argv,
-            cwd=repo_root,
+            cwd=exec_root,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -797,20 +816,47 @@ def _campaign_run(cir, root: Path, target_path: Path, cache_path: Path | None, a
         return (proc.returncode == 0, detail)
 
     input_sha256 = cir.compute_slice_input_sha256(node, repo_root)
-    ok, detail = cir.execute_slice_transaction(
-        repo_root,
-        node,
-        apply_fn=lambda: None,
-        verify_fn=_verify,
-        checkpoint=cp,
-    )
-    if ok:
-        input_sha256 = cp.completed_slices.get(node.id, input_sha256)
-        status = "PASS"
-    elif detail.startswith("HALT_MAX_ROUNDS"):
-        status = "HALT_MAX_ROUNDS"
+    if use_worktree or resolved_replay is not None:
+        rl = _resolve_crucible_submodule("replay_loop")
+        vdiff = rl.execute_replay_verified_slice(
+            repo_root,
+            node,
+            apply_fn=None,
+            verify_fn=_verify,
+            use_worktree=use_worktree,
+            checkpoint=cp,
+            trace_path=resolved_replay,
+        )
+        ok = vdiff.passed and vdiff.replay_verified
+        if ok:
+            input_sha256 = cp.completed_slices.get(node.id, input_sha256)
+            status = "PASS"
+        elif vdiff.error.startswith("HALT_MAX_ROUNDS"):
+            status = "HALT_MAX_ROUNDS"
+        else:
+            status = "ROLLED_BACK"
+        detail = vdiff.error or "replay verified"
+        replay_verified = vdiff.replay_verified
+        worktree_used = vdiff.worktree_used
+        diff_text = vdiff.diff_text
     else:
-        status = "ROLLED_BACK"
+        ok, detail = cir.execute_slice_transaction(
+            repo_root,
+            node,
+            apply_fn=lambda: None,
+            verify_fn=lambda: _verify(repo_root),
+            checkpoint=cp,
+        )
+        if ok:
+            input_sha256 = cp.completed_slices.get(node.id, input_sha256)
+            status = "PASS"
+        elif detail.startswith("HALT_MAX_ROUNDS"):
+            status = "HALT_MAX_ROUNDS"
+        else:
+            status = "ROLLED_BACK"
+        replay_verified = False
+        worktree_used = False
+        diff_text = ""
 
     if resolved_cache is not None:
         cir.save_campaign_checkpoint(resolved_cache, cp)
@@ -823,6 +869,9 @@ def _campaign_run(cir, root: Path, target_path: Path, cache_path: Path | None, a
         "status": status,
         "rounds_used": cp.rounds_used,
         "max_rounds": cp.max_rounds,
+        "replay_verified": replay_verified,
+        "worktree_used": worktree_used,
+        "diff_text": diff_text,
     }
     if as_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -862,11 +911,14 @@ def cmd_campaign(
     as_json: bool = False,
     cache_path: Path | None = None,
     last: int = 10,
+    use_worktree: bool = False,
+    replay_out: Path | None = None,
 ) -> int:
     parts = query.split() if isinstance(query, str) else list(query)
     usage_msg = (
         "usage: crucible_gate.py campaign "
-        "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | run <spec.json> [--cache <checkpoint.json>] | ledger <ledger.tsv> [--last N]}"
+        "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | "
+        "run <spec.json> [--cache <checkpoint.json>] [--worktree] [--replay-out <trace.jsonl>] | ledger <ledger.tsv> [--last N]}"
     )
     if len(parts) != 2 or parts[0] not in ("compile", "plan", "run", "ledger"):
         print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False) if as_json else usage_msg, file=sys.stdout if as_json else sys.stderr)
@@ -880,7 +932,15 @@ def cmd_campaign(
     if action == "plan":
         return _campaign_plan(cir, root, target_path, cache_path, as_json)
     if action == "run":
-        return _campaign_run(cir, root, target_path, cache_path, as_json)
+        return _campaign_run(
+            cir,
+            root,
+            target_path,
+            cache_path,
+            as_json,
+            use_worktree=use_worktree,
+            replay_out=replay_out,
+        )
     return _campaign_ledger(cir, target_path, last, as_json)
 
 
@@ -1018,6 +1078,126 @@ def cmd_ml_daemon(root: Path, query: list[str], *, as_json: bool = False) -> int
     return 0 if out.get("ok") or out.get("stopped") else 1
 
 
+def cmd_ast_scan(
+    root: Path,
+    query: list[str],
+    *,
+    import_root: str = "",
+    as_json: bool = False,
+) -> int:
+    ast_mod = _resolve_crucible_submodule("ast_scanner")
+    target_repo = _resolve_cli_path(root, query[0]) if query else root
+    res = ast_mod.scan_repo_edges(target_repo, import_root=import_root)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"AST Scan ({res['elapsed_ms']}ms): repo={res['repo_root']} | "
+            f"import_root={res['import_root'] or '.'} | units={res['unit_count']} | edges={res['edge_count']}"
+        )
+    return 0
+
+
+def cmd_discover(
+    root: Path,
+    *,
+    import_root: str = ".agents/scripts",
+    emit_campaign: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    rl = _resolve_crucible_submodule("replay_loop")
+    report = rl.discover_gaps(root, import_root=import_root)
+    if emit_campaign is not None:
+        out_path = _resolve_cli_path(root, emit_campaign)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report.campaign_spec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    payload = report.to_dict()
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        fail_count = sum(1 for g in report.gaps if g.severity == "FAIL")
+        warn_count = sum(1 for g in report.gaps if g.severity == "WARN")
+        print(
+            f"Discovery ({report.elapsed_ms}ms): units={report.unit_count} | edges={report.edge_count} | "
+            f"gaps={len(report.gaps)} (FAIL={fail_count}, WARN={warn_count}) | slices={len(report.campaign_spec.get('slices', []))}"
+        )
+        for g in report.gaps[:10]:
+            print(f"  [{g.severity}] {g.id} ({g.kind}): {g.detail}")
+    return 1 if any(g.severity == "FAIL" for g in report.gaps) else 0
+
+
+def cmd_story(
+    root: Path,
+    query: list[str],
+    *,
+    terms: list[str] | None = None,
+    max_duration: float = 60.0,
+    output_dir: Path | None = None,
+    as_json: bool = False,
+) -> int:
+    se = _resolve_crucible_submodule("story_engine")
+    if not query:
+        print("usage: crucible_gate.py story {recognize <brief...> | select <transcript> | chg01 <manifest> <transcript> | mcp}", file=sys.stderr)
+        return 2
+    action = query[0]
+    if action == "mcp":
+        se.serve_stdio()
+        return 0
+    if action == "recognize":
+        res = se.recognize_form(" ".join(query[1:]))
+        print(json.dumps(res, indent=2, ensure_ascii=False) if as_json else f"Story Recognize: form={res['form']} abstained={res['abstained']} craft={res['pinned_craft']}")
+        return 0
+    if action == "select":
+        if len(query) < 2:
+            print("usage: crucible_gate.py story select <transcript_path> [--terms ...] [--max-duration 60] [--output-dir <dir>]", file=sys.stderr)
+            return 2
+        t_path = _resolve_cli_path(root, query[1])
+        segs, src_sha = se.load_transcript_segments(t_path)
+        q_terms = list(terms or [])
+        selection = se.select_story_arc_clips(segs, q_terms, max_duration_sec=max_duration)
+        chg01_sha = se.compute_chg01_fingerprint(src_sha, "", q_terms, max_duration)
+        out_dir = _resolve_cli_path(root, output_dir) if output_dir is not None else None
+        exported = se.export_clip_manifest(selection, t_path, src_sha, chg01_sha, out_dir)
+        payload = {"source_sha256": src_sha, "selection": selection, **exported}
+        if as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"Story Select: clips={len(selection['clips'])} | duration={selection['total_duration_sec']}s | "
+                f"arc_complete={selection['story_arc_complete']} | chg01={chg01_sha[:12]}"
+            )
+        return 0
+    if action == "chg01":
+        if len(query) < 3:
+            print("usage: crucible_gate.py story chg01 <manifest.json> <transcript_path>", file=sys.stderr)
+            return 2
+        m_path = _resolve_cli_path(root, query[1])
+        t_path = _resolve_cli_path(root, query[2])
+        manifest = json.loads(m_path.read_text(encoding="utf-8"))
+        res = se.check_chg01_invalidation(manifest, t_path)
+        print(json.dumps(res, indent=2, ensure_ascii=False) if as_json else f"CHG-01: {res['status']} (stale={res['stale']}, reasons={res['reasons']})")
+        return 0 if not res["stale"] else 1
+    print(f"unknown story action: {action}", file=sys.stderr)
+    return 2
+
+
+def cmd_g5_check(
+    root: Path,
+    *,
+    ledger_file: Path | None = None,
+    target: int = 10,
+    as_json: bool = False,
+) -> int:
+    ol = _resolve_crucible_submodule("outcome_ledger")
+    res = ol.verify_g5_ledger_file(root, ledger_file, target=target)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    else:
+        status = "PASS" if res["passed"] else "BLOCKED"
+        print(f"G5 Ledger ({status}): {res['verified_count']}/{res['target']} verified | rejected={len(res['rejected'])} | path={res['ledger_path']}")
+    return 0 if res["passed"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -1028,7 +1208,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon", "kernel"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ast-scan", "discover", "story", "g5-check", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon", "kernel"),
         help="Gate action to execute.",
     )
     parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route', action+target for 'campaign', or paths for 'ml-rank'/'ml-review'.")
@@ -1040,6 +1220,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", action="store_true", help="Show all passing checks in 'doctor'.")
     parser.add_argument("--cache", type=Path, default=None, help="Optional receipt cache JSON path for 'campaign plan'.")
     parser.add_argument("--last", type=int, default=10, help="Number of recent entries to print for 'campaign ledger'.")
+    parser.add_argument("--worktree", action="store_true", help="Execute 'campaign run' inside an isolated detached git worktree.")
+    parser.add_argument("--replay-out", type=Path, default=None, help="Write replay trace JSONL during 'campaign run'.")
+    parser.add_argument("--import-root", type=str, default="", help="Relative import root for 'ast-scan' or 'discover'.")
+    parser.add_argument("--emit-campaign", type=Path, default=None, help="Optional CampaignSpec JSON output path for 'discover'.")
+    parser.add_argument("--terms", nargs="*", default=None, help="Query terms for 'story select'.")
+    parser.add_argument("--max-duration", type=float, default=60.0, help="Max clip duration seconds for 'story select'.")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for 'story select' manifest.")
+    parser.add_argument("--file", type=Path, default=None, help="Optional G5 ledger file path for 'g5-check'.")
+    parser.add_argument("--target", type=int, default=10, help="Graduation target count for 'g5-check'.")
     parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
     parser.add_argument("--autofix", action="store_true", help="Auto-repair mechanical stale_sha256 hashes in 'kernel'.")
     args = parser.parse_args(argv)
@@ -1054,7 +1243,31 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec, verbose=args.verbose)
     if args.subcommand == "campaign":
-        return cmd_campaign(root, args.query, as_json=args.json, cache_path=args.cache, last=args.last)
+        return cmd_campaign(
+            root,
+            args.query,
+            as_json=args.json,
+            cache_path=args.cache,
+            last=args.last,
+            use_worktree=args.worktree,
+            replay_out=args.replay_out,
+        )
+    if args.subcommand == "ast-scan":
+        return cmd_ast_scan(root, args.query, import_root=args.import_root, as_json=args.json)
+    if args.subcommand == "discover":
+        eff_imp = args.import_root or ".agents/scripts"
+        return cmd_discover(root, import_root=eff_imp, emit_campaign=args.emit_campaign, as_json=args.json)
+    if args.subcommand == "story":
+        return cmd_story(
+            root,
+            args.query,
+            terms=args.terms,
+            max_duration=args.max_duration,
+            output_dir=args.output_dir,
+            as_json=args.json,
+        )
+    if args.subcommand == "g5-check":
+        return cmd_g5_check(root, ledger_file=args.file, target=args.target, as_json=args.json)
     if args.subcommand == "ml-rank":
         return cmd_ml_rank(root, args.query, as_json=args.json)
     if args.subcommand == "ml-review":

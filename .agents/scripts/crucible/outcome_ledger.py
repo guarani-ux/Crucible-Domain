@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
+import os
 import re
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -188,4 +191,101 @@ def evaluate_g5_graduation(
         "target": target,
         "passed": passed,
         "rejected": rejected,
+    }
+
+
+DEFAULT_G5_LEDGER_REL_PATH = Path(".agents") / "g5_outcomes.json"
+
+
+def load_g5_ledger(ledger_path: Path | str) -> list[MaterialImprovementEntry]:
+    """Load MaterialImprovementEntry records from a JSON ledger file."""
+    p = Path(ledger_path)
+    if not p.is_file():
+        return []
+    raw = json.loads(p.read_text(encoding="utf-8"))
+    rows = raw.get("entries", []) if isinstance(raw, dict) else raw
+    if not isinstance(rows, list):
+        raise ValueError(f"G5 ledger '{p}' must contain a JSON object with 'entries' list")
+    entries: list[MaterialImprovementEntry] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            raise ValueError(f"G5 ledger '{p}' entry must be an object")
+        entries.append(
+            MaterialImprovementEntry(
+                id=str(item["id"]),
+                weakness_id=str(item["weakness_id"]),
+                metric_name=str(item["metric_name"]),
+                before_value=float(item["before_value"]),
+                after_value=float(item["after_value"]),
+                higher_is_better=bool(item["higher_is_better"]),
+                verify_cmd=str(item["verify_cmd"]),
+                evidence_sha256=str(item["evidence_sha256"]),
+            )
+        )
+    return entries
+
+
+def save_g5_ledger(ledger_path: Path | str, entries: list[MaterialImprovementEntry]) -> str:
+    """Atomically persist G5 MaterialImprovementEntry ledger JSON and return its SHA-256."""
+    p = Path(ledger_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": "crucible.g5_outcomes.v1",
+        "entries": [e.to_dict() for e in entries],
+    }
+    data = (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(prefix=".g5_", dir=str(p.parent))
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp_name, p)
+    except Exception:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+        raise
+    return hashlib.sha256(data).hexdigest()
+
+
+def record_g5_improvement(
+    ledger_path: Path | str,
+    entry: MaterialImprovementEntry,
+) -> tuple[bool, str]:
+    """Validate and upsert a MaterialImprovementEntry into the persistent G5 ledger."""
+    ok, reason = validate_improvement_entry(entry)
+    if not ok:
+        return False, reason
+    p = Path(ledger_path)
+    existing = load_g5_ledger(p)
+    updated = [e for e in existing if e.id.strip() != entry.id.strip()]
+    updated.append(entry)
+    save_g5_ledger(p, updated)
+    return True, f"recorded {entry.id}"
+
+
+def verify_g5_ledger_file(
+    root: Path | str,
+    ledger_path: Path | str | None = None,
+    *,
+    target: int = 10,
+) -> dict[str, Any]:
+    """Evaluate a G5 JSON ledger file on disk against target graduation threshold."""
+    base = Path(root).resolve()
+    target_path = Path(ledger_path) if ledger_path is not None else (base / DEFAULT_G5_LEDGER_REL_PATH)
+    if not target_path.is_absolute():
+        target_path = (base / target_path).resolve()
+    if not target_path.is_file():
+        return {
+            "ledger_path": str(target_path),
+            "exists": False,
+            "verified_count": 0,
+            "target": target,
+            "passed": False,
+            "rejected": [{"id": "$ledger", "weakness_id": "G5", "reason": f"ledger file not found: {target_path}"}],
+        }
+    entries = load_g5_ledger(target_path)
+    summary = evaluate_g5_graduation(entries, target=target)
+    return {
+        "ledger_path": str(target_path),
+        "exists": True,
+        **summary,
     }

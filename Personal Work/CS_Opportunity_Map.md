@@ -4,7 +4,7 @@ depends_on:
   - Graphs/00_System_Atlas_and_Neon_Handoff.md
   - Knowledge/Knowledge_Register.md
 depends_on_sha256:
-  Graphs/00_System_Atlas_and_Neon_Handoff.md: 1c392d60d6a59983f00b2868ec08ac4104711f8f52d41beab65f9852280db194
+  Graphs/00_System_Atlas_and_Neon_Handoff.md: 7a8a7d3fd2e21c9f14877c12080af561c72dada587138e7ffb414bd510479fe2
 ---
 
 # Crucible Domain — Computer Science & Engineering Architecture Manual
@@ -65,7 +65,7 @@ Current workstation hardware baseline: **`16` logical CPU cores**, **`34.0 GB` p
 
 | Component | Hardware-Matched Configuration | Physical Rationale & Observed Performance |
 | :--- | :--- | :--- |
-| **`scripts/verify_all.ps1`** | **`11` concurrent workers** via `ThreadPoolExecutor(max_workers=len(STEPS))`: `Hub Gate (--strict)`, `Hub Doctor`, `Story-Lane Pytest`, and **`8` Hub `pytest` file workers** (`.agents/scripts/tests/test_*.py`). | Saturates `11` of `16` logical cores while reserving `5` logical cores for OS scheduling, NTFS metadata locks, and background indexer/antivirus I/O. Cuts full-suite verification wall-clock to **`12.86s`** (`11` checks, 60s per-step timeout). |
+| **`scripts/verify_all.ps1`** | **`22` concurrent workers** via `ThreadPoolExecutor(max_workers=len(STEPS))`: `Hub Gate (--strict)`, `Hub Doctor`, `Mutation Kill Gate`, `Story-Lane Pytest`, and **`18` Hub `pytest` file workers** (`.agents/scripts/tests/test_*.py`). | Saturates local cores in parallel while isolating each check in its own subprocess (`60-120s` per-step timeout). Full-suite wall-clock is **`~86s`** with `Mutation Kill Gate` (`~15-27s` without mutations). |
 | **`.agents/scripts/crucible/tx_patch.py`** | **`TransactionBuffer` in-RAM Copy-on-Write overlay** (`_overlay: dict[Path, bytes | None]`), executed via `python -` without temporary script files. | Absorbs multi-file reads/edits in the `12.4 GB` free RAM budget, runs `validate()` (`compile()`, `json.loads()`, `test_quality_gate.py`) before any syscall writes, then commits atomically via `tempfile.mkstemp` + `os.replace()` with full `before_bytes` rollback on exception. |
 | **`.agents/scripts/crucible/campaign_ir.py`** | **DAG wave scheduler + SHA-256 content cache** (`compile_campaign`, `optimize_campaign`, `compute_slice_input_sha256`, `save_receipt_cache_cas`). | Partitions slices into disjoint parallel `execution_waves`, hashes exact target + dependency contents to emit `SKIP_CACHED` at `0` LLM tokens on unchanged inputs, and serializes cache updates via `_path_lock` + CAS digest checks (`CacheConflictError`). |
 | **`slice-worker` Sub-Agents** | **`Model="flash"`, `Workspace="share"`**, bounded single-slice prompt (`build_slice_worker_prompt`), strict JSON receipt output. | `Workspace="share"` isolates each parallel worker in a CoW worktree; `Model="flash"` minimizes inference latency and KV-cache footprint for single-slice surgical edits verified by deterministic terminal gates. |
@@ -133,6 +133,9 @@ Prevents stochastic retry loops from burning quota on identical failures:
 | **#7** | **BM25 + Graph-Walk Retrieval (`router.py`)** | `IR + Bounded k-Hop BFS` + `Structural Filtering` | Combines BM25 lexical scoring with cycle-safe `k`-hop traversal over `related_ids` and `domain`/`kind` filters inside the sub-100ms RAM budget. | **COMPLETED** — `router.py` (`ee42caa`, `main`) |
 | **#8** | **Spoke Design-by-Contract (`contracts.py`)** | `Formal Pre/Postconditions` + `Frame Invariants` | Enforces `requires`, `ensures`, and `unchanged_roots` SHA-256 frame invariants across spoke ABI calls. | **COMPLETED** — `contracts.py` + `test_contracts.py` |
 | **#9** | **SAT/SMT Constraint Solving (`solver.py`)** | `Z3 SAT/SMT` + `Disjoint Path & Authority Feasibility` | Proves wave schedule feasibility (disjoint `target_paths`, single-domain isolation, authority holds) prior to spawning workers. | **COMPLETED** — `solver.py` + `test_solver.py` |
+| **#10** | **Autonomous Self-Discovery & Replay Loop (`replay_loop.py`)** | `AST Call-Edge Scanner` + `Worktree/RAM Tx` + `Double-Run Replay` | Discovers structural/contract gaps in RAM (`discover`), executes bounded fixes in isolated worktrees/RAM, rolls back faults automatically, and surfaces only replay-verified diffs. | **WAVE 4.5** — `replay_loop.py` + `crucible_gate.py` |
+| **#11** | **Unified CS-First-Principles Story Engine (`story_engine.py`)** | `Form Grammars` + `DP Story-Arc Clip Selection` + `CHG-01 SHA-256` | Re-invents `writers-room` + `story-lane` capabilities from CS first principles with exact `OPEN -> DEVELOP -> PAYOFF_CLOSE` DP selection, `CHG-01` invalidation, and `K-MCP-01` compatibility. | **WAVE 4.5** — `story_engine.py` + `storylane_spoke` |
+| **#12** | **Cross-Repo Portability & G5 Ledger (`CD-W19` / `CD-W20`)** | `Relative MCP Paths` + `Non-Vanity G5 Outcome Ledger` | Eliminates hardcoded drive-letter paths across all 4 `.agents/plugins/*/mcp_config.json` files and verifies 10 compounding non-commit-counting improvements (`g5-check`). | **WAVE 4.5** — `doctor.py` + `outcome_ledger.py` |
 
 ### Open CS Frontiers (Unbuilt Domains)
 
