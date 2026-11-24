@@ -18,6 +18,7 @@ Thumbs.db
 .agents/bench_lever_log.jsonl
 .agents/bench_trial_state.json
 .agents/bench_trial_telemetry.jsonl
+.agents/bench_pipeline_telemetry.jsonl
 .agents/bench.stop
 .agents/bench_runs/
 .agents/bench_telemetry.jsonl

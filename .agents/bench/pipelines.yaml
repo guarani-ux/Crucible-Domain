@@ -1,0 +1,85 @@
+# End-to-End 8-Stage Project Pipeline Specifications
+# Each project runs ALL 8 document types in real production dependency order for ONE defined scope:
+#   1. research_note -> 2. treatment -> 3. production_brief -> 4. av_script ->
+#   5. shot_list -> 6. call_sheet -> 7. content_calendar -> 8. leadership_report
+version: "1.0"
+
+stage_order:
+  - stage: 1
+    form_id: research_note
+    filename: 01_research_note.md
+    gate: pre-G01
+    role_focus: "Discovery & Source Epistemology: observed patron problem, evaluated primary sources, hypotheses, transfer limits, and behavioral baseline."
+  - stage: 2
+    form_id: treatment
+    filename: 02_treatment.md
+    gate: Concept
+    role_focus: "Creative Concept & A/B/C Story Spine: hook, visual/sonic world, narrative turn, and creative intent vs pending clearances."
+  - stage: 3
+    form_id: production_brief
+    filename: 03_production_brief.md
+    gate: G01/G02
+    role_focus: "Controlling Scope & Decision Brief: decision in top 3 lines, deliverables specs, 2027-2030 mandates, service promises, and owner-assigned holds."
+  - stage: 4
+    form_id: av_script
+    filename: 04_av_script.md
+    gate: Editorial Lock
+    role_focus: "Timed A/V Script matching exact project runtime: contiguous MM:SS-MM:SS beats, <=150 WPM, audio-video counterpoint, A/B/C weave, and captions check."
+  - stage: 5
+    form_id: shot_list
+    filename: 05_shot_list.md
+    gate: Pre-Production
+    role_focus: "Capture Plan & Coverage Triage: concrete WS/MS/CU/OTS camera setups cuttable from the A/V script with Essential/Supporting priority triage."
+  - stage: 6
+    form_id: call_sheet
+    filename: 06_call_sheet.md
+    gate: G02 Field Ops
+    role_focus: "Shoot-Day Operations Sheet: realistic clock/load-in/wrap schedule matching all locations, host/cast, and crew from the A/V script and shot list."
+  - stage: 7
+    form_id: content_calendar
+    filename: 07_content_calendar.md
+    gate: CH-04/CHG-01
+    role_focus: "4-Platform Native Rollout Plan: genuinely distinct YouTube, Instagram, LinkedIn, Facebook, and Newsletter adaptations with CH-04 holds and CHG-01 recut custody."
+  - stage: 8
+    form_id: leadership_report
+    filename: 08_leadership_report.md
+    gate: G04/CEO Pack
+    role_focus: "Executive Decision Memo: top-25% CEO/Director ask, 2027-2030 strategic alignment, opportunity cost, counterarguments, and consolidated owned holds."
+
+projects:
+  - id: cpl-ycd-ep01-vhs-3m
+    title: "PITCH-YCD Episode 1 — You Can Do That Here? (Free VHS Digitization, 3-Minute Mini-Doc)"
+    domain: cpl_research
+    target_duration_s: 180
+    primary_location: "Central Library Digital Media Lab"
+    official_mandates: [Experiences, Technology]
+    immediate_patron_action: "Book a free VHS digitization transfer slot at calgarylibrary.ca with a library card."
+    scope_summary: >-
+      Produce one 3-minute flagship mini-documentary for PITCH-YCD showing a real Calgary patron rescuing
+      fragile family VHS memories using Central Library's free transfer station and staff expertise, plus
+      native 4-platform rollout adaptations (YouTube, Instagram, LinkedIn, Facebook). Ground all facts in
+      Calgary Public Library/GROUND_TRUTH.md, keep Asana read-only, and hold G06 release until signed off.
+
+  - id: cpl-nq-ep02-ra-1m
+    title: "PITCH-NQ Episode 2 — The Next Question (1-Minute Reader Advisory Diagnostic)"
+    domain: cpl_research
+    target_duration_s: 60
+    primary_location: "Central Library Fiction Stacks"
+    official_mandates: [Collections, Expertise]
+    immediate_patron_action: "Request a free personalized reading list or book a 15-minute reader-advisory chat at calgarylibrary.ca."
+    scope_summary: >-
+      Produce a sharp 1-minute reader-advisory diagnostic episode for PITCH-NQ helping patrons overcome
+      choice paralysis using specialist librarian expertise under official 2027-2030 Collections and
+      Expertise mandates, with native 4-platform rollout and explicit G02/G06 holds.
+
+  - id: cpl-studio-walkthrough-5m
+    title: "PITCH-YCD Deep Dive — Central Library Recording & Creation Suites (5-Minute Episode)"
+    domain: cpl_research
+    target_duration_s: 300
+    primary_location: "Central Library Audio Recording Suite"
+    official_mandates: [Spaces, Technology, Experiences]
+    immediate_patron_action: "Reserve a free 2-hour recording studio session at calgarylibrary.ca using your library card."
+    scope_summary: >-
+      Produce a 5-minute full YouTube episode walking first-time patrons through booking and using
+      Central Library's free recording suites and digital tools, structured with cold open + 4 chapters
+      (60-90s retention resets), A/B/C narrative arc, full capture plan, and 4-platform rollout.

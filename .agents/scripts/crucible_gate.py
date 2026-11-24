@@ -1266,10 +1266,44 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | fuzz [--rounds N] | trial [reset] [--rounds N] | test-validity | inspect | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect", "pipeline"):
+        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | pipeline [--project ID] [--mode offline|agy_live] [--no-judge] | fuzz [--rounds N] | trial [reset] [--rounds N] | test-validity | inspect | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "pipeline":
+        pr = _resolve_crucible_submodule("pipeline_runner")
+        pid = project_ids[0] if project_ids else (parts[1] if len(parts) >= 2 else None)
+        pipe_mode = "offline" if bench_mode == "offline" else "agy_live"
+        stream_fn = (lambda msg: print(msg, flush=True)) if not as_json else None
+        try:
+            res = pr.run_end_to_end_pipeline(
+                root,
+                project_id=pid,
+                mode=pipe_mode,
+                enable_judgment_gate=(not no_judge),
+                progress_fn=stream_fn,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=2) if as_json else str(exc), file=sys.stdout if as_json else sys.stderr)
+            return 2
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            par = res["parity"]
+            status = "PASS" if res["ok"] else "BLOCKED"
+            print(
+                f"End-to-End Pipeline ({status}): project={res['project_id']} | "
+                f"stages={res['stages_passed']}/{res['stages_total']} | "
+                f"parity={par['parity_score']:.2f} | message_carry={par['message_carry_score']:.0%} | "
+                f"cold_receiver={par['cold_receiver_rating']}({par['cold_receiver_score']:.0%}) | "
+                f"out={res['output_dir']} in {res['elapsed_ms']:.1f}ms"
+            )
+            if par.get("violations"):
+                print(f"  Parity violations: {par['violations']}")
+            if par.get("missing_outsider_info"):
+                print(f"  Missing for cold outsider: {par['missing_outsider_info']}")
+        return 0 if res["ok"] else 1
 
     if action == "test-validity":
         rae = _resolve_crucible_submodule("root_axis_engine")

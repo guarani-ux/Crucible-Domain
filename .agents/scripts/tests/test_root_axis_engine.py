@@ -165,3 +165,51 @@ def test_cli_bench_test_validity_and_inspect_end_to_end() -> None:
     assert data["ok"] is True
     assert data["ontology"]["l4_count"] == 36
     assert data["counterexamples_caught"] == data["counterexamples_total"]
+
+
+def test_end_to_end_8_stage_pipeline_and_cross_document_cold_receiver_parity(tmp_path: Path) -> None:
+    import shutil
+    from crucible.pipeline_runner import audit_pipeline_parity, load_pipeline_manifest, run_end_to_end_pipeline
+
+    # Isolate repo_root in tmp_path with required YAML configs
+    bench_dir = tmp_path / ".agents" / "bench"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    for fname in ("pipelines.yaml", "org_charter.yaml", "levers.yaml", "judgment_rubrics.yaml", "axis_contracts.yaml"):
+        shutil.copy(ROOT / ".agents" / "bench" / fname, bench_dir / fname)
+
+    res = run_end_to_end_pipeline(tmp_path, project_id="cpl-ycd-ep01-vhs-3m", mode="offline")
+    assert res["ok"] is True, res
+    assert res["stages_passed"] == 8
+    assert res["stages_total"] == 8
+    assert [s["form_id"] for s in res["stages"]] == [
+        "research_note",
+        "treatment",
+        "production_brief",
+        "av_script",
+        "shot_list",
+        "call_sheet",
+        "content_calendar",
+        "leadership_report",
+    ]
+    par = res["parity"]
+    assert par["ok"] is True
+    assert par["parity_score"] == 1.0
+    assert par["message_carry_score"] == 1.0
+    assert par["cold_receiver_score"] == 1.0
+    assert par["cold_receiver_rating"] == "RUNNABLE_STANDALONE"
+
+    # Negative cross-document parity check: drop holds in leadership_report + break runtime + inject unauthorized release
+    manifest = load_pipeline_manifest(tmp_path)
+    proj_cfg = manifest["projects"][0]
+    out_dir = tmp_path / res["output_dir"]
+    stage_texts = {s["form_id"]: (out_dir / s["filename"]).read_text(encoding="utf-8") for s in res["stages"]}
+    stage_texts["leadership_report"] = "# Memo\nApproved for release today.\n"
+    stage_texts["av_script"] = "# Script\n| Timecode | Audio | Video |\n| --- | --- | --- |\n| 00:00-00:15 | Short line. | WS branch. |\n"
+
+    bad_par = audit_pipeline_parity(stage_texts, proj_cfg, repo_root=tmp_path)
+    assert not bad_par.ok
+    assert bad_par.cold_receiver_rating != "RUNNABLE_STANDALONE"
+    assert any("unauthorized_release" in v for v in bad_par.violations)
+    assert any("runtime_parity_mismatch" in v for v in bad_par.violations)
+    assert any("hold_custody_dropped" in v for v in bad_par.violations)
+
