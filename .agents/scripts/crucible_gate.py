@@ -664,6 +664,118 @@ def cmd_campaign(
     return _campaign_ledger(cir, target_path, last, as_json)
 
 
+def _load_ram_ml_engine():
+    script_dir = str(Path(__file__).resolve().parent)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    import ram_ml_engine
+    return ram_ml_engine
+
+
+def cmd_ml_rank(root: Path, files: list[str], *, as_json: bool = False) -> int:
+    eng = _load_ram_ml_engine()
+    res = eng.rank_tests_for_changes(root, changed_files=files or None)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    print(f"In-RAM ML Test Ranker ({res['elapsed_ms']}ms | source={res['change_source']} | impacted={res['impacted_count']}/{len(res['ranked_tests'])})")
+    for item in res["ranked_tests"]:
+        tag = "IMPACTED" if item["tier"] == "impacted" else "baseline"
+        print(f"  [{tag:<8}] {item['score']:>6.4f}  {item['test_path']}  ({'; '.join(item['reasons'])})")
+    return 0
+
+
+def cmd_ml_review(root: Path, files: list[str], *, as_json: bool = False) -> int:
+    eng = _load_ram_ml_engine()
+    res = eng.review_changes_in_ram(root, changed_files=files or None)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0
+    print(f"In-RAM ML Review ({res['elapsed_ms']}ms | source={res['change_source']} | high_priority={res['high_priority_count']}/{res['files_reviewed']})")
+    for item in res["reviewed_files"]:
+        print(f"  [{item['review_priority']:>4.2f}] {item['rel_path']}  ({'; '.join(item['signals'])})")
+    return 0
+
+
+def cmd_ml_preflight(root: Path, query: list[str], *, verify_cmd: str = "", as_json: bool = False) -> int:
+    eng = _load_ram_ml_engine()
+    task_text = " ".join(query).strip()
+    res = eng.preflight_outcome_gate(root, task_text=task_text, verify_cmd=verify_cmd)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0 if res["status"] == "READY" else 2
+    if res["status"] != "READY":
+        print(f"In-RAM ML Preflight ({res['elapsed_ms']}ms): REALIGNMENT_REQUIRED | missing={res['missing']}")
+        for p in res["realignment_prompts"]:
+            print(f"  - {p}")
+        return 2
+    print(f"In-RAM ML Preflight ({res['elapsed_ms']}ms): READY | impacted_tests={len(res['impacted_tests'])} | verify={res['verify_cmd']}")
+    for step in res["carry_through_plan"]:
+        print(f"  {step}")
+    return 0
+
+
+def cmd_ml_curate(root: Path, *, as_json: bool = False) -> int:
+    eng = _load_ram_ml_engine()
+    res = eng.curate_training_dataset(root)
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        return 0 if res["quality_gate_passed"] else 1
+    print(
+        f"In-RAM ML Curate ({res['elapsed_ms']}ms): raw={res['raw_rows']} -> deduped={res['deduped_rows']} -> "
+        f"curated={res['curated_rows']} ({res['fail_rows']} fail, {res['pass_rows']} pass, "
+        f"resolved_fails={res['resolved_fail_rows']}) | domains={res['domain_counts']} | "
+        f"quality_gate={'PASS' if res['quality_gate_passed'] else 'FAIL'}"
+    )
+    return 0 if res["quality_gate_passed"] else 1
+
+
+def cmd_ml_train(root: Path, *, as_json: bool = False) -> int:
+    eng = _load_ram_ml_engine()
+    ext = eng.extract_transcript_failures(root)
+    rank = eng.rank_tests_for_changes(root)
+    ho = rank.get("held_out_metrics") or {}
+    out = {
+        "extraction": ext,
+        "model_mode": rank["model_mode"],
+        "training_rows": rank["training_rows"],
+        "training_accuracy": rank["training_accuracy"],
+        "held_out_metrics": ho,
+    }
+    if as_json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return 0
+    ho_str = f" | held_out({ho['folds']}f): acc={ho['accuracy']} P={ho['precision']} R={ho['recall']} F1={ho['f1']}" if ho else ""
+    print(
+        f"In-RAM ML Train ({ext['elapsed_ms']}ms): scanned {ext['conversations_scanned']} conversations -> "
+        f"{ext['rows_written']} rows ({ext['fail_rows']} fail, {ext['pass_rows']} pass) | "
+        f"mode={rank['model_mode']} train_acc={rank['training_accuracy']}{ho_str}"
+    )
+    return 0
+
+
+def cmd_ml_daemon(root: Path, query: list[str], *, as_json: bool = False) -> int:
+    script_dir = str(Path(__file__).resolve().parent)
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    import ram_ml_daemon
+
+    action = query[0] if query else "status"
+    if action == "start":
+        out = ram_ml_daemon.start_daemon_background(root)
+    elif action == "stop":
+        out = ram_ml_daemon.stop_daemon(root)
+    elif action == "bench":
+        out = ram_ml_daemon.benchmark_hot_daemon(root)
+    elif action == "status":
+        out = ram_ml_daemon.query_daemon(root, {"cmd": "ping"}) or {"ok": False, "status": "stopped"}
+    else:
+        print(f"usage: crucible_gate.py ml-daemon {{start|stop|status|bench}}", file=sys.stderr)
+        return 2
+    print(json.dumps(out, indent=2, ensure_ascii=False))
+    return 0 if out.get("ok") or out.get("stopped") else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -674,10 +786,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign", "ml-rank", "ml-review", "ml-train", "ml-curate", "ml-preflight", "ml-daemon"),
         help="Gate action to execute.",
     )
-    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route' or action+target for 'campaign'.")
+    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route', action+target for 'campaign', or paths for 'ml-rank'/'ml-review'.")
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route'.")
     parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'doctor', or 'campaign'.")
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
@@ -686,6 +798,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--verbose", action="store_true", help="Show all passing checks in 'doctor'.")
     parser.add_argument("--cache", type=Path, default=None, help="Optional receipt cache JSON path for 'campaign plan'.")
     parser.add_argument("--last", type=int, default=10, help="Number of recent entries to print for 'campaign ledger'.")
+    parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -699,6 +812,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec, verbose=args.verbose)
     if args.subcommand == "campaign":
         return cmd_campaign(root, args.query, as_json=args.json, cache_path=args.cache, last=args.last)
+    if args.subcommand == "ml-rank":
+        return cmd_ml_rank(root, args.query, as_json=args.json)
+    if args.subcommand == "ml-review":
+        return cmd_ml_review(root, args.query, as_json=args.json)
+    if args.subcommand == "ml-train":
+        return cmd_ml_train(root, as_json=args.json)
+    if args.subcommand == "ml-curate":
+        return cmd_ml_curate(root, as_json=args.json)
+    if args.subcommand == "ml-preflight":
+        return cmd_ml_preflight(root, args.query, verify_cmd=args.verify_cmd, as_json=args.json)
+    if args.subcommand == "ml-daemon":
+        return cmd_ml_daemon(root, args.query, as_json=args.json)
     return cmd_check(root, strict=args.strict)
 
 

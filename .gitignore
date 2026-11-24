@@ -7,3 +7,6 @@ __pycache__/
 Thumbs.db
 
 .worktrees/
+.agents/ml_history.jsonl
+.agents/ml_curated.jsonl
+.agents/.ml_daemon.json
