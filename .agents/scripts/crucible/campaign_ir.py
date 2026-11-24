@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -266,10 +267,20 @@ def optimize_campaign(
     return CompiledCampaign(name=spec.name, repo_root=repo_root, ordered_slices=planned)
 
 
+_VOLATILE_PATTERNS = (
+    (re.compile(r"0x[0-9a-fA-F]+"), "<HEX>"),
+    (re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b"), "<TS>"),
+    (re.compile(r"pytest-\d+"), "pytest-<N>"),
+    (re.compile(r"\bin \d+\.\d+s\b"), "in <T>s"),
+)
+
+
 def hash_error_output(output: str) -> str:
-    """Compute normalized SHA-256 of a failure output for circuit-breaker comparison."""
-    normalized = "\n".join(line.rstrip() for line in output.strip().splitlines())
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    """Compute canonical SHA-256 of failure output, stripping volatile paths/timestamps/hex."""
+    text = "\n".join(line.rstrip() for line in output.strip().splitlines())
+    for pat, repl in _VOLATILE_PATTERNS:
+        text = pat.sub(repl, text)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 @dataclass

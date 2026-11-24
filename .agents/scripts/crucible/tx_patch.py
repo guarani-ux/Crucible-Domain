@@ -111,34 +111,45 @@ class TransactionBuffer:
             raise TransactionValidationError(errors)
 
         receipt_files: list[dict[str, Any]] = []
-        for path, data in sorted(self._overlay.items()):
-            before_bytes = path.read_bytes() if path.is_file() else None
-            rel = str(path.relative_to(self.root)).replace("\\", "/")
-            if data is None:
-                if path.exists():
-                    path.unlink()
-                action = "deleted"
-            else:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                fd, tmp_name = tempfile.mkstemp(prefix=".tx_", dir=str(path.parent))
-                try:
-                    with os.fdopen(fd, "wb") as fh:
-                        fh.write(data)
-                    os.replace(tmp_name, path)
-                except Exception:
-                    if os.path.exists(tmp_name):
-                        os.unlink(tmp_name)
-                    raise
-                action = "updated" if before_bytes is not None else "created"
+        applied_undo: list[tuple[Path, bytes | None]] = []
+        try:
+            for path, data in sorted(self._overlay.items()):
+                before_bytes = path.read_bytes() if path.is_file() else None
+                rel = str(path.relative_to(self.root)).replace("\\", "/")
+                if data is None:
+                    if path.exists():
+                        path.unlink()
+                    action = "deleted"
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    fd, tmp_name = tempfile.mkstemp(prefix=".tx_", dir=str(path.parent))
+                    try:
+                        with os.fdopen(fd, "wb") as fh:
+                            fh.write(data)
+                        os.replace(tmp_name, path)
+                    except Exception:
+                        if os.path.exists(tmp_name):
+                            os.unlink(tmp_name)
+                        raise
+                    action = "updated" if before_bytes is not None else "created"
 
-            receipt_files.append(
-                {
-                    "path": rel,
-                    "action": action,
-                    "before_sha256": _sha256_bytes(before_bytes),
-                    "after_sha256": _sha256_bytes(data),
-                }
-            )
+                applied_undo.append((path, before_bytes))
+                receipt_files.append(
+                    {
+                        "path": rel,
+                        "action": action,
+                        "before_sha256": _sha256_bytes(before_bytes),
+                        "after_sha256": _sha256_bytes(data),
+                    }
+                )
+        except Exception:
+            for undo_path, prev_bytes in reversed(applied_undo):
+                if prev_bytes is None:
+                    if undo_path.exists():
+                        undo_path.unlink()
+                else:
+                    undo_path.write_bytes(prev_bytes)
+            raise
 
         self._overlay.clear()
         return {"status": "committed", "file_count": len(receipt_files), "files": receipt_files}

@@ -169,3 +169,9 @@ def test_property_100_random_dags_and_cache_invariants(tmp_path: Path) -> None:
         assert compute_slice_input_sha256(sample, case_dir) == compiled.ordered_slices[0].computed_sha256
         err_msg = f"fail-{case}-{rng.randint(1, 99)}"
         assert hash_error_output(err_msg + "  \n") == hash_error_output(err_msg)
+
+
+def test_hash_error_output_strips_volatile_tokens() -> None:
+    e1 = "FAIL at 2026-11-24T00:01:02Z obj=0x7ff123ab pytest-21 in 1.42s"
+    e2 = "FAIL at 2026-11-24T00:05:59Z obj=0xdeadbeef pytest-99 in 3.87s"
+    assert hash_error_output(e1) == hash_error_output(e2)

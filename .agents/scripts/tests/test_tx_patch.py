@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import os
 import sys
 from pathlib import Path
 
@@ -110,3 +111,30 @@ def test_fuzz_tx_buffer_100_cases_all_or_nothing_atomicity(tmp_path: Path) -> No
 
     assert committed == 50
     assert aborted == 50
+
+
+def test_commit_rolls_back_prior_files_on_mid_commit_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    f1 = tmp_path / "a.txt"
+    f2 = tmp_path / "b.txt"
+    f1.write_text("orig-a", encoding="utf-8")
+    f2.write_text("orig-b", encoding="utf-8")
+
+    tx = TransactionBuffer(tmp_path)
+    tx.stage_write("a.txt", "new-a")
+    tx.stage_write("b.txt", "new-b")
+
+    real_replace = os.replace
+    calls = {"n": 0}
+
+    def flaky_replace(src: str, dst: Path) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("simulated Windows lock on second file")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", flaky_replace)
+    with pytest.raises(OSError, match="simulated Windows lock"):
+        tx.commit()
+
+    assert f1.read_text(encoding="utf-8") == "orig-a"
+    assert f2.read_text(encoding="utf-8") == "orig-b"
