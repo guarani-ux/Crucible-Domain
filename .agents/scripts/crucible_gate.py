@@ -1255,6 +1255,7 @@ def cmd_bench(
     adaptive: bool = False,
     until_exit: bool = False,
     max_minutes: float = 0.0,
+    workers: int | None = None,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1323,6 +1324,7 @@ def cmd_bench(
     if until_exit and not as_json:
         print("Crucible Workload Bench: starting continuous loop (press Ctrl+C or run 'crucible_gate.py bench stop' in another terminal to exit cleanly)...", flush=True)
 
+    eff_workers = workers if (workers is not None and workers >= 1) else (3 if bench_mode in ("all", "agy_live") else 1)
     res = wb.run_workload_bench(
         root,
         manifest,
@@ -1333,6 +1335,7 @@ def cmd_bench(
         adaptive=adaptive,
         until_exit=until_exit,
         max_minutes=max_minutes,
+        workers=eff_workers,
         progress_fn=stream_progress,
     )
     if as_json:
@@ -1402,6 +1405,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--adaptive", action="store_true", help="Enable UCB1 bandit craft selection & diminishing-returns frontier rotation in 'bench run'.")
     parser.add_argument("--until-exit", action="store_true", help="Run 'bench run' continuously until Ctrl+C or 'bench stop'.")
     parser.add_argument("--max-minutes", type=float, default=0.0, help="Optional safety time limit (minutes) for continuous 'bench run'.")
+    parser.add_argument("--workers", type=int, default=None, help="Parallel live workers per round in 'bench run' (default: 3 for live modes, 1 for offline).")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1434,6 +1438,7 @@ def main(argv: list[str] | None = None) -> int:
             adaptive=args.adaptive,
             until_exit=args.until_exit,
             max_minutes=args.max_minutes,
+            workers=args.workers,
             project_ids=args.project,
             as_json=args.json,
         )

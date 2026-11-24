@@ -462,3 +462,71 @@ def test_progress_streaming_emits_start_banner_heartbeat_and_element_breakdown(t
     assert any("START p-stream" in line for line in events)
     assert any("still waiting on agy" in line for line in events)
     assert any("style=" in line and "stake=" in line and "weak=" in line for line in events)
+
+
+def test_parallel_workers_trains_multiple_forms_concurrently_without_race(tmp_path: Path) -> None:
+    import time as _time
+
+    manifest = load_workload_manifest(
+        {
+            "version": "1.0",
+            "defaults": {
+                "staging_dir": "runs",
+                "telemetry_file": "tel.jsonl",
+                "ml_history_file": "ml.jsonl",
+                "bandit_state_file": "bandit.json",
+                "learned_policies_file": "learned.json",
+                "timeout_seconds": 15,
+                "max_retries": 0,
+            },
+            "projects": [
+                {
+                    "id": "p-par-1",
+                    "domain": "personal_creative",
+                    "mode": "agy_live",
+                    "form": "treatment",
+                    "intent": "Draft treatment.",
+                    "deliverable": "t.md",
+                    "public_checks": {"required_sections": ["Premise", "Story"]},
+                },
+                {
+                    "id": "p-par-2",
+                    "domain": "personal_creative",
+                    "mode": "agy_live",
+                    "form": "shot_list",
+                    "intent": "Draft shot list.",
+                    "deliverable": "s.md",
+                    "public_checks": {"required_sections": ["Setup", "Priority"]},
+                },
+            ],
+        }
+    )
+
+    def concurrent_worker(prompt: str, _root: Path, _timeout_s: float) -> tuple[bool, str]:
+        _time.sleep(0.15)
+        if "shot list" in prompt.lower():
+            return (
+                True,
+                "## Shot List\n| ID / Setup | Priority | Minimum | Alternate |\n| --- | --- | --- | --- |\n"
+                "| P01 | Essential | Clean focus | Reframe |\n| H01 | Supporting | Wide | Hold |\n",
+            )
+        return (
+            True,
+            "## Premise & Story\nOpen on hands folding paper; visual frame stays tight; pending studio access.\n",
+        )
+
+    t0 = _time.perf_counter()
+    res = run_workload_bench(
+        tmp_path,
+        manifest,
+        mode_filter="all",
+        rounds=1,
+        adaptive=True,
+        workers=2,
+        agy_worker_fn=concurrent_worker,
+    )
+    elapsed = _time.perf_counter() - t0
+    assert res["ok"] is True
+    assert res["executed_count"] == 2
+    assert elapsed < 0.29  # 2x 0.15s ran in parallel
+    assert len((tmp_path / "tel.jsonl").read_text(encoding="utf-8").splitlines()) == 2
