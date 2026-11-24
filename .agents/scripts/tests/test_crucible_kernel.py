@@ -102,3 +102,60 @@ def test_run_kernel_cegis_stale_witness_and_cli_rejection(tmp_path: Path) -> Non
     data = json.loads(proc.stdout)
     assert data["status"] == "VERIFIED_DONE"
     assert data["potential_v"] == 0
+
+
+def test_kernel_autofix_repairs_stale_sha256_and_pre_tool_guards(tmp_path: Path) -> None:
+    # 1. Autofix repairs stale_sha256 mechanically (V=1 -> V=0)
+    (tmp_path / "Personal Work").mkdir()
+    dep = tmp_path / "src.txt"
+    dep.write_text("fresh-bytes", encoding="utf-8")
+    (tmp_path / "Personal Work" / "doc.md").write_text(
+        "---\ndepends_on:\n  - src.txt\ndepends_on_sha256:\n  src.txt: " + ("0" * 64) + "\n---\n# Doc\n",
+        encoding="utf-8",
+    )
+    fixed = ck.run_kernel(tmp_path, outcome="Autofix stale hash", changed_files=["src.txt"], autofix=True)
+    assert fixed["status"] == "VERIFIED_DONE"
+    assert fixed["potential_v"] == 0
+    assert len(fixed["autofixed"]) == 1
+
+    # 2. Pre-tool SYNTAX_GUARD blocks invalid Python write_file in RAM
+    bad_py = {
+        "toolCall": {
+            "name": "write_file",
+            "args": {"Path": str(tmp_path / "broken.py"), "Content": "def broken(:\n    pass\n"},
+        }
+    }
+    p_syn = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "--root", str(tmp_path), "pre-tool"],
+        input=json.dumps(bad_py),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert p_syn.returncode == 0
+    syn_dec = json.loads(p_syn.stdout)
+    assert syn_dec["decision"] == "deny"
+    assert "SYNTAX_GUARD" in syn_dec["reason"]
+
+    # 3. Pre-tool DELTA_ONLY blocks full-file Overwrite on >150-line existing file
+    big_file = tmp_path / "large.py"
+    big_file.write_text("\n".join(f"x_{i} = {i}" for i in range(160)) + "\n", encoding="utf-8")
+    overwrite_req = {
+        "toolCall": {
+            "name": "write_file",
+            "args": {"Path": str(big_file), "Content": "x = 1\n", "Overwrite": True},
+        }
+    }
+    p_ow = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "--root", str(tmp_path), "pre-tool"],
+        input=json.dumps(overwrite_req),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert p_ow.returncode == 0
+    ow_dec = json.loads(p_ow.stdout)
+    assert ow_dec["decision"] == "deny"
+    assert "DELTA_ONLY" in ow_dec["reason"]

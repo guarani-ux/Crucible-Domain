@@ -278,6 +278,26 @@ def _syntax_counterexamples(root: Path, files: list[str]) -> list[dict[str, Any]
     return witnesses
 
 
+def autofix_stale_sha256(root: Path) -> list[dict[str, str]]:
+    """Mechanically repair stale depends_on_sha256 entries in YAML frontmatter (0 LLM tokens)."""
+    root = root.resolve()
+    dag = IncrementalDAG(root)
+    repaired: list[dict[str, str]] = []
+    for w in dag.stale_counterexamples():
+        if w["kind"] != "stale_sha256" or not w.get("actual_sha256"):
+            continue
+        art_path = root / w["artifact"]
+        if not art_path.is_file():
+            continue
+        text = art_path.read_text(encoding="utf-8", errors="replace")
+        old_sha = w["expected_sha256"]
+        new_sha = w["actual_sha256"]
+        if old_sha in text:
+            art_path.write_text(text.replace(old_sha, new_sha, 1), encoding="utf-8")
+            repaired.append({"artifact": w["artifact"], "dependency": w["dependency"], "new_sha256": new_sha})
+    return repaired
+
+
 def run_kernel(
     root: Path,
     outcome: str = "",
@@ -286,11 +306,13 @@ def run_kernel(
     requested_effects: list[tuple[EffectTier, Path | None, CapabilityToken | None]] | None = None,
     unknowns: list[Unknown] | None = None,
     prev_potential: int | None = None,
+    autofix: bool = False,
 ) -> dict[str, Any]:
     """Execute one closed-loop kernel evaluation over DAG, capabilities, EVOI, CEGIS, and Lyapunov V(state)."""
     t0 = time.perf_counter()
     root = root.resolve()
     changes = changed_files if changed_files is not None else _git_dirty_files(root)
+    autofixed = autofix_stale_sha256(root) if autofix else []
 
     dag = IncrementalDAG(root)
     dirty_downstream = dag.dirty_closure(changes)
@@ -325,6 +347,7 @@ def run_kernel(
         "convergence": convergence,
         "changed_files": changes,
         "dirty_closure": dirty_downstream,
+        "autofixed": autofixed,
         "counterexamples": counterexamples,
         "capability_denials": capability_denials,
         "evoi": evoi,

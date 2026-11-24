@@ -223,6 +223,29 @@ def _emit_decision(decision: str, reason: str | None = None) -> int:
     return 0
 
 
+def _check_mechanical_edit_guard(tool_name: str, args: dict[str, object], target: Path) -> str | None:
+    """Enforce delta-only edits on large files (>150 lines) and valid Python syntax in RAM before disk write."""
+    if tool_name != "write_file":
+        return None
+    if args.get("Overwrite") is True and target.is_file():
+        try:
+            line_count = len(target.read_text(encoding="utf-8", errors="replace").splitlines())
+        except OSError:
+            line_count = 0
+        if line_count > 150:
+            return (
+                f"DELTA_ONLY: Refusing full-file write_file(Overwrite=True) on existing {line_count}-line file "
+                f"'{target.name}'. Use targeted edit_file or tx_patch.py."
+            )
+    if target.suffix.lower() == ".py" and isinstance(args.get("Content"), str):
+        try:
+            import ast
+            ast.parse(str(args["Content"]), filename=str(target))
+        except SyntaxError as exc:
+            return f"SYNTAX_GUARD: Refusing to write invalid Python syntax ({exc.msg} at line {exc.lineno})."
+    return None
+
+
 def cmd_pre_tool(root: Path = ROOT) -> int:
     payload = _read_stdin_json()
     tool_call = payload.get("toolCall")
@@ -238,6 +261,10 @@ def cmd_pre_tool(root: Path = ROOT) -> int:
         rel_parts = target.relative_to(root.resolve()).parts
     except ValueError:
         return _emit_decision("allow")
+
+    mech_deny = _check_mechanical_edit_guard(str(tool_call.get("name")), args, target)
+    if mech_deny is not None:
+        return _emit_decision("deny", mech_deny)
 
     matched_domain = next((d for d in COUNT_DIRS if rel_parts and d.lower() == rel_parts[0].lower()), None)
     if matched_domain is None:
@@ -797,20 +824,21 @@ def cmd_ml_train(root: Path, *, as_json: bool = False) -> int:
     return 0
 
 
-def cmd_kernel(root: Path, query: list[str], *, as_json: bool = False) -> int:
+def cmd_kernel(root: Path, query: list[str], *, as_json: bool = False, autofix: bool = False) -> int:
     script_dir = str(Path(__file__).resolve().parent)
     if script_dir not in sys.path:
         sys.path.insert(0, script_dir)
     import crucible_kernel
 
     outcome = " ".join(query).strip()
-    res = crucible_kernel.run_kernel(root, outcome=outcome)
+    res = crucible_kernel.run_kernel(root, outcome=outcome, autofix=autofix)
     if as_json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
         return 0 if res["status"] == "VERIFIED_DONE" else 1
     print(
         f"Crucible Kernel ({res['elapsed_ms']}ms): status={res['status']} | V={res['potential_v']} "
-        f"({res['convergence']}) | dirty_closure={len(res['dirty_closure'])} | counterexamples={len(res['counterexamples'])}"
+        f"({res['convergence']}) | dirty_closure={len(res['dirty_closure'])} | "
+        f"autofixed={len(res.get('autofixed') or [])} | counterexamples={len(res['counterexamples'])}"
     )
     for cx in res["counterexamples"][:5]:
         print(f"  COUNTEREXAMPLE: {cx}")
@@ -862,6 +890,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cache", type=Path, default=None, help="Optional receipt cache JSON path for 'campaign plan'.")
     parser.add_argument("--last", type=int, default=10, help="Number of recent entries to print for 'campaign ledger'.")
     parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
+    parser.add_argument("--autofix", action="store_true", help="Auto-repair mechanical stale_sha256 hashes in 'kernel'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -888,7 +917,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "ml-daemon":
         return cmd_ml_daemon(root, args.query, as_json=args.json)
     if args.subcommand == "kernel":
-        return cmd_kernel(root, args.query, as_json=args.json)
+        return cmd_kernel(root, args.query, as_json=args.json, autofix=args.autofix)
     if args.subcommand == "pre-commit":
         return cmd_pre_commit(root, strict=args.strict)
     return cmd_check(root, strict=args.strict)

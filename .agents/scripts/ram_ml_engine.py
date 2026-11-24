@@ -810,15 +810,15 @@ def review_changes_in_ram(
     mod_by_rel = {m["rel_path"]: m for m in py_modules}
     sym_map = extract_changed_symbols(root, changes) if hot_state is None else {}
 
-    # Build strong co-change expectation map (P(partner | file) >= 0.3 and co_changes >= 3)
+    # Build strong co-change expectation map (P(partner | file) >= 0.25 and co_changes >= 3)
     partners_of: defaultdict[str, list[tuple[str, int, float]]] = defaultdict(list)
     for (a, b), cnt in pair_freq.items():
         if cnt >= 3:
             pa = cnt / max(1, file_freq.get(a, cnt))
             pb = cnt / max(1, file_freq.get(b, cnt))
-            if pa >= 0.3:
+            if pa >= 0.25:
                 partners_of[a].append((b, cnt, pa))
-            if pb >= 0.3:
+            if pb >= 0.25:
                 partners_of[b].append((a, cnt, pb))
 
     change_set = set(changes)
