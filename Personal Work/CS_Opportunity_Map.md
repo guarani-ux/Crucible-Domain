@@ -5,77 +5,68 @@ depends_on:
   - Knowledge/Knowledge_Register.md
 ---
 
-# Crucible Domain — Computer Science Opportunity Map
+# Crucible Domain — 10-Pillar CS & CE Stack Blueprint
 
-> **Purpose:** Map the Computer Science primitives already powering `Crucible Domain`, identify high-leverage CS primitives *not yet in play*, and show what becomes possible when they work together as one system.  
-> **Scope:** Sovereign personal systems-engineering (`PW-01`–`PW-03`). Every concept is tied to physical mechanisms on disk, not abstract theory.
-
----
-
-## 1. The 5 Active CS Pillars (What You Already Run & Where Each Hits Its Ceiling)
-
-| CS Pillar | Live Crucible Implementation | What It Physically Guarantees Today | Current Ceiling (Where It Stops) |
-| :--- | :--- | :--- | :--- |
-| **1. Microkernel & IPC (`OS Architecture`)** | 5-piece `<40ms` Hub kernel (`.agents/scripts/crucible/`) + 3-tool stdio JSON-RPC 2.0 MCP spokes (`writers-room`, `crucible-observatory`, `story-lane`) | Policy, routing, and safety stay in a tiny kernel; domain parsers/renderers run in isolated user-space processes over a uniform 3-call ABI (`recognize / prepare / deliver`). | Spokes still run with **ambient host filesystem permissions**—nothing prevents a buggy spoke from reading/writing outside its assigned directory. |
-| **2. Static Analysis (`Compilers / AST`)** | `test_quality_gate.py` (`TQ-01..05`), `py_compile`, `mutation_gate.py` | Parses Python test files into an AST to catch tautological asserts, missing negative paths, and hardcoded host paths before commit. | Only checks **static test syntax** and hand-written test cases; does not generate adversarial inputs or prove invariants across arbitrary payloads. |
-| **3. Dependency Graphs (`DAGs & Cache Invalidation`)** | 7-Graph WOS standard (`K-GRAPH-01`), `depends_on:` frontmatter staleness check in `crucible_gate.py check --strict` | Models blocking vs. advisory dependencies and flags when an upstream `GROUND_TRUTH.md` changes after a downstream artifact. | Uses **file `mtime`** (wall-clock timestamps) rather than **content hashes**, so touching a file without changing meaning triggers false staleness, and unchanged inputs still re-run LLM turns. |
-| **4. Information Retrieval (`BM25 & Precedence`)** | `router.py` indexing 150 capabilities in ~30ms RAM with `CAPABILITY_PRECEDENCE` and selective abstention | Resolves canonical IDs in `O(1)` and natural-language queries in milliseconds without burning tokens grepping disk. | Purely **lexical** (token overlap); cannot match conceptual synonyms unless shared tokens appear, and has no structured query algebra (e.g., filter by domain + authority + stage). |
-| **5. Transactional Checkpoints (`Version Control`)** | `crucible-loop` (1 verified Git commit per round on `loop/<slug>`) + `check_artifact.py` SHA-256 verification | Every autonomous round is an atomic, rewindable transaction; any bad round rolls back cleanly without corrupting `main`. | Commits capture **final file state**, not the **event trace** of tool calls/spoke inputs that produced it—so you can rewind state, but you cannot deterministically *replay* a run offline. |
+> **Purpose:** Map the full Computer Science and Computer Engineering stack governing `Crucible Domain` from neural token inference down to disk I/O and control loops.
+> **Scope:** Sovereign systems engineering (`PW-01`–`PW-03`). Every layer links a physical mechanism in CPU, RAM, disk, ASTs, or solvers to observed agent and build behavior.
 
 ---
 
-## 2. Five High-Leverage CS Elements NOT Yet in Play
-
-These five primitives are battle-tested in compilers, build systems, and distributed infrastructure—and each one directly breaks a ceiling from Section 1:
-
-1. **Content-Addressable Memoization (`SHA-256 Build Caching` — like Bazel / Nix)**
-   * **Mechanism:** Hash `(spoke_name, tool_name, normalized_inputs, pinned_craft_sha)` into a deterministic cache key. If the hash matches a prior verified receipt, return the cached result in `1ms` with **zero LLM tokens and zero re-execution**.
-   * **What it unlocks individually:** Eliminates redundant LLM/spoke runs when upstream inputs haven't actually changed; replaces fragile `mtime` staleness with cryptographic content-hash staleness.
-
-2. **Formal State Machines & Type-State Contracts (`Finite Automata`)**
-   * **Mechanism:** Represent every deliverable lifecycle (`INTAKE → DRAFT → EXPLORATORY_REVIEW → LOCKED_CUT → DELIVERED`) as an explicit finite state machine where each transition declares its required guard (e.g., `LOCKED_CUT` is mathematically unreachable without a signed `project_authority` token).
-   * **What it unlocks individually:** Makes illegal transitions (like approving an editorial cut inside a spoke, or shipping an unaudited final script) **impossible by construction** rather than relying on prompt reminders.
-
-3. **Property-Based Testing & Fuzzing (`Formal / Automated Verification`)**
-   * **Mechanism:** Instead of only writing 3–5 hand-crafted unit tests, declare **invariants** (*"for any transcript JSON with arbitrary timestamps, `storylane_prepare` must reject `end <= start` and never crash"*) and auto-generate 200+ randomized/adversarial inputs per test run.
-   * **What it unlocks individually:** Catches weird Unicode, negative timestamps, malformed frontmatter, and edge-case JSON-RPC payloads that human-written tests miss.
-
-4. **Event Sourcing & Deterministic Replay (`Append-Only Log`)**
-   * **Mechanism:** Record every Hub → Spoke JSON-RPC call (`request`, `response`, `input_sha256`, `exit_status`) as an immutable JSONL event log. Replay any historical run offline against a new spoke version to prove zero regressions.
-   * **What it unlocks individually:** Turns every real work session into a permanent **regression test fixture**—giving you true Rung-3/Rung-4 proof without manually authoring fixtures.
-
-5. **Capability-Based Security (`Least-Privilege Object Capabilities`)**
-   * **Mechanism:** Instead of letting every spoke see the entire `C:\` drive, pass an explicit **scoped capability token** (`allowed_read_roots`, `allowed_write_root`, `read_only=True`) in `mcp_config.json` / `prepare()` and enforce path containment at the spoke boundary.
-   * **What it unlocks individually:** Enforces domain isolation (`Calgary Public Library/` vs. `Personal Work/`, Asana read-only) at the OS/process boundary rather than trusting prompts.
-
----
-
-## 3. Compound Synergies (What Happens When They Work Together)
-
-Individually, each CS element solves one local bug. **Combined**, they turn Crucible Domain from a "well-organized agent workspace" into a **deterministic, incremental AI compiler for real-world work**:
+## 1. Full Computing Stack Dataflow
 
 ```mermaid
 flowchart LR
-    INTENT["Human Intent (High-Level)"] --> LLM["Stochastic LLM Compiler"]
-    LLM --> FSM["Formal State Machine\n(Valid Transitions Only)"]
-    FSM --> CAP["Capability-Scoped\nMCP Spokes"]
-    CAP --> CACHE["Content-Addressable\nMemoization (SHA-256)"]
-    CACHE --> DAG["DAG Dependency Graph\n(depends_on)"]
-    DAG --> REPLAY["Event-Sourced Replay\n+ Property Fuzzing"]
-    REPLAY --> GIT["Rewindable Git Checkpoint\n(crucible-loop)"]
+    PROMPT["Prompt & Contract"] --> INF["Information Theory & LLM Inference (Token Budget / KV-Cache)"]
+    INF --> TYPES["PL Type Schemas (JSON Spec / Dataclasses)"]
+    TYPES --> DAG["Compiler DAG (campaign_ir.py)"]
+    DAG --> OS["OS / Sub-Agent Worktrees (slice-worker / stdio IPC)"]
+    OS --> DB["Database ACID / CAS (tx_patch.py / os.replace)"]
+    DB --> HW["Hardware Latency (RAM vs. Disk I/O / ThreadPool)"]
+    HW --> CTRL["Control Ratchet (results.tsv / ErrorCircuitBreaker)"]
 ```
-
-### Three Emergent Capabilities You Cannot Get Any Other Way
-1. **Incremental, Zero-Waste AI Build Pipeline (`DAG` + `Content-Addressable Memoization` + `MCP Spokes`):**
-   * Just like `Bazel` or `make` only recompiles the `.c` file that changed, changing one paragraph in `Calgary Public Library/GROUND_TRUTH.md` hashes down the DAG and **re-runs only the exact downstream script or brief whose input hash changed**, returning cached verified receipts for everything else in `1ms`.
-2. **Self-Hardening Agent System (`Event Sourcing` + `Property-Based Fuzzing` + `AST Gates`):**
-   * Every real Hub→Spoke call gets logged as a replayable event. Whenever you upgrade `writers-room` or `story-lane`, you replay your real historical work log + 200 fuzzed edge cases automatically. The system gets **more reliable every time you use it**, not more fragile.
-3. **Zero-Trust Multi-Domain Execution (`Microkernel` + `Formal State Machines` + `Capability-Based Security`):**
-   * You can safely run autonomous 12-round `crucible-loop` sessions across both `Personal Work/` and `Calgary Public Library/` because **illegal state transitions** (shipping unapproved cuts) and **cross-domain leaks** (CPL data touching Personal Work) are blocked mathematically at the spoke boundary.
 
 ---
 
-## 4. Top 3 Ranked Vertical Slices (Leverage vs. Complexity)
+## 2. Pillars 1–5: Hardware, OS, Storage, Distributed Systems, Security
+
+| Pillar & Core Law | Physical Mechanism (CPU/RAM/Disk/Net) | Impact on Prompts, Sub-Agents & Builds |
+| :--- | :--- | :--- |
+| **1. Hardware & Computer Architecture** *(Memory Hierarchy, I/O Latency Gap)* | L1/RAM operations execute in nanoseconds; NTFS metadata lookups, process forks, and sequential subprocess spawning cost tens to hundreds of milliseconds. | Packing capability indexing (`router.py`) into ~30ms RAM reads and running 4 verification suites concurrently via `ThreadPoolExecutor` in `scripts/verify_all.ps1` cuts suite wall-clock latency to the slowest critical-path process (~15.6s). |
+| **2. Operating Systems** *(Process Isolation, IPC, Copy-on-Write Worktrees)* | Separate OS processes communicate over stdio JSON-RPC 2.0 (`writers-room`, `crucible-observatory`, `story-lane`); isolated Git worktrees and `slice-worker` sub-agents decouple working directories and process heaps. | Keeps Hub routing and policy checks in a thin kernel while isolating third-party parsers, LLM tool sessions, and parallel slice execution from mutating shared working trees. |
+| **3. Storage & Databases** *(ACID Atomicity, Copy-on-Write, Append-Only WAL)* | `tx_patch.py` (`TransactionBuffer`) buffers edits in RAM, validates syntax/AST before disk touch, writes temp files, commits atomically via `os.replace()`, and restores `before_bytes` on failure; `append_ratchet_ledger` appends immutable TSV rows to `results.tsv`. | Eliminates partial multi-file writes on mid-edit crashes, removes serial disk write roundtrips, and preserves a monotonic append-only execution log (`results.tsv`) per round. |
+| **4. Distributed Systems** *(Optimistic Concurrency Control / CAS, Idempotency)* | `campaign_ir.py` (`save_receipt_cache_cas`, `file_sha256`, `_path_lock`) verifies the expected cache SHA-256 before writing and raises `CacheConflictError` on concurrent mismatch; `compute_slice_input_sha256` keys memoized receipts by exact target + dependency hashes. | Prevents parallel workers from silently overwriting each other's cached slice receipts (lost-update anomaly) and enables deterministic idempotent skips across rounds. |
+| **5. Security** *(Object-Capability Model, Least-Privilege Containment)* | `TransactionBuffer._resolve` rejects path traversal outside `root`; `compile_campaign` enforces `allowed_roots` containment (`_is_within_any`); MCP spokes enforce explicit directory capability bounds and read-only external boundaries. | Bounds `slice-worker` and spoke file access mathematically at path resolution rather than relying on natural-language prompt compliance. |
+
+---
+
+## 3. Pillars 6–10: Information Theory, PL/Types, Compilers, Formal Methods, Control Theory
+
+| Pillar & Core Law | Physical Mechanism (Tokens/ASTs/Graphs/Solvers) | Impact on Prompts, LLM Behavior & Builds |
+| :--- | :--- | :--- |
+| **6. Information Theory & Neural Inference** *(Shannon Entropy, Context Dilution, KV-Cache Budget)* | Autoregressive transformer attention degrades as irrelevant context tokens accumulate; `build_slice_worker_prompt` injects only the bounded slice spec, target paths, and `verify_cmd`. | Stripping conversation history and multi-slice noise in `slice-worker` keeps attention entropy focused on target symbols, reducing hallucinated edits and token cost per round. |
+| **7. Programming Languages & Type Systems** *(Static Schemas, Algebraic Error Types)* | `campaign_ir.py` (`CampaignSpec`, `SliceNode`, `PlannedSlice`, `_expect_str_list`) enforces typed schemas at load time; `tx_patch.py` validates Python syntax (`compile`) and JSON parsing in RAM before `os.replace()`. | Converts malformed LLM outputs and invalid JSON specs into deterministic pre-execution parse failures (`CampaignCompileError`, `TransactionValidationError`) with zero side effects. |
+| **8. Compilers & Graph Theory** *(Typed DAG IR, Topological Wave Scheduling, AST Gates)* | `compile_campaign` lowers campaign specs into an acyclic dependency graph (`_topological_order` via Kahn's algorithm) grouped into parallel `execution_waves`; `test_quality_gate.py` (`TQ-01..05`) parses test ASTs prior to commit. | Detects dependency cycles before Round 1, exposes parallelizable slice waves to the orchestrator, and blocks tautological assertions at compile/stage time. |
+| **9. Formal Methods & Logic** *(Finite State Machines, Invariants, Property Testing)* | `LoopStateMachine` (`PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE`) rejects out-of-order round transitions with `StateTransitionError`; property-based tests and `mutation_gate.py` assert invariants across randomized inputs. | Prevents an autonomous loop from committing unverified code or skipping cache invalidation by making illegal round transitions unrepresentable in runtime state. |
+| **10. Control Theory & Amdahl's Law** *(Closed-Loop Ratchet, Circuit Breaking, Critical Path)* | `ErrorCircuitBreaker` hashes normalized stderr (`hash_error_output`) and trips on repeated identical failures; `results.tsv` records pass/fail deltas; `verify_all.ps1` parallelizes independent gates. | Halts runaway retry loops deterministically on identical error hashes, ensures round-over-round monotonic progress, and bounds verification latency by the slowest single check rather than their sum. |
+
+---
+
+## 4. Causality Matrix (`Symptom -> CS Root Cause -> Physical Code Fix`)
+
+| Observed Symptom | CS Root Cause | Physical Code Fix & Exact Mechanism |
+| :--- | :--- | :--- |
+| **Model drift & context rot across rounds** | Unbounded autoregressive context growth dilutes attention over stale history and unrelated files; unconstrained loop phases allow ad-hoc re-planning mid-edit. | `slice-worker` executes fresh-context single-slice prompts from `campaign_ir.py` (`build_slice_worker_prompt`) under `LoopStateMachine` (`PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE`). |
+| **Slow sub-agents & verification stalls** | Serial disk I/O roundtrips per file edit and sequential subprocess execution (`check` -> `doctor` -> `pytest` -> spoke tests) compound process-fork overhead. | `tx_patch.py` batches edits in RAM via `TransactionBuffer`; `scripts/verify_all.ps1` runs all 4 verification suites concurrently via `ThreadPoolExecutor(max_workers=4)`; `campaign_ir.py` schedules independent slices in parallel `execution_waves`. |
+| **Partial commits & half-written files on failure** | Non-atomic direct writes leave mutated files on disk if a later file fails validation or process execution aborts mid-batch. | `tx_patch.py` (`TransactionBuffer.commit`) runs `validate()` in RAM, stages temp files with atomic `os.replace()`, and executes full `before_bytes` rollback on any exception. |
+| **Lost cache keys under concurrent slice workers** | Uncoordinated read-modify-write updates to `receipt_cache.json` drop earlier workers' entries when two slices finish concurrently. | `campaign_ir.py` (`save_receipt_cache_cas`, `_path_lock`, `merge_receipt_cache`) verifies the prior cache `file_sha256` before atomic write and raises `CacheConflictError` on mismatch. |
+| **False staleness & wasted re-runs after Git checkout** | Filesystem `mtime` timestamps reset on `git checkout` or `git clone`, causing wall-clock dependency checks to flag unchanged upstream files as modified. | `crucible_gate.py` checks `depends_on_sha256` content digests before falling back to `mtime`, and `campaign_ir.py` (`compute_slice_input_sha256`, `optimize_campaign`) hashes target/dependency contents to skip unchanged slices at 0 tokens. |
+| **Repeated identical error loops** | Stochastic retry without failure-state memory repeats the same failing patch across consecutive iterations. | `campaign_ir.py` (`ErrorCircuitBreaker`, `hash_error_output`) hashes failure diagnostics and trips the breaker (`BreakerState`) once consecutive identical error hashes hit threshold. |
+
+---
+
+## 5. Verified Vertical Slices (#1–#6) & Open CS Frontiers
+
+### Verified Vertical Slices (#1–#6)
 
 | Rank | Vertical Slice | CS Primitives Combined | Why Build It First | Status & Verified Commits |
 | :---: | :--- | :--- | :--- | :--- |
@@ -85,3 +76,12 @@ flowchart LR
 | **#4** | **In-RAM Transactional Patcher & Terminal Runner** | `Copy-on-Write ACID` + `AST/TQ Pre-Commit Gate` | Eliminates per-file tool roundtrips and guarantees zero disk corruption on failed multi-file edits. | **COMPLETED** — `tx_patch.py` (`2a6f06b`) + `scripts/verify_all.ps1` (`36d1db0`, merged to `main`) |
 | **#5** | **Campaign IR Compiler Front-End & v3 Loop** | `Typed DAG IR` + `Incremental Cache` + `Error-Hash Circuit Breaker` | Compiles campaigns before Round 1, skips unchanged slices at 0 LLM tokens, and halts identical-error loops immediately. | **COMPLETED** — `campaign_ir.py` (`2aa5922`) + `depends_on_sha256` (`e4f7d26`, merged to `main`) |
 | **#6** | **v4 Thin-Orchestrator, CAS Cache, FSM & Ratchet Ledger** | `Optimistic CAS` + `Finite State Machine` + `Append-Only Event Log` | Enforces `PLAN → STAGE → VERIFY → COMMIT → CACHE` in code, prevents concurrent cache lost updates, logs every round to TSV, and exposes `crucible_gate.py campaign` CLI. | **COMPLETED** — `campaign_ir.py` (`7abe2f6`) + `crucible_gate.py campaign` (`loop/v4-thin-orchestrator`) |
+
+### Open CS Frontiers (Unbuilt Domains)
+
+1. **Spoke Design-by-Contract (`Formal Pre/Postconditions & Runtime Invariants`)**
+   * Enforce machine-checkable preconditions, postconditions, and frame invariants (`requires` / `ensures` / `unchanged_roots`) across every MCP spoke ABI call (`recognize`, `prepare`, `deliver`), turning spoke contracts into runtime-verified assertions rather than prose rules.
+2. **BM25 + Graph-Walk Retrieval in `router.py` (`IR + Relational Traversal`)**
+   * Combine ranked lexical BM25 scoring with bounded `k`-hop traversal over capability/dependency edges in `router.py`, enabling synonym-tolerant and structural queries (filtering by domain, authority tier, and execution stage) inside the sub-100ms RAM budget.
+3. **SAT/SMT Constraint Solving (`Automated Schedule, Authority & Path Feasibility`)**
+   * Encode slice resource locks, disjoint `target_paths`, domain-isolation policies, and authority holds as Boolean/linear constraints solved via SAT/SMT before execution, proving plan feasibility and zero-conflict parallel scheduling prior to spawning workers.
