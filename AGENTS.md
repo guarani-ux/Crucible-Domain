@@ -15,7 +15,7 @@ Before proposing new folders, plans, or cross-project work, resolve what exists 
 - Media Agency Role Cards & Procedures (55): [Knowledge/Media Agency/Skills and Workflows/README.md](Knowledge/Media%20Agency/Skills%20and%20Workflows/README.md) · [Knowledge/Media Agency/Media_Work_Routing.md](Knowledge/Media%20Agency/Media_Work_Routing.md)
 - Work Operating System & 7-Graph Standard: [Project/Work Operating System/Work_Operating_System_Graph_Catalog.md](Project/Work%20Operating%20System/Work_Operating_System_Graph_Catalog.md)
 - Antigravity Harness Self-Model: [Project/Inner Gravity/README.md](Project/Inner%20Gravity/README.md)
-- Registered Domain MCP Spokes: [Writer's Room MCP Spoke](.agents/plugins/writers-room/skills/writers-room/SKILL.md) (`writers-room`)
+- Registered Domain MCP Spokes: [Writer's Room MCP Spoke](.agents/plugins/writers-room/skills/writers-room/SKILL.md) (`writers-room`) · [Crucible Observatory MCP Spoke](.agents/plugins/crucible-observatory/skills/crucible-observatory/SKILL.md) (`crucible-observatory`) · [Universal MCP Spoke Template](Knowledge/Universal_MCP_Spoke_Template.md)
 
 Route any task, canonical ID (`MW-04`, `PROD-S`, `K-WOS-02`), or legacy ChatGPT `skill_id` in RAM (<100ms):
 ```sh
