@@ -42,8 +42,8 @@ To prevent agents from misreading shared system directories as "distraction" or 
 
 1. **Completed (`952a5ab`):** Split hot-path safety gate (`crucible_gate.py` + 5-piece `crucible/` kernel) from offline research/mining tools (`forge`, `melt-diff`, `melt-scan`, `risk`, `export-map` moved to `crucible-observatory` MCP spoke).
 2. **Demoted / Parked (`2026-11-23`):** `Knowledge/outcome_ledger.json` parked as an optional manual log inside `crucible-observatory` (no automated write-back hook in the `<40ms` Hub kernel).
-3. **Active — Slice A (Hub Closure):** Reconcile self-model docs (`00_System_Atlas`, `Personal Work/GROUND_TRUTH.md`), add deterministic plugin/kernel drift check and `depends_on` staleness check (`--strict` option) to `crucible_gate.py check`, and formalize `CAPABILITY_PRECEDENCE` in `router.py`.
-4. **Next — Slice B (Spoke Ergonomics):** Lighten the exploratory authoring path (`treatment`, `production_brief`) in `writers-room` (`K-MCP-01`) before cloning the Universal MCP Spoke Template to `Story-Lane`.
+3. **Completed — Slice A (Hub Closure):** Reconciled self-model docs (`00_System_Atlas`, `Personal Work/GROUND_TRUTH.md`), added deterministic plugin/kernel drift check and `depends_on` staleness check (`--strict` option) to `crucible_gate.py check`, and formalized `CAPABILITY_PRECEDENCE` in `router.py`.
+4. **Completed — Slice B (Spoke Ergonomics):** Merged `writers-room` recipient-use editorial review (`214/214` tests) and onboarded `story-lane` as the third 3-tool MCP spoke (`C:\crucible-spokes\story-lane`, `.agents/plugins/story-lane/`).
 
 ---
 

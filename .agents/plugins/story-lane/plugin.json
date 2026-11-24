@@ -1,0 +1,7 @@
+{
+  "name": "story-lane",
+  "version": "0.1.0",
+  "description": "Deterministic saved-transcript clip selection, timestamp boundary validation, and traceable extraction MCP spoke (K-STORY-01, K-MCP-01).",
+  "mcp_config": "mcp_config.json",
+  "skills": ["skills/story-lane"]
+}
