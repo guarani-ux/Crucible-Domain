@@ -420,6 +420,40 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertTrue(res_empty.abstained)
         self.assertEqual(res_empty.match_mode, "abstained")
 
+    def test_format_route_text_truncates_summary_and_rejects_tiny_limit(self) -> None:
+        from crucible.models import CapabilityEntry, RouteMatch, RouteResult
+
+        long_summary = "Alpha summary detail " * 6
+        entry = CapabilityEntry(
+            id="CAP-TRIM",
+            kind="procedure",
+            title="Trim Test",
+            path="trim.md",
+            line=1,
+            domain="personal",
+            reachability="local",
+            use_when="trim summary",
+            summary=long_summary,
+        )
+        result = RouteResult(
+            query="trim",
+            match_mode="exact_id",
+            abstained=False,
+            reason="Exact match.",
+            matches=[RouteMatch(entry=entry, score=10.0, matched_via="exact_id")],
+        )
+
+        formatted = crucible_index._format_route_text(result, max_summary_chars=40)
+        note_lines = [line for line in formatted.splitlines() if line.startswith("   Note: ")]
+        self.assertEqual(len(note_lines), 1)
+        note_payload = note_lines[0][len("   Note: "):]
+        self.assertLessEqual(len(note_payload), 40)
+        self.assertTrue(note_payload.endswith("..."))
+        self.assertEqual(note_payload, f"{long_summary[:37].rstrip()}...")
+
+        with self.assertRaises(ValueError):
+            crucible_index._format_route_text(result, max_summary_chars=5)
+
 
 if __name__ == "__main__":
     unittest.main()
