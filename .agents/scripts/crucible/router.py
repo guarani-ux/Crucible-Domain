@@ -263,7 +263,9 @@ def route_query(
     )
 
 
-def _format_route_text(result: RouteResult) -> str:
+def _format_route_text(result: RouteResult, *, max_summary_chars: int = 160) -> str:
+    if max_summary_chars < 20:
+        raise ValueError(f"max_summary_chars must be >= 20, got {max_summary_chars}")
     if result.abstained:
         return f"ABSTAINED: {result.reason}"
     lines = [f"[{result.match_mode}] {result.reason}"]
@@ -273,7 +275,10 @@ def _format_route_text(result: RouteResult) -> str:
         lines.append(f"{idx}. {e.id} ({e.kind}, {e.reachability}, score={match.score:.2f}) — {e.title}")
         lines.append(f"   Open: {loc}")
         if e.summary:
-            lines.append(f"   Note: {e.summary[:180]}")
+            summary_text = e.summary
+            if len(summary_text) > max_summary_chars:
+                summary_text = f"{summary_text[: max_summary_chars - 3].rstrip()}..."
+            lines.append(f"   Note: {summary_text}")
         if e.related_ids:
             lines.append(f"   Linked: {', '.join(e.related_ids[:8])}")
     return "\n".join(lines)
