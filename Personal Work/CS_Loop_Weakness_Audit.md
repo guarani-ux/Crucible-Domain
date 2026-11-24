@@ -8,7 +8,7 @@ depends_on:
   - scripts/verify_all.ps1
 depends_on_sha256:
   .agents/scripts/crucible/tx_patch.py: 857e9e127769200bd5e8950c75081f961ace38066f219bacbc5d99b7dc86d984
-  .agents/scripts/crucible/campaign_ir.py: f6079805d1de207e65f97ecb9d71635c0edb6178bab4167d1eb9acc196f34c6e
+  .agents/scripts/crucible/campaign_ir.py: b519967dbda4415d15df0ef9f872fd11cc8b6e0856b881f9c8dc36ed04cbbeb6
   scripts/verify_all.ps1: b926d62181d41ef64a11d08b8fa20e998857f2500df6bbc0fc04695dfde51cc9
 ---
 
@@ -33,7 +33,7 @@ depends_on_sha256:
 
 ## 2. Unleveraged CS Domains (Not Yet in the Loop)
 
-1. **Formal State Machines (Round Lifecycle Enforcement):**
+1. **Formal State Machines (Round Lifecycle Enforcement) — RESOLVED (`LoopStateMachine`, `7abe2f6`):**
    - *Gap:* The `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` cycle is currently enforced by prompt prose in `SKILL.md`, not by code.
    - *CS Primitive:* **Finite State Machine (FSM)** controller that rejects `COMMIT` unless `VERIFY` passed on the exact staged `after_sha256`.
 2. **Programming Languages (Design-by-Contract on Spoke Boundaries):**
@@ -42,7 +42,7 @@ depends_on_sha256:
 3. **Information Retrieval (BM25 + Graph-Walk Orientation):**
    - *Gap:* `crucible_gate.py route` uses basic lexical matching.
    - *CS Primitive:* Zero-dependency local **BM25 + dependency-graph ranking** for sub-50ms exact procedure/knowledge retrieval.
-4. **Distributed Systems (Append-Only Event Sourcing):**
+4. **Distributed Systems (Append-Only Event Sourcing / Ratchet Ledger) — RESOLVED (`append_ratchet_ledger`, `7abe2f6`):**
    - *Gap:* Receipts are overwritten in `receipts.json` rather than appended as a replayable history.
    - *CS Primitive:* **Append-Only JSONL Event Log** turning every real campaign round into an offline regression fixture.
 
@@ -60,4 +60,7 @@ depends_on_sha256:
 - **W2** (Canonical volatile-token error hashing in `campaign_ir.py`): **RESOLVED** (`b857c43`)
 - **W3** (`ast` local-import dependency hashing in `campaign_ir.py`): **RESOLVED** (Round 03/12)
 - **W4** (Parallel DAG `execution_waves` in `campaign_ir.py`): **RESOLVED** (Round 03/12)
+- **W5** (Optimistic CAS `save_receipt_cache_cas` + `merge_receipt_cache` in `campaign_ir.py`): **RESOLVED** (`7abe2f6`, Round 01/12)
 - **W6** (Parallel `scripts/verify_all.ps1` via Python `ThreadPoolExecutor` + scoped spoke tests): **RESOLVED** (Round 04/12)
+- **Formal State Machines** (`LoopStateMachine` enforcing `PLAN -> STAGE -> VERIFY -> COMMIT -> CACHE` in `campaign_ir.py`): **RESOLVED** (`7abe2f6`, Round 01/12)
+- **Append-Only Ratchet Ledger** (`append_ratchet_ledger` / `load_ratchet_ledger` TSV log in `campaign_ir.py` + `crucible_gate.py campaign ledger`): **RESOLVED** (`7abe2f6`, Round 01/12 + Round 02/12)

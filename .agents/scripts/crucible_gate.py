@@ -10,6 +10,7 @@ import py_compile
 import re
 import subprocess
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -543,6 +544,188 @@ def cmd_doctor(root: Path, *, as_json: bool = False, no_global: bool = False, sk
     return 0 if report.ok else 1
 
 
+def _resolve_campaign_ir_module():
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from crucible import campaign_ir
+
+    return campaign_ir
+
+
+def _resolve_cli_path(root: Path, raw_path: Path | str) -> Path:
+    p = Path(raw_path)
+    if p.is_absolute():
+        return p
+    candidate = root / p
+    if candidate.exists() or not p.exists():
+        return candidate
+    return p
+
+
+def _planned_slice_to_dict(ps: object) -> dict[str, object]:
+    node = ps.node
+    return {
+        "id": node.id,
+        "status": ps.status,
+        "computed_sha256": ps.computed_sha256,
+        "target_paths": list(node.target_paths),
+        "depends_on": list(node.depends_on),
+        "verify_cmd": node.verify_cmd,
+        "reason": ps.reason,
+    }
+
+
+def _emit_campaign_errors(errors: list[str], label: str, as_json: bool) -> int:
+    if as_json:
+        print(json.dumps({"ok": False, "errors": errors}, indent=2, ensure_ascii=False))
+    else:
+        print(f"BLOCKED: {label}:")
+        for err in errors:
+            print(f"  - {err}")
+    return 1
+
+
+def cmd_campaign(
+    root: Path,
+    query: list[str] | str,
+    *,
+    as_json: bool = False,
+    cache_path: Path | None = None,
+    last: int = 10,
+) -> int:
+    parts = query.split() if isinstance(query, str) else list(query)
+    usage_msg = (
+        "usage: crucible_gate.py campaign "
+        "{compile <spec.json> | plan <spec.json> [--cache <receipts.json>] | ledger <ledger.tsv> [--last N]}"
+    )
+    if len(parts) != 2 or parts[0] not in ("compile", "plan", "ledger"):
+        if as_json:
+            print(json.dumps({"ok": False, "error": usage_msg}, indent=2, ensure_ascii=False))
+        else:
+            print(usage_msg, file=sys.stderr)
+        return 2
+
+    action, target_raw = parts[0], parts[1]
+    cir = _resolve_campaign_ir_module()
+    target_path = _resolve_cli_path(root, target_raw)
+
+    if action == "compile":
+        try:
+            spec = cir.load_campaign_spec(target_path)
+            ordered = cir.compile_campaign(spec)
+        except cir.CampaignCompileError as exc:
+            return _emit_campaign_errors(exc.errors, "campaign compile failed", as_json)
+        except OSError as exc:
+            return _emit_campaign_errors([f"cannot read campaign spec '{target_path}': {exc}"], "campaign compile failed", as_json)
+
+        if as_json:
+            payload = {
+                "ok": True,
+                "name": spec.name,
+                "repo_root": str(Path(spec.repo_root).resolve()),
+                "max_rounds": spec.max_rounds,
+                "slice_count": len(ordered),
+                "ordered_slices": [
+                    {
+                        "id": node.id,
+                        "target_paths": list(node.target_paths),
+                        "depends_on": list(node.depends_on),
+                        "verify_cmd": node.verify_cmd,
+                    }
+                    for node in ordered
+                ],
+            }
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            order_str = " -> ".join(node.id for node in ordered) if ordered else "(none)"
+            print(f"PASS: campaign '{spec.name}' compiled ({len(ordered)} slices): {order_str}")
+        return 0
+
+    if action == "plan":
+        resolved_cache = _resolve_cli_path(root, cache_path) if cache_path is not None else None
+        try:
+            spec = cir.load_campaign_spec(target_path)
+            compiled = cir.optimize_campaign(spec, resolved_cache)
+        except cir.CampaignCompileError as exc:
+            return _emit_campaign_errors(exc.errors, "campaign plan failed", as_json)
+        except (OSError, ValueError) as exc:
+            return _emit_campaign_errors([f"campaign plan error: {exc}"], "campaign plan failed", as_json)
+
+        waves = compiled.execution_waves
+        active = compiled.active_slices
+        skipped = compiled.skipped_slices
+        if as_json:
+            payload = {
+                "ok": True,
+                "name": compiled.name,
+                "repo_root": str(compiled.repo_root),
+                "execution_waves": [[_planned_slice_to_dict(ps) for ps in wave] for wave in waves],
+                "active_slices": [_planned_slice_to_dict(ps) for ps in active],
+                "skipped_slices": [_planned_slice_to_dict(ps) for ps in skipped],
+            }
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(
+                f"CAMPAIGN PLAN: {compiled.name} | run={len(active)} | "
+                f"skip_cached={len(skipped)} | waves={len(waves)}"
+            )
+            for wave_idx, wave in enumerate(waves, start=1):
+                print(f"Wave {wave_idx}:")
+                for ps in wave:
+                    targets = ", ".join(ps.node.target_paths) or "-"
+                    print(
+                        f"  [RUN] {ps.node.id} (sha256={ps.computed_sha256[:12]} targets=[{targets}]) - {ps.reason}"
+                    )
+            if skipped:
+                print("Cached:")
+                for ps in skipped:
+                    print(
+                        f"  [SKIP_CACHED] {ps.node.id} (sha256={ps.computed_sha256[:12]}) - {ps.reason}"
+                    )
+        return 0
+
+    if isinstance(last, bool) or last < 0:
+        msg = f"--last must be >= 0, got {last!r}"
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False))
+        else:
+            print(msg, file=sys.stderr)
+        return 2
+
+    try:
+        entries = cir.load_ratchet_ledger(target_path)
+    except (OSError, ValueError) as exc:
+        msg = f"cannot read ratchet ledger '{target_path}': {exc}"
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}, indent=2, ensure_ascii=False))
+        else:
+            print(f"BLOCKED: {msg}")
+        return 1
+
+    tail = entries[-last:] if last > 0 else []
+    if as_json:
+        payload = {
+            "ok": True,
+            "ledger": str(target_path),
+            "total": len(entries),
+            "showing": len(tail),
+            "entries": [asdict(entry) for entry in tail],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"LEDGER: {target_path} (showing {len(tail)} of {len(entries)} entries)")
+        if not tail:
+            print("  (no entries)")
+        for entry in tail:
+            commit_str = entry.commit_sha or "-"
+            print(
+                f"  round={entry.round_id} | {entry.slice_id} | {entry.status} | "
+                f"{entry.seconds:.2f}s | commit={commit_str} | {entry.timestamp}"
+            )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Crucible Domain deterministic gate.")
     parser.add_argument(
@@ -553,16 +736,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "subcommand",
-        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor"),
+        choices=("session-start", "pre-tool", "check", "pre-commit", "route", "doctor", "campaign"),
         help="Gate action to execute.",
     )
-    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route'.")
+    parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route' or action+target for 'campaign'.")
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route'.")
-    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route' or 'doctor'.")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'doctor', or 'campaign'.")
     parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--strict", action="store_true", help="Treat stale depends_on artifacts as blocking failures in 'check'.")
     parser.add_argument("--verbose", action="store_true", help="Show all passing checks in 'doctor'.")
+    parser.add_argument("--cache", type=Path, default=None, help="Optional receipt cache JSON path for 'campaign plan'.")
+    parser.add_argument("--last", type=int, default=10, help="Number of recent entries to print for 'campaign ledger'.")
     args = parser.parse_args(argv)
     root = args.root.resolve()
 
@@ -574,6 +759,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_route(root, args.query, top_k=args.top, as_json=args.json, no_global=args.no_global)
     if args.subcommand == "doctor":
         return cmd_doctor(root, as_json=args.json, no_global=args.no_global, skip_exec=args.skip_exec, verbose=args.verbose)
+    if args.subcommand == "campaign":
+        return cmd_campaign(root, args.query, as_json=args.json, cache_path=args.cache, last=args.last)
     return cmd_check(root, strict=args.strict)
 
 

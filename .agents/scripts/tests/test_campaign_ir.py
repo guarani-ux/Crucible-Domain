@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import subprocess
 import sys
 from pathlib import Path
 
@@ -495,3 +496,192 @@ def test_property_100_random_fsm_cas_and_ledger_invariants(tmp_path: Path) -> No
         )
         append_ratchet_ledger(ledger_path, entry)
         assert load_ratchet_ledger(ledger_path) == [entry]
+
+
+GATE_SCRIPT = SCRIPTS_DIR / "crucible_gate.py"
+
+
+def _run_gate_cli(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(GATE_SCRIPT), "--root", str(repo), *args],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+
+def test_cli_campaign_compile_rejects_errors_and_prints_order(tmp_path: Path) -> None:
+    """Fails if crucible_gate.py campaign compile exits 0 on invalid specs or drops topological order."""
+    # Negative: missing action/arg returns usage exit code
+    bad_usage = _run_gate_cli(tmp_path, "campaign")
+    assert bad_usage.returncode != 0
+
+    # Negative: path escape + dependency cycle exits 1 and emits errors in text and JSON
+    bad_spec = tmp_path / "bad_campaign.json"
+    bad_spec.write_text(
+        json.dumps(
+            {
+                "name": "bad-cli",
+                "repo_root": str(tmp_path),
+                "slices": [
+                    {"id": "a", "target_paths": ["../escape.py"], "depends_on": ["b"]},
+                    {"id": "b", "target_paths": ["b.py"], "depends_on": ["a"]},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    bad_txt = _run_gate_cli(tmp_path, "campaign", "compile", "bad_campaign.json")
+    assert bad_txt.returncode == 1, bad_txt.stdout + bad_txt.stderr
+    assert "escapes repo_root" in (bad_txt.stdout + bad_txt.stderr)
+    assert "dependency cycle" in (bad_txt.stdout + bad_txt.stderr)
+
+    bad_json = _run_gate_cli(tmp_path, "campaign", "compile", "bad_campaign.json", "--json")
+    assert bad_json.returncode == 1, bad_json.stdout + bad_json.stderr
+    bad_payload = json.loads(bad_json.stdout)
+    assert bad_payload["ok"] is False
+    assert len(bad_payload["errors"]) >= 2
+
+    # Negative: missing spec file exits 1
+    missing_proc = _run_gate_cli(tmp_path, "campaign", "compile", "does_not_exist.json")
+    assert missing_proc.returncode == 1
+
+    # Positive: valid spec listed in reverse dependency order compiles into topological order
+    (tmp_path / "a.py").write_text("A = 1\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("B = 2\n", encoding="utf-8")
+    good_spec = tmp_path / "good_campaign.json"
+    good_spec.write_text(
+        json.dumps(
+            {
+                "name": "good-cli",
+                "repo_root": str(tmp_path),
+                "slices": [
+                    {"id": "s2", "target_paths": ["b.py"], "depends_on": ["s1"], "verify_cmd": "pytest -q"},
+                    {"id": "s1", "target_paths": ["a.py"], "verify_cmd": "pytest -q"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ok_txt = _run_gate_cli(tmp_path, "campaign", "compile", "good_campaign.json")
+    assert ok_txt.returncode == 0, ok_txt.stdout + ok_txt.stderr
+    assert ok_txt.stdout.index("s1") < ok_txt.stdout.index("s2")
+
+    ok_json = _run_gate_cli(tmp_path, "campaign", "compile", "good_campaign.json", "--json")
+    assert ok_json.returncode == 0, ok_json.stdout + ok_json.stderr
+    ok_payload = json.loads(ok_json.stdout)
+    assert ok_payload["ok"] is True
+    assert [s["id"] for s in ok_payload["ordered_slices"]] == ["s1", "s2"]
+
+
+def test_cli_campaign_plan_waves_and_cache_skip(tmp_path: Path) -> None:
+    """Fails if crucible_gate.py campaign plan misclassifies RUN vs SKIP_CACHED or drops waves."""
+    (tmp_path / "a.py").write_text("A = 1\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text("B = 2\n", encoding="utf-8")
+    (tmp_path / "c.py").write_text("C = 3\n", encoding="utf-8")
+
+    spec_path = tmp_path / "plan_campaign.json"
+    spec_path.write_text(
+        json.dumps(
+            {
+                "name": "plan-cli",
+                "repo_root": str(tmp_path),
+                "slices": [
+                    {"id": "s1", "target_paths": ["a.py"], "verify_cmd": "pytest -k s1"},
+                    {"id": "s2", "target_paths": ["b.py"], "verify_cmd": "pytest -k s2"},
+                    {"id": "s3", "target_paths": ["c.py"], "depends_on": ["s1"], "verify_cmd": "pytest -k s3"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # Negative: invalid spec file fails plan with exit code 1
+    bad_spec = tmp_path / "bad_plan.json"
+    bad_spec.write_text(
+        json.dumps({"name": "bad", "repo_root": str(tmp_path), "slices": [{"id": "x", "target_paths": ["../x.py"]}]}),
+        encoding="utf-8",
+    )
+    assert _run_gate_cli(tmp_path, "campaign", "plan", "bad_plan.json").returncode == 1
+
+    # Positive (cold cache): 2 waves [["s1", "s2"], ["s3"]], all RUN
+    cold_proc = _run_gate_cli(tmp_path, "campaign", "plan", "plan_campaign.json", "--json")
+    assert cold_proc.returncode == 0, cold_proc.stdout + cold_proc.stderr
+    cold = json.loads(cold_proc.stdout)
+    assert [[s["id"] for s in wave] for wave in cold["execution_waves"]] == [["s1", "s2"], ["s3"]]
+    assert [s["id"] for s in cold["active_slices"]] == ["s1", "s2", "s3"]
+    assert cold["skipped_slices"] == []
+
+    # Populate cache for all 3 slices, then dirty s1 -> s1 and downstream s3 RUN, s2 SKIP_CACHED
+    cache_path = tmp_path / "receipts.json"
+    receipts = {s["id"]: s["computed_sha256"] for s in cold["active_slices"]}
+    save_receipt_cache_cas(cache_path, receipts)
+    (tmp_path / "a.py").write_text("A = 999\n", encoding="utf-8")
+
+    warm_json = _run_gate_cli(tmp_path, "campaign", "plan", "plan_campaign.json", "--cache", "receipts.json", "--json")
+    assert warm_json.returncode == 0, warm_json.stdout + warm_json.stderr
+    warm = json.loads(warm_json.stdout)
+    assert [[s["id"] for s in wave] for wave in warm["execution_waves"]] == [["s1"], ["s3"]]
+    assert [s["id"] for s in warm["active_slices"]] == ["s1", "s3"]
+    assert [s["id"] for s in warm["skipped_slices"]] == ["s2"]
+
+    warm_txt = _run_gate_cli(tmp_path, "campaign", "plan", "plan_campaign.json", "--cache", "receipts.json")
+    assert warm_txt.returncode == 0, warm_txt.stdout + warm_txt.stderr
+    assert "Wave 1" in warm_txt.stdout
+    assert "Wave 2" in warm_txt.stdout
+    assert "RUN" in warm_txt.stdout
+    assert "SKIP_CACHED" in warm_txt.stdout
+
+
+def test_cli_campaign_ledger_last_n_and_rejects_corrupt(tmp_path: Path) -> None:
+    """Fails if crucible_gate.py campaign ledger ignores --last N or accepts corrupt TSV."""
+    # Negative: corrupt TSV returns exit 1
+    bad_tsv = tmp_path / "corrupt.tsv"
+    bad_tsv.write_text("bad\theader\n", encoding="utf-8")
+    bad_proc = _run_gate_cli(tmp_path, "campaign", "ledger", "corrupt.tsv")
+    assert bad_proc.returncode == 1, bad_proc.stdout + bad_proc.stderr
+
+    # Negative: negative --last fails cleanly
+    assert _run_gate_cli(tmp_path, "campaign", "ledger", "missing.tsv", "--last", "-1").returncode != 0
+
+    # Missing/empty ledger returns 0 with empty list
+    empty_proc = _run_gate_cli(tmp_path, "campaign", "ledger", "missing.tsv", "--json")
+    assert empty_proc.returncode == 0, empty_proc.stdout + empty_proc.stderr
+    assert json.loads(empty_proc.stdout)["entries"] == []
+
+    # Populate 5 entries, verify --last 2 and --last 0
+    ledger_path = tmp_path / "ratchet.tsv"
+    for r in range(1, 6):
+        append_ratchet_ledger(
+            ledger_path,
+            RatchetEntry(
+                timestamp=f"2026-11-24T00:0{r}:00Z",
+                campaign="v4-cli",
+                round_id=r,
+                slice_id=f"s{r}",
+                status="KEEP" if r < 5 else "SKIP_CACHED",
+                seconds=0.25 * r,
+                commit_sha=f"c{r:06d}" if r < 5 else "",
+                after_sha256=f"a{r:06d}",
+                error_sha256="",
+            ),
+        )
+
+    tail_json = _run_gate_cli(tmp_path, "campaign", "ledger", "ratchet.tsv", "--last", "2", "--json")
+    assert tail_json.returncode == 0, tail_json.stdout + tail_json.stderr
+    tail_data = json.loads(tail_json.stdout)
+    assert tail_data["total"] == 5
+    assert [e["round_id"] for e in tail_data["entries"]] == [4, 5]
+
+    zero_json = _run_gate_cli(tmp_path, "campaign", "ledger", "ratchet.tsv", "--last", "0", "--json")
+    assert zero_json.returncode == 0, zero_json.stdout + zero_json.stderr
+    assert json.loads(zero_json.stdout)["entries"] == []
+
+    tail_txt = _run_gate_cli(tmp_path, "campaign", "ledger", "ratchet.tsv", "--last", "2")
+    assert tail_txt.returncode == 0, tail_txt.stdout + tail_txt.stderr
+    assert "s4" in tail_txt.stdout
+    assert "s5" in tail_txt.stdout
+    assert "s1" not in tail_txt.stdout
