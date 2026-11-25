@@ -306,9 +306,14 @@ def validate_sensemaking_graph(
     elif form_id == "call_sheet":
         rows = cs.get("schedule_rows")
         _chk(isinstance(rows, list) and len(rows) >= 2, "call_sheet_too_few_schedule_rows", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
-        _chk(bool(str(cs.get("location", "")).strip()), "call_sheet_missing_location", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+        for key in ("location", "shoot_date", "safety_notes"):
+            value = cs.get(key)
+            _chk(isinstance(value, str) and bool(value.strip()), f"call_sheet_missing_{key}", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
 
     elif form_id == "shot_list":
+        for key in ("location", "coverage_note"):
+            value = cs.get(key)
+            _chk(isinstance(value, str) and bool(value.strip()), f"shot_list_missing_{key}", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
         shots = cs.get("shots")
         _chk(isinstance(shots, list) and len(shots) >= 3, "shot_list_too_few_shots", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
         framing_ok = isinstance(shots, list) and all(
@@ -447,8 +452,8 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
     elif form_id == "call_sheet":
         lines.append("## Shoot Overview")
         lines.append(f"- **Shoot Date & Call Time:** {cs.get('shoot_date', 'TBD — Producer to confirm')}")
-        lines.append(f"- **Location / Branch:** {cs.get('location', 'Central Library — Digital Media Lab')}")
-        lines.append(f"- **Safety & Lab Rules:** {cs.get('safety_notes', 'No food or drinks near digitization decks.')}")
+        lines.append(f"- **Location / Branch:** {cs.get('location') or 'Location to confirm'}")
+        lines.append(f"- **Safety & Lab Rules:** {cs.get('safety_notes') or 'Safety requirements to confirm'}")
         lines.append("")
         lines.append("## Operational Schedule & Crew/Cast")
         lines.append("")
@@ -461,8 +466,8 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
 
     elif form_id == "shot_list":
         lines.append("## Coverage Strategy & Location Custody")
-        lines.append(f"- **Location:** {cs.get('location', 'Central Library — Digital Media Lab')}")
-        lines.append(f"- **Visual & Audio Approach:** {cs.get('coverage_note', 'Single-location handheld + tripod coverage with clean nat-sound.')}")
+        lines.append(f"- **Location:** {cs.get('location') or 'Location to confirm'}")
+        lines.append(f"- **Visual & Audio Approach:** {cs.get('coverage_note') or 'Coverage approach to confirm'}")
         lines.append("")
         lines.append("## Structured Shot List")
         lines.append("")
@@ -1019,58 +1024,6 @@ def synthesize_canonical_graph(
     return base
 
 
-def _make_subprocess_worker(cmd_template: list[str], *, use_stdin: bool = False) -> Callable[..., tuple[bool, str]]:
-    """Create a portable CLI worker for Claude Code, Codex CLI, or any custom VM/terminal AI command."""
-    import subprocess as _sp
-
-    def _worker(prompt: str, repo_root: Path, timeout_s: float = 120.0, effort: str = "low") -> tuple[bool, str]:
-        del effort
-        cmd = list(cmd_template) if use_stdin else [*cmd_template, prompt]
-        try:
-            proc = _sp.run(
-                cmd,
-                input=prompt if use_stdin else None,
-                cwd=str(repo_root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_s,
-                check=False,
-            )
-            out = (proc.stdout or "").strip()
-            if proc.returncode != 0 and not out:
-                return False, (proc.stderr or f"exit_code={proc.returncode}").strip()
-            return True, out
-        except Exception as exc:
-            return False, f"portable_worker_error: {exc}"
-
-    return _worker
-
-
-def resolve_portable_worker(mode: str) -> Callable[..., tuple[bool, str]]:
-    """Resolve an AI CLI worker for Antigravity, Claude Code, Codex CLI, or any custom VM/terminal command."""
-    import os as _os
-    import shlex as _shlex
-
-    m = mode.lower().strip()
-    if m == "claude_live":
-        return _make_subprocess_worker(["claude", "-p"], use_stdin=False)
-    if m == "codex_live":
-        return _make_subprocess_worker(["codex", "exec"], use_stdin=False)
-    if m == "custom_cli":
-        raw_cmd = _os.environ.get("CRUCIBLE_AI_CMD", "").strip()
-        if not raw_cmd:
-            def _missing_env(prompt: str, repo_root: Path, timeout_s: float = 120.0, effort: str = "low") -> tuple[bool, str]:
-                del prompt, repo_root, timeout_s, effort
-                return False, "CRUCIBLE_AI_CMD environment variable is not set for --mode custom_cli"
-            return _missing_env
-        return _make_subprocess_worker(_shlex.split(raw_cmd), use_stdin=True)
-    from .workload_bench import _default_agy_worker
-
-    return _default_agy_worker
-
-
 def _parse_graph_object(text: str) -> dict[str, Any]:
     graph = json.loads(text)
     if not isinstance(graph, dict) or not graph:
@@ -1110,7 +1063,17 @@ def compile_and_evaluate(
             "prompt": prompt_text,
         }
 
-    attempts = 1 if (mode == "offline" or from_json_path is not None) else (1 + max(0, max_retries))
+    fixture = mode == "offline" and from_json_path is None
+    if from_json_path is None and not fixture and worker_fn is None:
+        return {
+            "ok": False,
+            "error": "source_graph_required: supply the document graph with --from-json FILE",
+            "form_id": form_id,
+            "platform": platform,
+            "target_duration_s": target_duration_s,
+        }
+
+    attempts = 1 if (fixture or from_json_path is not None) else (1 + max(0, max_retries))
     feedback_note = ""
     last_result: dict[str, Any] = {"ok": False, "platform": platform, "target_duration_s": target_duration_s}
 
@@ -1118,6 +1081,7 @@ def compile_and_evaluate(
     for attempt in range(attempts):
         writer_lessons: list[str] = []
         if from_json_path is not None:
+            input_source = "supplied_graph"
             try:
                 graph = _parse_graph_object(Path(from_json_path).read_text(encoding="utf-8"))
             except (OSError, ValueError, RecursionError) as exc:
@@ -1127,14 +1091,15 @@ def compile_and_evaluate(
                     "platform": platform,
                     "target_duration_s": target_duration_s,
                 }
-        elif mode == "offline":
+        elif fixture:
+            input_source = "example_fixture"
             graph = synthesize_canonical_graph(
                 form_id=form_id, platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
             )
         else:
             from .workload_bench import _call_worker
 
-            wfn = worker_fn or resolve_portable_worker(mode)
+            input_source = "worker_callback"
             prompt = (
                 build_sensemaking_graph_prompt(
                     form_id=form_id,
@@ -1151,7 +1116,7 @@ def compile_and_evaluate(
                     prompt += "\nApply these editorial lessons when building the graph:\n"
                     prompt += "\n".join(f"- {lesson}" for lesson in writer_lessons) + "\n"
             eff = "medium" if attempt > 0 else "low"
-            ok, raw = _call_worker(wfn, prompt, repo_root, timeout_s, eff)
+            ok, raw = _call_worker(worker_fn, prompt, repo_root, timeout_s, eff)
             if not ok:
                 return {"ok": False, "error": raw[:240], "platform": platform, "target_duration_s": target_duration_s}
             cleaned = raw.strip()
@@ -1184,16 +1149,14 @@ def compile_and_evaluate(
         gate1_ok = g_val.ok and fe.passed and bd.buy_in_ready and ax.passed
 
         gate2_dict: dict[str, Any] = {"verdict": "SKIPPED", "ok": True}
-        if gate1_ok and mode != "offline" and enable_judgment_gate:
+        if gate1_ok and not fixture and enable_judgment_gate:
             from .judgment_panel import run_adversarial_judgment
-            from .workload_bench import _default_agy_worker
 
-            j_worker = worker_fn or _default_agy_worker
             jv = run_adversarial_judgment(
                 markdown,
                 form_id,
                 repo_root=repo_root,
-                worker_fn=j_worker,
+                worker_fn=worker_fn,
                 timeout_s=min(90.0, timeout_s),
                 use_case_intent=f"{platform} {target_duration_s}s {topic}",
                 persist_lesson=True,
@@ -1213,6 +1176,8 @@ def compile_and_evaluate(
 
         last_result = {
             "ok": gate1_ok and bool(gate2_dict.get("ok", False)),
+            "input_source": input_source,
+            "gate1_ok": gate1_ok,
             "attempts_used": attempt + 1,
             "form_id": form_id,
             "platform": platform,

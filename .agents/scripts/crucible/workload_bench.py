@@ -1,4 +1,4 @@
-"""YAML-Driven Crucible Workload Bench: CPL, Creative & Antigravity Proving Ground + Productive Runner."""
+"""YAML-Driven Crucible Workload Bench: local document verification and productive runner."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import concurrent.futures
 import hashlib
 import json
 import re
-import shutil
-import subprocess
 import sys
 import tempfile
 import threading
@@ -42,7 +40,7 @@ except ImportError:
 
 
 VALID_DOMAINS = frozenset({"cpl_sim", "cpl_research", "personal_creative", "personal_systems"})
-VALID_MODES = frozenset({"plumbing", "hybrid", "agy_live"})
+VALID_MODES = frozenset({"plumbing", "hybrid", "local"})
 OFFICIAL_CPL_MANDATES_2027 = ("Collections", "Experiences", "Expertise", "Spaces", "Technology")
 CPL_INTERNAL_LENSES = ("Grow", "Books & Reading", "Community")
 
@@ -112,6 +110,9 @@ class ProjectRunReceipt:
     verify_ms: float
     total_ms: float
     deliverable_path: str = ""
+    document_source: str = ""
+    gate2_verdict: str = "SKIPPED"
+    advisory: dict[str, Any] = field(default_factory=dict)
     failure_category: str = ""
     error_summary: str = ""
     form_id: str = ""
@@ -217,6 +218,8 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
                 errors.append(f"project '{pid}' domain '{domain}' must be one of {sorted(VALID_DOMAINS)}")
 
             mode = str(item.get("mode", "")).strip()
+            if mode == "agy_live":  # Read manifests written before local document verification.
+                mode = "local"
             if mode not in VALID_MODES:
                 errors.append(f"project '{pid}' mode '{mode}' must be one of {sorted(VALID_MODES)}")
 
@@ -231,7 +234,7 @@ def load_workload_manifest(source: Path | str | dict[str, Any]) -> WorkloadManif
 
             if mode == "plumbing" and not planted:
                 errors.append(f"plumbing project '{pid}' must declare at least one planted_faults check")
-            if mode in ("hybrid", "agy_live") and not str(item.get("intent", "")).strip():
+            if mode in ("hybrid", "local") and not str(item.get("intent", "")).strip():
                 errors.append(f"{mode} project '{pid}' must declare a non-empty 'intent'")
 
             use_cases: list[dict[str, Any]] = []
@@ -496,7 +499,7 @@ def _infer_project_form(project: WorkloadProject) -> str:
     return "production_brief"
 
 
-def _build_agy_worker_prompt(
+def _build_worker_prompt(
     project: WorkloadProject,
     *,
     form_id: str = "",
@@ -562,56 +565,24 @@ def _build_agy_worker_prompt(
     return "\n".join(lines) + "\n"
 
 
-def _default_agy_worker(
-    prompt: str,
-    root: Path,
-    timeout_s: float,
-    *,
-    effort: str = "medium",
-) -> tuple[bool, str]:
-    """Invoke headless `agy --print` in sandbox mode with adaptive --effort, hard timeout, and Ctrl+C kill."""
-    agy_bin = shutil.which("agy") or shutil.which("agy.exe")
-    if not agy_bin:
-        return False, "AGY_UNAVAILABLE: 'agy' CLI not found on PATH"
-    cmd = [
-        agy_bin,
-        "--print",
-        prompt,
-        "--sandbox",
-        "--print-timeout",
-        f"{int(max(5, round(timeout_s)))}s",
-    ]
-    if effort in ("low", "medium", "high"):
-        cmd.extend(["--effort", effort])
-    proc = subprocess.Popen(
-        cmd,
-        cwd=root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+def read_submitted_document(documents_dir: Path | None, project_id: str, filename: str) -> tuple[bool, str]:
+    """Read the named project deliverable from an explicitly supplied document directory."""
+    relpath = Path(project_id) / filename
+    if documents_dir is None:
+        return False, f"Document required: supply --documents-dir containing {relpath}"
+    base = Path(documents_dir).resolve()
     try:
-        stdout, stderr = proc.communicate(timeout=timeout_s + 10.0)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.communicate()
-        return False, f"AGY_TIMEOUT: exceeded {timeout_s}s"
-    except KeyboardInterrupt:
-        proc.terminate()
-        try:
-            proc.communicate(timeout=3.0)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.communicate()
-        raise
-
-    out = (stdout or "").strip()
-    if proc.returncode != 0 or not out:
-        err = (stderr or "").strip() or f"exit_code={proc.returncode}"
-        return False, f"AGY_FAILED: {err[:240]}"
-    return True, out
+        path = (base / relpath).resolve()
+        if not path.is_relative_to(base):
+            return False, f"Document outside supplied directory: {relpath}"
+        if not path.is_file():
+            return False, f"Document missing: {path}"
+        text = path.read_text(encoding="utf-8")
+    except (OSError, RuntimeError, UnicodeError) as exc:
+        return False, f"Cannot read submitted document {relpath}: {exc}"
+    if not text.strip():
+        return False, f"Document empty: {path}"
+    return True, text
 
 
 def _run_with_heartbeat(
@@ -630,7 +601,7 @@ def _run_with_heartbeat(
     def _beat() -> None:
         while not done.wait(interval_s):
             elapsed = int(round(time.monotonic() - t0))
-            progress_fn(f"    ... {label} still waiting on agy ({elapsed}s / {int(timeout_s)}s)")
+            progress_fn(f"    ... {label} still waiting on worker ({elapsed}s / {int(timeout_s)}s)")
 
     th = threading.Thread(target=_beat, daemon=True)
     th.start()
@@ -648,8 +619,6 @@ def _call_worker(
     timeout_s: float,
     effort: str,
 ) -> tuple[bool, str]:
-    if worker is _default_agy_worker:
-        return _default_agy_worker(prompt, root, timeout_s, effort=effort)
     return worker(prompt, root, timeout_s)
 
 
@@ -693,6 +662,7 @@ def run_workload_bench(
     manifest: WorkloadManifest,
     *,
     mode_filter: str = "all",
+    documents_dir: Path | None = None,
     form_filter: str | None = None,
     project_ids: list[str] | None = None,
     rounds: int = 1,
@@ -701,7 +671,7 @@ def run_workload_bench(
     until_exit: bool = False,
     max_minutes: float = 0.0,
     workers: int = 1,
-    enable_judgment_gate: bool = False,
+    enable_judgment_gate: bool | None = None,
     progress_fn: Callable[[str], None] | None = None,
     agy_worker_fn: Callable[[str, Path, float], tuple[bool, str]] | None = None,
     judge_worker_fn: Callable[..., tuple[bool, str]] | None = None,
@@ -710,7 +680,9 @@ def run_workload_bench(
     """Execute YAML workloads for N rounds or --until-exit with 6-role board enforcement, auto-levers, and ML mastery."""
     if not until_exit and rounds < 1:
         raise ValueError("rounds must be >= 1 unless until_exit=True")
-    if mode_filter not in ("all", "offline", "plumbing", "hybrid", "agy_live"):
+    if mode_filter == "agy_live":
+        mode_filter = "local"
+    if mode_filter not in ("all", "offline", "plumbing", "hybrid", "local"):
         raise ValueError(f"invalid mode_filter '{mode_filter}'")
 
     root = Path(repo_root).resolve()
@@ -720,7 +692,9 @@ def run_workload_bench(
     bandit_state_path = (root / manifest.defaults.bandit_state_file).resolve()
     learned_policies_path = (root / manifest.defaults.learned_policies_file).resolve()
     stop_file_path = (root / manifest.defaults.stop_file).resolve()
-    worker = agy_worker_fn or _default_agy_worker
+    worker = agy_worker_fn
+    if enable_judgment_gate is None:
+        enable_judgment_gate = worker is None or judge_worker_fn is not None
     selected_ids = set(project_ids) if project_ids else None
     norm_form_filter = resolve_form_id(form_filter) if form_filter else None
     max_workers = max(1, int(workers))
@@ -772,8 +746,8 @@ def run_workload_bench(
                     and (selected_ids is None or p.id in selected_ids)
                     and (norm_form_filter is None or _infer_project_form(p) == norm_form_filter)
                     and p.mode != "plumbing"
-                    and not (mode_filter == "offline" and p.mode == "agy_live")
-                    and (mode_filter not in ("hybrid", "agy_live") or p.mode == mode_filter)
+                    and not (mode_filter == "offline" and p.mode == "local")
+                    and (mode_filter not in ("hybrid", "local") or p.mode == mode_filter)
                 ]
                 if eligible_non_plumbing:
                     chosen_list, f_choice = _select_frontier_batch(
@@ -896,7 +870,7 @@ def run_workload_bench(
                     )
 
                     retries_used = 0
-                    max_attempts = 1 + (manifest.defaults.max_retries if proj.mode == "agy_live" else 0)
+                    max_attempts = 1 + (manifest.defaults.max_retries if proj.mode == "local" and worker else 0)
                     execute_ms = 0.0
                     verify_ms = 0.0
                     pub_ok = False
@@ -904,6 +878,8 @@ def run_workload_bench(
                     fail_cat = ""
                     err_detail = ""
                     candidate_text = ""
+                    advisory: dict[str, Any] = {}
+                    gate2_verdict = "SKIPPED"
                     feedback_suffix = ""
                     diag_score = 0.0
                     weakest_aspect = ""
@@ -918,9 +894,12 @@ def run_workload_bench(
                             retries_used += 1
                             _safe_progress(f"    -> repair retry ({attempt}/{max_attempts - 1}) after '{fail_cat}'...")
                         t_exec = time.perf_counter()
+                        j_lessons: list[str] = []
                         if proj.mode == "hybrid":
                             ok_gen = True
                             candidate_text = _synthesize_hybrid_deliverable(root, proj, telemetry_path)
+                        elif worker is None:
+                            ok_gen, candidate_text = read_submitted_document(documents_dir, proj.id, proj.deliverable)
                         else:
                             effort = "high" if (attempt > 0 or cur_level >= 3) else ("medium" if cur_level == 2 else "low")
                             form_lever_rules: list[str] = []
@@ -938,7 +917,7 @@ def run_workload_bench(
                                 root, form_id, use_case_id=(uc_id or proj.id) if enable_judgment_gate else None, limit=4
                             )
                             prompt = (
-                                _build_agy_worker_prompt(
+                                _build_worker_prompt(
                                     eff_proj,
                                     form_id=form_id,
                                     craft_instruction=arm_instruction,
@@ -964,6 +943,10 @@ def run_workload_bench(
                         if not ok_gen:
                             pub_ok = False
                             hold_ok = False
+                            if worker is None:
+                                fail_cat = "document_input_unavailable"
+                                err_detail = candidate_text
+                                break
                             low_err = candidate_text.lower()
                             if "resource_exhausted" in low_err or "code 429" in low_err or "quota reached" in low_err:
                                 fail_cat = "quota_exhausted"
@@ -1003,7 +986,7 @@ def run_workload_bench(
                         mastery_tip = diag.mastery_tip
 
                         # Enforce 6-Role Executive Buy-In Board + Flow AST on live generated documents
-                        if pub_ok and hold_ok and proj.mode == "agy_live" and (blocking_roles or diag.flow_score < 0.85):
+                        if pub_ok and hold_ok and proj.mode == "local" and (blocking_roles or diag.flow_score < 0.85):
                             pub_ok = False
                             fail_cat = "stakeholder_board_blocked"
                             err_detail = (
@@ -1036,7 +1019,7 @@ def run_workload_bench(
                             )
 
                         # Gate 2: Independent Adversarial Judgment Panel (runs ONLY after Gate 1 passes)
-                        if pub_ok and hold_ok and proj.mode == "agy_live" and enable_judgment_gate:
+                        if pub_ok and hold_ok and proj.mode == "local" and enable_judgment_gate:
                             from .judgment_panel import run_adversarial_judgment
                             from .outcome_ratchet import record_paired_outcome
 
@@ -1051,7 +1034,9 @@ def run_workload_bench(
                                 use_case_intent=eff_proj.intent,
                                 persist_lesson=True,
                             )
-                            if jv.verdict == "UNAVAILABLE":
+                            gate2_verdict = jv.verdict
+                            advisory = jv.advisory
+                            if jv.verdict not in ("SIGN_OFF", "REVISE", "KILL"):
                                 low_jerr = jv.raw_error.lower()
                                 if "resource_exhausted" in low_jerr or "code 429" in low_jerr or "quota reached" in low_jerr:
                                     pub_ok = False
@@ -1110,7 +1095,7 @@ def run_workload_bench(
                     with state_lock:
                         if diagnosis:
                             prior_diagnosis_by_proj[proj.id] = f"weakest_element={weakest_element} ({diagnosis})"
-                        if rml is not None:
+                        if rml is not None and (proj.mode != "local" or worker is not None):
                             upd = rml.update_craft_arm(
                                 root,
                                 context_key,
@@ -1166,6 +1151,9 @@ def run_workload_bench(
                         verify_ms=round(verify_ms, 2),
                         total_ms=total_ms,
                         deliverable_path=deliv_rel,
+                        document_source="fixture" if proj.mode == "hybrid" else ("callback" if worker else "submitted"),
+                        advisory=advisory,
+                        gate2_verdict=gate2_verdict,
                         failure_category=fail_cat,
                         error_summary=err_detail,
                         form_id=form_id,
@@ -1185,7 +1173,7 @@ def run_workload_bench(
 
                 with state_lock:
                     _append_bench_telemetry(telemetry_path, receipt)
-                    if rml is not None:
+                    if rml is not None and (proj.mode != "local" or worker is not None):
                         err_sha = (
                             hashlib.sha256(receipt.failure_category.encode("utf-8")).hexdigest()[:16]
                             if not receipt.passed
@@ -1233,7 +1221,7 @@ def run_workload_bench(
                     continue
                 if norm_form_filter is not None and (proj.mode == "plumbing" or _infer_project_form(proj) != norm_form_filter):
                     continue
-                if mode_filter == "offline" and proj.mode == "agy_live":
+                if mode_filter == "offline" and proj.mode == "local":
                     all_receipts.append(
                         ProjectRunReceipt(
                             timestamp=_utc_now_iso(),
@@ -1257,7 +1245,7 @@ def run_workload_bench(
                         )
                     )
                     continue
-                if mode_filter in ("plumbing", "hybrid", "agy_live") and proj.mode != mode_filter:
+                if mode_filter in ("plumbing", "hybrid", "local") and proj.mode != mode_filter:
                     continue
                 if adaptive and proj.mode != "plumbing" and adaptive_target_ids and proj.id not in adaptive_target_ids:
                     continue

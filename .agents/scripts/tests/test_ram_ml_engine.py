@@ -96,6 +96,10 @@ def test_transcript_extraction_and_supervised_mode(tmp_path: Path) -> None:
     ]
     (conv / "transcript.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
     out_hist = tmp_path / "ml_history.jsonl"
+    out_hist.write_text('{"source":"existing"}\n', encoding="utf-8")
+    skipped = ram_ml_engine.extract_transcript_failures(tmp_path, out_path=out_hist)
+    assert skipped["rows_written"] == 0
+    assert out_hist.read_text(encoding="utf-8") == '{"source":"existing"}\n'
     ext = ram_ml_engine.extract_transcript_failures(HUB_ROOT, brain_root=brain, out_path=out_hist)
     assert ext["conversations_scanned"] == 1
     assert ext["fail_rows"] == 1

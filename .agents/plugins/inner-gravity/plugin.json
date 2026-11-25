@@ -1,5 +1,4 @@
 {
-  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "inner-gravity",
   "displayName": "Inner Gravity",
   "version": "0.1.1",

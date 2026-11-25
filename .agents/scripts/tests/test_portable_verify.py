@@ -23,6 +23,7 @@ from crucible import doctor as crucible_doctor
 IMPORT_TO_PACKAGE = {
     "sklearn": "scikit-learn",
     "z3": "z3-solver",
+    "yaml": "PyYAML",
 }
 
 

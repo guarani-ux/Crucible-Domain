@@ -463,7 +463,7 @@ def test_progress_streaming_emits_start_banner_heartbeat_and_element_breakdown(t
 
     assert res["ok"] is True
     assert any("START p-stream" in line for line in events)
-    assert any("still waiting on agy" in line for line in events)
+    assert any("still waiting on worker" in line for line in events)
     assert any("style=" in line and "stake=" in line and "weak=" in line for line in events)
 
 
@@ -588,3 +588,54 @@ def test_use_cases_rotate_per_round_and_carry_skills_and_tools(tmp_path: Path) -
     msg = "; ".join(exc_info.value.errors)
     assert "needs non-empty 'id' and 'intent'" in msg
     assert "duplicate use_case id 'y'" in msg
+
+
+def test_matrix_reviews_submitted_documents_without_provider_or_fixture_cursor(tmp_path: Path, monkeypatch) -> None:
+    import shutil
+
+    shutil.copytree(HUB_ROOT / ".agents" / "bench", tmp_path / ".agents" / "bench")
+    monkeypatch.setenv("PATH", "")
+    documents = tmp_path / "submitted"
+    documents.mkdir()
+
+    def invoke(*options: str) -> tuple[int, dict]:
+        run = subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "bench", "matrix",
+             "--root", str(tmp_path), "--rounds", "1", "--json", *options],
+            text=True, capture_output=True, check=False,
+        )
+        return run.returncode, json.loads(run.stdout)
+
+    code, fixture = invoke("--mode", "offline")
+    assert code == 0
+    example = fixture["runs"][0]
+    assert example["document_source"] == "fixture"
+    assert example["stages"][0]["gate2_verdict"] == "OFFLINE_SKIPPED"
+    assert not example["all_stages_signed_off"]
+
+    options = ("--documents-dir", str(documents))
+    code, missing = invoke(*options)
+    assert code == 1
+    assert missing["next_cursor"] == 0
+    assert missing["stopped_reason"] == "document_input_required"
+    assert missing["runs"][0]["stages"][0]["output_path"] == ""
+
+    stage = example["stages"][0]
+    target = documents / example["project_id"] / stage["filename"]
+    target.parent.mkdir()
+    target.write_text((tmp_path / stage["output_path"]).read_text() + "\nCopy supplied for review.\n")
+    code, mechanical = invoke(*options, "--no-judge")
+    assert code == 0
+    assert mechanical["runs"][0]["stages"][0]["gate2_verdict"] == "SKIPPED"
+    assert not mechanical["runs"][0]["all_stages_signed_off"]
+
+    code, result = invoke(*options)
+    assert code == 1
+    run = result["runs"][0]
+    assert run["permutation_id"] == example["permutation_id"]
+    receipt = run["stages"][0]
+    assert run["document_source"] == "submitted"
+    assert receipt["gate1_ok"] and receipt["gate2_verdict"] == "UNAVAILABLE"
+    assert receipt["advisory"]["recommendation"] == "abstain"
+    assert (tmp_path / receipt["output_path"]).read_text() == target.read_text()
+    assert not (tmp_path / ".agents" / "ml_outcome_ratchet.json").exists()

@@ -83,7 +83,7 @@ projects:
     failure_category: systems_overclaim
 - id: cpl-next-question-ep02-research
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: research_note
   target_audience: CPL Strategist & Series Producer
   intent: 'Read Calgary Public Library/GROUND_TRUTH.md and draft a research_note for PITCH-NQ Episode 2 identifying 3 concrete reader-advisory patron barriers under the official 2027-2030 Collections and Expertise mandates, separating observed evidence from hypotheses, listing transfer limits and a next test.
@@ -143,7 +143,7 @@ projects:
     - Calgary Public Library/GROUND_TRUTH.md
 - id: cpl-ycd-ep01-av-script
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: av_script
   target_audience: Director, Host, and Editor
   intent: 'Write a 30-second timed A/V script table (`MM:SS-MM:SS | Audio | Video`) for PITCH-YCD Episode 1 ("You Can Do That Here? — Free VHS Digitization") aligned with Experiences and Technology mandates. Keep spoken cadence <=150 WPM and let camera action carry visual detail without VO repeating it.
@@ -237,7 +237,7 @@ projects:
     - writers-room
 - id: creative-short-doc-treatment
   domain: personal_creative
-  mode: agy_live
+  mode: local
   form: treatment
   target_audience: Executive Producer & Creative Collaborators
   intent: 'Draft a visual concept pitch / treatment for an independent 3-minute documentary short showing how a local builder designs deterministic tools under deadline, separating intended story moments from available/pending locations and assets.
@@ -280,7 +280,7 @@ projects:
     - Knowledge/Media Agency/Skills and Workflows/media-writing.md (MW-03)
 - id: cpl-ycd-ep01-call-sheet
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: call_sheet
   target_audience: Crew, Presenter, and Branch Room Contact
   intent: 'Build a shoot-day call sheet table (`Window | Who and First Job | Gate and Fallback`) for a 2-hour branch shoot of PITCH-YCD Episode 1, including door time, sound lav test, coverage test, room reset, and fallback moves if house power or room access is limited. Keep branch contact details as [UNKNOWN].
@@ -324,7 +324,7 @@ projects:
     - Knowledge/Media Agency/Skills and Workflows/media-production.md (MP-04, MP-06)
 - id: cpl-ycd-ep01-shot-list
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: shot_list
   target_audience: Camera Operator, Sound Helper, and Editor
   intent: 'Write a priority-ranked shot list table (`ID / Setup | Priority and Action | Minimum Usable Take | Alternate`) with shot IDs (P01, H01, P02, A01) tracing to PITCH-YCD Episode 1 beats, marking Essential vs. Supporting shots and minimum usable playback criteria.
@@ -367,7 +367,7 @@ projects:
     - Knowledge/Media Agency/Skills and Workflows/media-production.md (MP-02, MP-05)
 - id: cpl-series-executive-summary
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: leadership_report
   target_audience: Acting Director, Communications
   intent: 'Write an executive summary (<=220 words) recommending Pilot A (The Next Question) and Pilot B (You Can Do That Here?) using decision-first inverted-pyramid structure, citing Calgary Public Library/GROUND_TRUTH.md, official 2027-2030 mandates (Experiences, Expertise, Collections), and explicit remit limits / open holds.
@@ -418,7 +418,7 @@ projects:
     - Knowledge/Media Agency/Skills and Workflows/media-production.md (MP-11)
 - id: cpl-pilot-content-calendar
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: content_calendar
   target_audience: Content Management & Digital Marketing
   intent: 'Create a multi-channel content plan & rollout calendar separating YouTube watch copy, Instagram Reel copy, and Newsletter copy (distinct hooks per platform) with a milestone exposure table enforcing CH-04 handoff vs. unlisted preview vs. public rollout holds.
@@ -474,7 +474,7 @@ projects:
     - Knowledge/Media Agency/Skills and Workflows/channel-and-content-operations.md (CH-04, CH-06)
 - id: cpl-production-brief-mastery
   domain: cpl_research
-  mode: agy_live
+  mode: local
   form: production_brief
   target_audience: Media Production Manager, Marketing & Engagement Director, Communications Director, and CEO
   intent: 'Write a decision-first 1-page Production Brief for Calgary Public Library aligned with the official 2027-2030 Strategic Plan (Collections, Experiences, Expertise, Spaces, Technology) and patron service promises. Put the Decision Request in the top 3 lines, ground claims in Calgary Public Library/GROUND_TRUTH.md, include a Deliverables specs table, and assign a named accountable owner to every [UNKNOWN — OWNER TO CONFIRM] hold.

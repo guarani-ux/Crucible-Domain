@@ -1,5 +1,4 @@
 {
-  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "writers-room",
   "displayName": "The Writer's Room",
   "version": "0.1.0",

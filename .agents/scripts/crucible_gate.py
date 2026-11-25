@@ -113,8 +113,7 @@ def _build_system_map(root: Path = ROOT) -> str:
     cap_line = 'Route: python ".agents/scripts/crucible_gate.py" route "<task or ID>" | Health: doctor'
     try:
         ci = _resolve_index_module()
-        global_dir = ci.DEFAULT_GLOBAL_CONFIG_DIR if ci.DEFAULT_GLOBAL_CONFIG_DIR.is_dir() else None
-        idx = ci.build_index(root, global_config_dir=global_dir)
+        idx = ci.build_index(root)
         counts = idx.counts_by_kind
         cap_line = (
             f"Capabilities (RAM {idx.build_ms:.0f}ms): procs={counts.get('procedure', 0)}, "
@@ -1057,9 +1056,13 @@ def cmd_ml_curate(root: Path, *, as_json: bool = False) -> int:
     return 0 if res["quality_gate_passed"] else 1
 
 
-def cmd_ml_train(root: Path, *, as_json: bool = False) -> int:
+def cmd_ml_train(root: Path, *, transcript_root: Path | None = None, as_json: bool = False) -> int:
     eng = _load_ram_ml_engine()
-    ext = eng.extract_transcript_failures(root)
+    try:
+        ext = eng.extract_transcript_failures(root, brain_root=transcript_root)
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}) if as_json else str(exc))
+        return 2
     rank = eng.rank_tests_for_changes(root)
     ho = rank.get("held_out_metrics") or {}
     out = {
@@ -1259,6 +1262,13 @@ def cmd_bench(
     workers: int | None = None,
     no_judge: bool = False,
     from_json: str | None = None,
+    advice_only: bool = False,
+    documents_dir: Path | None = None,
+    reviewer: str | None = None,
+    role: str | None = None,
+    case_id: str | None = None,
+    evidence: str | None = None,
+    training_authorized: bool = False,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1266,9 +1276,20 @@ def cmd_bench(
     parts = query.split() if isinstance(query, str) else list(query)
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
+    if documents_dir is not None:
+        documents_dir = _resolve_cli_path(root, documents_dir)
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect", "pipeline", "matrix", "compile", "evolve"):
-        msg = "usage: crucible_gate.py bench {validate | run | pipeline | matrix | compile [platform] [duration_s] [--mode offline|agy_live] | evolve [apply] [--form FORM] | fuzz | trial | test-validity | inspect | audit | judge | train | score | label | steer | pull | stop | report}"
+    def usage_error(message: str) -> int:
+        print(json.dumps({"ok": False, "error": message}) if as_json else message,
+              file=sys.stdout if as_json else sys.stderr)
+        return 2
+
+
+    if advice_only and action != "judge":
+        return usage_error("--advice-only applies to bench judge")
+
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect", "pipeline", "matrix", "compile", "evolve", "label-expert", "train-expert"):
+        msg = "usage: crucible_gate.py bench {validate | run | pipeline | matrix | compile [platform] [duration_s] [--mode offline|local] | evolve [apply] [--form FORM] | fuzz | trial | test-validity | inspect | audit | judge | train-expert | label-expert | train | score | label | steer | pull | stop | report}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
 
@@ -1276,9 +1297,12 @@ def cmd_bench(
         sc = _resolve_crucible_submodule("sensemaking_compiler")
         plat = parts[1] if len(parts) >= 2 and not parts[1].startswith("--") else "youtube"
         dur = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 180
-        valid_modes = {"offline", "agy_live", "claude_live", "codex_live", "custom_cli", "prompt"}
-        comp_mode = bench_mode if bench_mode in valid_modes else "agy_live"
-        from_json_arg = Path(from_json) if from_json else None
+        if bench_mode not in {"offline", "local", "prompt"}:
+            return usage_error("bench compile accepts --mode offline, local, or prompt")
+        if bench_mode == "prompt" and from_json:
+            return usage_error("bench compile --mode prompt exports the schema; omit --from-json")
+        comp_mode = bench_mode
+        from_json_arg = _resolve_cli_path(root, from_json) if from_json else None
         res = sc.compile_and_evaluate(
             root,
             form_id=form_filter or "av_script",
@@ -1286,7 +1310,7 @@ def cmd_bench(
             target_duration_s=dur,
             mode=comp_mode,
             from_json_path=from_json_arg,
-            enable_judgment_gate=(not no_judge and comp_mode not in ("offline", "prompt") and from_json_arg is None),
+            enable_judgment_gate=(not no_judge and comp_mode == "local"),
         )
         if comp_mode == "prompt":
             print(json.dumps(res, indent=2, ensure_ascii=False) if as_json else res.get("prompt", ""))
@@ -1312,6 +1336,12 @@ def cmd_bench(
                 print(f"  Gate 2 Objection: {g2.get('top_executive_objection')}")
                 print(f"  Gate 2 Cut:       {g2.get('required_cut')}")
                 print(f"  Gate 2 Fix:       {g2.get('actionable_fix')}")
+            if g2.get("raw_error"):
+                print(f"  Review: {g2['raw_error']}")
+            if g2.get("advisory"):
+                print(f"  Expert-trained recommendation: {g2['advisory']['recommendation']}")
+            if comp_mode == "offline" and from_json_arg is None:
+                print("  Fixture run using a sample graph.")
             if res.get("error"):
                 print(f"  Error: {res['error']}")
         return 0 if res.get("ok") else 1
@@ -1340,23 +1370,36 @@ def cmd_bench(
                 print(f"  [{ctag}] {c['platform']:<10} {c['duration_s']:>3}s | graph={c['graph_score']:.2f} flow={c['flow_score']:.2f} board={c['board_score']:.2f} axes={c['axes']}")
         return 0 if res["ok"] else 1
 
+    if action in ("matrix", "pipeline", "run"):
+        if bench_mode == "local" and documents_dir is None:
+            return usage_error("--mode local requires --documents-dir DIR containing <project-id>/<document>")
+        if documents_dir is not None and bench_mode not in ("local", "all"):
+            return usage_error("Use --mode local with --documents-dir to evaluate supplied documents")
+
+    if action in ("matrix", "pipeline") and bench_mode not in ("local", "offline"):
+        return usage_error(f"bench {action} accepts --mode local or offline")
+    if action == "run" and bench_mode not in ("local", "all", "offline", "hybrid", "plumbing"):
+        return usage_error("bench run accepts --mode local, offline, all, plumbing, or hybrid")
+
     if action == "matrix":
         pr = _resolve_crucible_submodule("pipeline_runner")
         do_reset = len(parts) >= 2 and parts[1].lower() in ("reset", "--reset")
-        mat_mode = "offline" if bench_mode == "offline" else "agy_live"
         stream_fn = (lambda msg: print(msg, flush=True)) if not as_json else None
         res = pr.run_workflow_matrix(
             root,
-            mode=mat_mode,
+            mode=bench_mode,
+            documents_dir=documents_dir,
             rounds=max(1, rounds),
             enable_judgment_gate=(not no_judge),
             reset=do_reset,
             progress_fn=stream_fn,
         )
+        res["document_source"] = "fixture" if bench_mode == "offline" else "submitted"
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
         else:
             status = "PASS" if res["ok"] else "BLOCKED"
+            print(f"Document source: {res['document_source']}")
             print(
                 f"\nCrucible Workflow Permutation Matrix ({status}): "
                 f"runs={res['runs_passed']}/{res['runs_executed']} passed | "
@@ -1368,7 +1411,6 @@ def cmd_bench(
     if action == "pipeline":
         pr = _resolve_crucible_submodule("pipeline_runner")
         pid = project_ids[0] if project_ids else (parts[1] if len(parts) >= 2 else None)
-        pipe_mode = "offline" if bench_mode == "offline" else "agy_live"
         stream_fn = (lambda msg: print(msg, flush=True)) if not as_json else None
         manifest = pr.load_pipeline_manifest(root)
         all_pids = [p["id"] for p in manifest["projects"]]
@@ -1390,7 +1432,8 @@ def cmd_bench(
                 res = pr.run_end_to_end_pipeline(
                     root,
                     project_id=cur_pid,
-                    mode=pipe_mode,
+                    mode=bench_mode,
+                    documents_dir=documents_dir,
                     enable_judgment_gate=(not no_judge),
                     progress_fn=stream_fn,
                 )
@@ -1400,6 +1443,7 @@ def cmd_bench(
             round_results.append(res)
             if not as_json:
                 par = res["parity"]
+                print(f"Document source: {res['document_source']}")
                 status = "PASS" if res["ok"] else "BLOCKED"
                 print(
                     f"End-to-End Pipeline ({status}): project={res['project_id']} | "
@@ -1469,7 +1513,7 @@ def cmd_bench(
 
     if action == "judge":
         if len(parts) < 3:
-            msg = "usage: crucible_gate.py bench judge <file_path> <form_id> [--json]"
+            msg = "usage: crucible_gate.py bench judge <file_path> <form_id> [--advice-only] [--json]"
             print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
             return 2
         jp = _resolve_crucible_submodule("judgment_panel")
@@ -1479,19 +1523,36 @@ def cmd_bench(
             msg = f"File not found: {target_file}"
             print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
             return 1
-        text = target_file.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = target_file.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeError) as exc:
+            return usage_error(f"Cannot read document {target_file}: {exc}")
+        if not text.strip():
+            return usage_error("Document is empty")
+        if advice_only:
+            expert = _resolve_crucible_submodule("expert_document_review")
+            advice = expert.assess_document(text, form_id, repo_root=root)
+            if as_json:
+                print(json.dumps(advice, indent=2, ensure_ascii=False))
+            else:
+                print(f"Editorial recommendation: {advice['recommendation']} ({form_id})")
+                print(advice["reason"])
+                print("Professional sign-off is still required.")
+            return 0 if advice["ok"] else 1
+
         jv = jp.run_adversarial_judgment(
             text,
             form_id,
             repo_root=root,
-            worker_fn=wb._default_agy_worker,
             timeout_s=90.0,
             persist_lesson=True,
         )
         if as_json:
             print(json.dumps(jv.to_dict(), indent=2, ensure_ascii=False))
         else:
-            print(f"Gate 2 Adversarial Judgment ({jv.verdict}): form={form_id} | judgment_score={jv.judgment_score:.2f}")
+            print(f"Local document review ({jv.verdict}): form={form_id} | judgment_score={jv.judgment_score:.2f}")
+            if jv.advisory:
+                print(f"  Expert-trained recommendation: {jv.advisory['recommendation']}")
             if jv.weakest_quote:
                 print(f"  Weakest quote:  \"{jv.weakest_quote}\"")
             if jv.top_executive_objection:
@@ -1566,15 +1627,44 @@ def cmd_bench(
             print(f"PULLED LEVER [{res['lever_id']}] -> forms={len(res['updated_forms'])} | rule: {res['policy_rule']}")
         return 0
 
+    if action == "label-expert":
+        if len(parts) != 4 or not all((reviewer, role, case_id, evidence, training_authorized)):
+            return usage_error("usage: bench label-expert FILE FORM pass|fail --reviewer ID --role ROLE "
+                               "--case-id ID --evidence REFERENCE --training-authorized")
+        expert = _resolve_crucible_submodule("expert_document_review")
+        try:
+            row = expert.append_expert_label(
+                root, _resolve_cli_path(root, parts[1]), parts[2], parts[3],
+                reviewer=reviewer, role=role, case_id=case_id, evidence=evidence,
+                training_authorized=training_authorized,
+            )
+        except (OSError, ValueError) as exc:
+            return usage_error(str(exc))
+        print(json.dumps({"ok": True, "label": row}, indent=2) if as_json
+              else f"Recorded {row['verdict']} for {row['form_id']} in case {row['case_id']}.")
+        return 0
+
+    if action == "train-expert":
+        if len(parts) != 2:
+            return usage_error("usage: bench train-expert FORM")
+        expert = _resolve_crucible_submodule("expert_document_review")
+        try:
+            result = expert.train_expert_model(root, parts[1])
+        except (OSError, ValueError) as exc:
+            return usage_error(str(exc))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result["ok"] else 1
+
     if action == "train":
         mls = _resolve_crucible_submodule("doc_ml_scorer")
         res = mls.train_whitebox_model(root, save=True)
+        res.update(assessment_scope="fixture_benchmark", professional_signoff=False)
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
         else:
             status = "PASS" if res["ok"] else "WARN"
             print(
-                f"Offline 40-Feature White-Box ML Train ({status}): "
+                f"Fixture benchmark ML training ({status}): "
                 f"samples={res['train_samples']} (human={res['human_label_count']}) | "
                 f"holdout_acc={res['holdout_accuracy']:.1%} | F1={res['holdout_f1']:.3f} in {res['elapsed_ms']:.1f}ms"
             )
@@ -1597,11 +1687,12 @@ def cmd_bench(
             return 1
         text = target_file.read_text(encoding="utf-8", errors="replace")
         res = mls.score_document_ml(text, form_id, repo_root=root)
+        res.update(assessment_scope="fixture_benchmark", professional_signoff=False)
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
         else:
             print(
-                f"Offline ML Score ({res['verdict']}): form={form_id} | P(buy-in)={res['buy_in_probability']:.1%} | "
+                f"Benchmark ML score ({res['verdict']}): form={form_id} | P(buy-in)={res['buy_in_probability']:.1%} | "
                 f"flow={res['flow_score']:.2f} | board={res['board_score']:.2f} | blocking_roles={res['blocking_roles']}"
             )
             if res["top_negative_drivers"]:
@@ -1735,17 +1826,18 @@ def cmd_bench(
         print(json.dumps(payload, indent=2, ensure_ascii=False) if as_json else f"BENCH VALID: {len(manifest.projects)} workloads in {yaml_path.name}")
         return 0
 
-    should_stream = (not as_json) and (until_exit or bench_mode in ("all", "agy_live") or rounds > 1)
+    should_stream = (not as_json) and (until_exit or bench_mode in ("all", "local") or rounds > 1)
     stream_progress = (lambda msg: print(msg, flush=True)) if should_stream else None
     if until_exit and not as_json:
         print("Crucible Workload Bench: starting continuous loop (press Ctrl+C or run 'crucible_gate.py bench stop' in another terminal to exit cleanly)...", flush=True)
 
-    eff_workers = workers if (workers is not None and workers >= 1) else (3 if bench_mode in ("all", "agy_live") else 1)
-    enable_judge = (not no_judge) and (bench_mode in ("all", "agy_live"))
+    eff_workers = workers if (workers is not None and workers >= 1) else (3 if bench_mode in ("all", "local") else 1)
+    enable_judge = (not no_judge) and (bench_mode in ("all", "local"))
     res = wb.run_workload_bench(
         root,
         manifest,
         mode_filter=bench_mode,
+        documents_dir=documents_dir,
         form_filter=form_filter,
         project_ids=project_ids,
         rounds=rounds,
@@ -1780,7 +1872,7 @@ def cmd_bench(
                         extra += f" -> {r['deliverable_path']}"
                 print(f"  [r{r['round_idx']}] {r['project_id']} ({r['mode']}): {tag} in {r['total_ms']:.1f}ms{extra}")
         if res["skipped_count"] > 0 and bench_mode == "offline":
-            print("  Note: live 'agy_live' workloads skipped in offline mode (pass --mode all to run live agent jobs).")
+            print("  Fixture run. To evaluate submitted documents, use --mode local --documents-dir DIR.")
         print(f"  #1 Telemetry Insight: {res['telemetry_summary']['top_recommendation']}")
     return 0 if res["ok"] else 1
 
@@ -1801,7 +1893,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("query", nargs="*", help="Query tokens/ID for 'route', action+target for 'campaign', or paths for 'ml-rank'/'ml-review'.")
     parser.add_argument("--top", type=int, default=5, help="Max matches per category for 'route'.")
     parser.add_argument("--json", action="store_true", help="Emit structured JSON for 'route', 'doctor', or 'campaign'.")
-    parser.add_argument("--no-global", action="store_true", help="Skip reading ~/.gemini/config during route/doctor.")
+    parser.add_argument("--transcript-root", type=Path, help="Explicit transcript archive to import for ml-train.")
+    parser.add_argument("--no-global", action="store_true", help="Use repository-only route/doctor checks (the default).")
     parser.add_argument("--skip-exec", action="store_true", help="Skip live hook execution during 'doctor'.")
     parser.add_argument("--strict", action="store_true", help="Treat stale depends_on artifacts as blocking failures in 'check'.")
     parser.add_argument("--verbose", action="store_true", help="Show all passing checks in 'doctor'.")
@@ -1818,16 +1911,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target", type=int, default=10, help="Graduation target count for 'g5-check'.")
     parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
     parser.add_argument("--autofix", action="store_true", help="Auto-repair mechanical stale_sha256 hashes in 'kernel'.")
-    parser.add_argument("--mode", type=str, default="offline", choices=("offline", "all", "plumbing", "hybrid", "agy_live", "claude_live", "codex_live", "custom_cli", "prompt"), help="Execution mode for 'bench run/compile' (default: offline).")
-    parser.add_argument("--from-json", type=str, default=None, help="Load a saved Sensemaking Graph JSON file (e.g., from ChatGPT/Web UI) in 'bench compile'.")
+    parser.add_argument("--mode", type=str, choices=("offline", "local", "all", "plumbing", "hybrid", "prompt"), help="Use local for supplied documents or offline for fixture runs. Supplying --documents-dir selects local by default.")
+    parser.add_argument("--from-json", type=str, default=None, help="Load a supplied Sensemaking Graph JSON file in bench compile. Add --mode local for expert-trained triage.")
+    parser.add_argument("--documents-dir", type=Path, help="Root containing <project-id>/<manifest filename> for local workloads, pipeline or matrix.")
+    parser.add_argument("--advice-only", action="store_true", help="Return local editorial triage from bench judge. Exit 0 for a recommendation and 1 for abstention.")
+    parser.add_argument("--reviewer", help="Identity of the professional who made the recorded decision.")
+    parser.add_argument("--role", help="Reviewer’s document-work discipline or role.")
+    parser.add_argument("--case-id", help="Source assignment identifier shared by its document versions.")
+    parser.add_argument("--evidence", help="Reference to the professional judgment and its provenance.")
+    parser.add_argument("--training-authorized", action="store_true", help="Attest to permission to use this judgment for training.")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds to execute in 'bench run'.")
     parser.add_argument("--interval-min", type=float, default=0.0, help="Minutes between rounds in 'bench run'.")
     parser.add_argument("--adaptive", action="store_true", help="Enable UCB1 bandit craft selection & diminishing-returns frontier rotation in 'bench run'.")
     parser.add_argument("--until-exit", action="store_true", help="Run 'bench run' continuously until Ctrl+C or 'bench stop'.")
     parser.add_argument("--max-minutes", type=float, default=0.0, help="Optional safety time limit (minutes) for continuous 'bench run'.")
-    parser.add_argument("--workers", type=int, default=None, help="Parallel live workers per round in 'bench run' (default: 3 for live modes, 1 for offline).")
+    parser.add_argument("--workers", type=int, default=None, help="Parallel workers per round in bench run (default: 3 for local or all).")
     parser.add_argument("--form", type=str, default=None, help="Filter 'bench run' to a single document type (e.g. production_brief, av_script, leadership_report).")
-    parser.add_argument("--no-judge", action="store_true", help="Skip Gate 2 independent adversarial judgment panel in 'bench run'.")
+    parser.add_argument("--no-judge", action="store_true", help="Run mechanical checks only and skip local editorial review.")
     parser.add_argument("--project", action="append", default=None, help="Filter 'bench run' to specific project ID(s).")
     args = parser.parse_args(argv)
     root = args.root.resolve()
@@ -1854,7 +1954,11 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_bench(
             root,
             args.query,
-            bench_mode=args.mode,
+            bench_mode=args.mode or ("local" if args.documents_dir is not None else "offline"),
+            documents_dir=args.documents_dir,
+            advice_only=args.advice_only,
+            reviewer=args.reviewer, role=args.role, case_id=args.case_id,
+            evidence=args.evidence, training_authorized=args.training_authorized,
             form_filter=args.form,
             rounds=args.rounds,
             interval_min=args.interval_min,
@@ -1888,7 +1992,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.subcommand == "ml-review":
         return cmd_ml_review(root, args.query, as_json=args.json)
     if args.subcommand == "ml-train":
-        return cmd_ml_train(root, as_json=args.json)
+        return cmd_ml_train(root, transcript_root=args.transcript_root, as_json=args.json)
     if args.subcommand == "ml-curate":
         return cmd_ml_curate(root, as_json=args.json)
     if args.subcommand == "ml-preflight":

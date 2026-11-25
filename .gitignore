@@ -25,3 +25,6 @@ Thumbs.db
 .agents/bench.stop
 .agents/bench_runs/
 .agents/bench_telemetry.jsonl
+
+# Local professional review evidence and feature snapshots
+.agents/bench/expert_reviews/

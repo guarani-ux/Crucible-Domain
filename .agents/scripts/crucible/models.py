@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-DEFAULT_GLOBAL_CONFIG_DIR = Path.home() / ".gemini" / "config"
+DEFAULT_GLOBAL_CONFIG_DIR: Path | None = None
 
 STOPWORDS = frozenset(
     {

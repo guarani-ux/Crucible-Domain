@@ -1,82 +1,29 @@
-# Crucible Document Compiler & Verification Guide
+# Compiling and reviewing documents
 
-> **Works Everywhere:** Antigravity (`agy`), Claude Code (`claude`), OpenAI Codex CLI (`codex`), ChatGPT / Claude.ai / Gemini Web UI (`--mode prompt` + `--from-json`), any custom VM/terminal AI (`CRUCIBLE_AI_CMD`), or air-gapped offline (`--mode offline`).
+Crucible renders a source-backed document graph using local Python. The author supplies the facts, wording and project decisions. The compiler checks the graph and renders Markdown. A qualified professional retains editorial and release authority.
 
-Crucible Domain compiles **8 institutional & production document types** through a **Bidirectional Sensemaking Graph Compiler** before rendering a single line of Markdown:
+## Compile a real document
 
-```text
-Upstream Sensemaking Graph (JSON)
-  ├── Reality & Custody (verified domain facts, official 2027-2030 mandates, owned holds)
-  ├── Belief-Delta Matrix (>= 3 stakeholder roles: skepticism -> target -> trigger)
-  ├── Creative Modality & Intention-to-Outcome Contract (non-formulaic voice/visual strategy)
-  └── Form-Native Causal Spine (beats, decision request, signals/hypotheses, shots, schedule)
-        │
-        ▼  [Deterministic Gate 1: Graph + Flow + 6-Role Board + 3 Root Axes]
-Clean 2-Zone Markdown (Stakeholder Body + Isolated Internal Custody & Sources)
-        │
-        ▼  [Independent Gate 2: Adversarial Judgment Panel (SIGN_OFF >= 0.85)]
-Upstream Self-Healing Re-Compile (feeds objections back into the Graph, never surface patches)
+Install the repository requirements with `python -m pip install -r requirements.txt`. From the project root, run the following with a graph for the indicated form.
+
+```sh
+python .agents/scripts/crucible_gate.py bench compile youtube 180 --form research_note --from-json graph.json --mode local --json
 ```
 
----
+Inspect the rendered `markdown`, graph validation and `gate2` fields separately. A mechanically valid document can still need professional review. Use `--no-judge` for a mechanical check. Supported forms are `av_script`, `production_brief`, `leadership_report`, `research_note`, `treatment`, `call_sheet`, `shot_list`, and `content_calendar`. To inspect an example graph for a form, run the same command with `--mode offline` and omit `--from-json`. Offline examples contain illustrative content. Use the governing project sources to prepare a real graph.
 
-## 1. Quick Start by AI Runtime (Use Any Tool or VM)
+For an existing Markdown draft, use `bench judge DOCUMENT FORM --advice-only --json` for a triage recommendation, or omit `--advice-only` to check professional sign-off with the same Python entry point. For a document pack, use `bench pipeline --mode local --documents-dir DIR`. Place each supplied document under `DIR/<project-id>/<manifest filename>`. The [pipeline manifest](.agents/bench/pipelines.yaml) identifies the stage filenames.
 
-| Runtime / Environment | Command | How It Works |
-| :--- | :--- | :--- |
-| **Antigravity (`agy`)** | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode agy_live` | Uses `agy` CLI + Gate 2 adversarial panel + upstream self-healing retry. |
-| **Claude Code (`claude`)** | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode claude_live` | Invokes `claude -p "<prompt>"` locally and runs full Gate 1 + Gate 2. |
-| **OpenAI Codex CLI (`codex`)** | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode codex_live` | Invokes `codex exec "<prompt>"` locally and runs full Gate 1 + Gate 2. |
-| **Any VM / Terminal / Ollama / Custom CLI** | `CRUCIBLE_AI_CMD="my-ai-cli --stdin" python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode custom_cli` | Pipes the upstream prompt to `stdin` of `CRUCIBLE_AI_CMD` and reads JSON from `stdout`. |
-| **ChatGPT / Claude.ai / Gemini Web UI (Zero CLI)** | **Step 1:** `python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode prompt`<br>**Step 2:** Paste prompt into ChatGPT/Web UI, save JSON response to `graph.json`<br>**Step 3:** `python .agents/scripts/crucible_gate.py bench compile youtube 180 --from-json graph.json` | Zero local API keys or CLI required. Prints the exact governed prompt, then validates & compiles your pasted JSON into clean 2-zone Markdown. |
-| **Offline / Air-Gapped Baseline** | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --mode offline` | Zero LLM calls. Runs deterministic canonical graph through Gate 1. |
+## Learn from professional decisions
 
-> **Tip:** Add `--json` to any command for full machine-readable output (including the compiled `markdown` field, `graph_validation`, `axes`, and `gate2` report). Add `--no-judge` to skip Gate 2 during fast local iteration.
+A curator records the exact revision a professional reviewed, their decision, the assignment, and a reference supporting their role and decision. Obtain permission for training use. Keep revisions from one assignment under the same case ID. Examples of relevant judgments include an editor deciding whether a research note separates observations from hypotheses, or a producer deciding whether a brief contains enough information to commission a shoot.
 
----
+```sh
+python .agents/scripts/crucible_gate.py bench label-expert draft.md research_note fail --reviewer "$REVIEWER" --role "$ROLE" --case-id "$ASSIGNMENT" --evidence "$REVIEW_RECORD" --training-authorized
+python .agents/scripts/crucible_gate.py bench train-expert research_note --json
+python .agents/scripts/crucible_gate.py bench judge next-draft.md research_note --advice-only --json
+```
 
-## 2. All 8 Document Types & Copy-Paste Use Cases
+The classifier learns per form from local records containing measured features, a document digest and the review provenance. Training checks predictions on held-out assignments, including both pass and fail decisions. Read the case counts and results for each class before interpreting a recommendation. Missing evidence, inadequate performance, ambiguous inputs or a document outside the measured range lead to abstention. A recommendation can help prioritize revisions. It supplies neither claim evidence nor a professional's sign-off. The separate benchmark trainer uses fixtures and mutations to exercise the software.
 
-Pass `--form <form_id>` to target any of the 8 supported forms:
-
-| Document Type (`--form`) | Best Use Case | Example Command |
-| :--- | :--- | :--- |
-| **`av_script`** | YouTube 3m mini-doc, 5m deep-dive, 30s IG Reel, 45s LinkedIn cut, 60s FB walkthrough, 15s cutdown | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form av_script --mode agy_live` |
-| **`production_brief`** | Greenlighting a shoot or campaign with Decision Request & Opportunity Cost in top 25% | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form production_brief --mode claude_live` |
-| **`leadership_report`** | CEO / Executive brief with Counterargument Steelman, Resource Commitment & Owned Holds | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form leadership_report --mode codex_live` |
-| **`research_note`** | Evidence-first memo (Observed Signals before Hypotheses, Transfer Limits, Next Falsification Test) | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form research_note --mode prompt` |
-| **`treatment`** | Creative pitch with Premise/Logline in top 35%, Visual/Sound Approach & Availability Holds | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form treatment --mode offline` |
-| **`call_sheet`** | Cold-receiver shoot schedule with Call Times, Location, Crew/Cast Roles & Lab Safety | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form call_sheet --mode offline` |
-| **`shot_list`** | Camera coverage plan with standard framing codes (`WS`, `MS`, `MCU`, `CU`, `ECU`, `OTS`, `B-Roll`) | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form shot_list --mode offline` |
-| **`content_calendar`** | Multi-platform rollout (YouTube, Instagram, LinkedIn, Facebook) with native hooks & CTAs | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form content_calendar --mode offline` |
-
----
-
-## 3. End-to-End Workflows & Verification Commands
-
-- **8-Stage Project Pipeline** (runs all 8 forms sequentially with cross-document parity & hold carryover):
-  ```sh
-  python .agents/scripts/crucible_gate.py bench pipeline --mode offline
-  ```
-- **Platform & Runtime Matrix Sweep** (tests multiple platforms/lengths in isolated subprocesses):
-  ```sh
-  pwsh -File scripts/run_workflow_matrix.ps1
-  ```
-- **Inspect A/B Outcome Ratchet & Promoted Lessons**:
-  ```sh
-  python .agents/scripts/crucible_gate.py bench inspect
-  ```
-- **Run Full Unit Test Suite (Zero LLM)**:
-  ```sh
-  pytest .agents/scripts/tests/test_root_axis_engine.py .agents/scripts/tests/test_doc_flow_engine.py .agents/scripts/tests/test_workload_bench.py -q
-  ```
-
----
-
-## 4. Where the Upstream Rules Live (Edit Here, Never Patch Downstream)
-
-- **Craft Protocols (all 8 forms + platform physics):** [.agents/bench/craft_protocols.yaml](.agents/bench/craft_protocols.yaml)
-- **Verified Domain Facts & Forbidden Myths:** [.agents/bench/domain_facts.yaml](.agents/bench/domain_facts.yaml)
-- **Organization Charter & Mandates:** [.agents/bench/org_charter.yaml](.agents/bench/org_charter.yaml)
-- **Gate 2 Adversarial Rubrics:** [.agents/bench/judgment_rubrics.yaml](.agents/bench/judgment_rubrics.yaml)
-- **Compiler Engine:** [.agents/scripts/crucible/sensemaking_compiler.py](.agents/scripts/crucible/sensemaking_compiler.py)
+Review the [form protocols](.agents/bench/craft_protocols.yaml), [judgment rubrics](.agents/bench/judgment_rubrics.yaml), and controlling project materials for the intended audience and next action.

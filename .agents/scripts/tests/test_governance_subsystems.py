@@ -199,7 +199,10 @@ class TestGovernanceSubsystems(unittest.TestCase):
     def test_crucible_index_shim_exports_all_and_cli_runs(self) -> None:
         for sym in crucible_index.__all__:
             self.assertTrue(hasattr(crucible_index, sym), f"Missing shim export: {sym}")
-            self.assertIsNotNone(getattr(crucible_index, sym))
+            if sym == "DEFAULT_GLOBAL_CONFIG_DIR":
+                self.assertIsNone(getattr(crucible_index, sym))
+            else:
+                self.assertIsNotNone(getattr(crucible_index, sym))
 
         proc = subprocess.run(
             [sys.executable, str(INDEX_SCRIPT), "--root", str(REPO_ROOT), "doctor", "--json", "--no-global", "--skip-exec"],

@@ -248,7 +248,6 @@ def _pair_count(pair_freq: Counter[tuple[str, str]], a: str, b: str) -> int:
     return pair_freq.get((lo, hi), 0)
 
 
-DEFAULT_BRAIN_ROOT = Path.home() / ".gemini" / "antigravity" / "brain"
 HISTORY_REL_PATH = Path(".agents") / "ml_history.jsonl"
 CURATED_REL_PATH = Path(".agents") / "ml_curated.jsonl"
 _TEST_FILE_RE = re.compile(r"(test_[A-Za-z0-9_]+\.py)")
@@ -377,11 +376,19 @@ def extract_transcript_failures(
     brain_root: Path | None = None,
     out_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Scan Antigravity transcript.jsonl files for 5W1H + Resolution failure/pass records."""
+    """Import test outcome records from an explicitly supplied transcript archive."""
     t0 = time.perf_counter()
     root = root.resolve()
-    b_root = brain_root or DEFAULT_BRAIN_ROOT
     target_path = out_path or (root / HISTORY_REL_PATH)
+    if brain_root is None:
+        return {
+            "elapsed_ms": 0.0, "conversations_scanned": 0, "rows_written": 0,
+            "fail_rows": 0, "pass_rows": 0, "history_path": str(target_path),
+            "status": "no_archive_selected",
+        }
+    b_root = brain_root
+    if not b_root.is_dir():
+        raise ValueError(f"Transcript archive is not a directory: {b_root}")
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     rows: list[dict[str, Any]] = []
@@ -459,9 +466,10 @@ def extract_transcript_failures(
             except OSError:
                 continue
 
-    with target_path.open("w", encoding="utf-8") as out_fh:
-        for r in rows:
-            out_fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    if rows:
+        with target_path.open("w", encoding="utf-8") as out_fh:
+            for r in rows:
+                out_fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     fail_count = sum(1 for r in rows if r["outcome"] == 0)
     pass_count = sum(1 for r in rows if r["outcome"] == 1)

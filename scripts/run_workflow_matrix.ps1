@@ -6,8 +6,9 @@
     lever, or charter upgrade takes effect immediately on the very next run with zero restart.
 #>
 param(
-    [ValidateSet("agy_live", "offline")]
-    [string]$Mode = "agy_live",
+    [ValidateSet("local", "offline")]
+    [string]$Mode,
+    [string]$DocumentsDir,
     [int]$Rounds = 15,
     [switch]$NoJudge,
     [switch]$Reset
@@ -19,6 +20,22 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $StopFile = Join-Path $RepoRoot ".agents\bench.stop"
 $StateFile = Join-Path $RepoRoot ".agents\bench_matrix_state.json"
+
+if ($DocumentsDir) {
+    $DocumentsDir = (Resolve-Path -LiteralPath $DocumentsDir).Path
+    if (-not (Test-Path -LiteralPath $DocumentsDir -PathType Container)) {
+        throw "DocumentsDir must be a directory."
+    }
+}
+if (-not $Mode) {
+    $Mode = if ($DocumentsDir) { "local" } else { "offline" }
+}
+if ($Mode -eq "local" -and -not $DocumentsDir) {
+    throw "Local review requires DocumentsDir."
+}
+if ($Mode -eq "offline" -and $DocumentsDir) {
+    throw "Offline fixtures do not use DocumentsDir. Select local to review supplied documents."
+}
 
 Push-Location $RepoRoot
 try {
@@ -39,12 +56,13 @@ try {
 
         Write-Host "`n>>> [Hot-Reload Step $i/$Rounds] spawning fresh Python process..." -ForegroundColor Cyan
         $argsList = @(".agents/scripts/crucible_gate.py", "bench", "matrix", "--mode", $Mode, "--rounds", "1")
+        if ($DocumentsDir) { $argsList += @("--documents-dir", $DocumentsDir) }
         if ($NoJudge) { $argsList += "--no-judge" }
 
         & python @argsList
         $code = $LASTEXITCODE
-        if ($code -eq 2) {
-            Write-Host "Matrix CLI usage/config error (exit 2). Stopping." -ForegroundColor Red
+        if ($code -ne 0) {
+            Write-Host "Matrix returned exit $code. Stopping." -ForegroundColor Red
             exit $code
         }
     }

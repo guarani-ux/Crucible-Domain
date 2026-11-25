@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""Gate 2: Independent Adversarial Judgment Panel & Persistent Judgment Lessons.
-
-Evaluates a document ONLY after it clears Gate 1 (Flow AST + 6-Role Floor + Strategic Charter).
-Judges the actual editorial, operational, strategic, political, equity, reconciliation,
-accessibility, and brand-voice judgment of the document as an independent cold-receiver
-buying room, emitting a binding SIGN_OFF / REVISE / KILL verdict and persisting reusable
-Judgment Lessons per document type.
-"""
+"""Local document review and parsing of explicitly supplied reviewer responses."""
 
 from __future__ import annotations
 
@@ -42,6 +35,7 @@ class JudgmentVerdict:
     org_voice_flags: list[str] = field(default_factory=list)
     criteria_scores: dict[str, float] = field(default_factory=dict)
     raw_error: str = ""
+    advisory: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -290,12 +284,17 @@ def run_adversarial_judgment(
     form_id: str,
     *,
     repo_root: Path,
-    worker_fn: Callable[..., tuple[bool, str]],
+    worker_fn: Callable[..., tuple[bool, str]] | None = None,
     timeout_s: float = 90.0,
     use_case_intent: str = "",
     persist_lesson: bool = True,
 ) -> JudgmentVerdict:
-    """Invoke an independent cold-receiver critic pass (Gate 2) and persist reusable judgment lessons."""
+    """Assess locally unless the caller explicitly provides a reviewer callback."""
+    if worker_fn is None:
+        from .expert_document_review import review_document
+
+        return review_document(text, form_id, repo_root=repo_root)
+
     prompt = build_adversarial_judge_prompt(
         text, form_id, repo_root=repo_root, use_case_intent=use_case_intent
     )

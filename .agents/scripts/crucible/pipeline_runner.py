@@ -35,7 +35,7 @@ from .judgment_panel import run_adversarial_judgment
 from .lever_control import load_lever_registry, pull_lever
 from .outcome_ratchet import get_active_promoted_lessons, record_paired_outcome
 from .root_axis_engine import evaluate_root_axes
-from .workload_bench import _build_agy_worker_prompt, _call_worker, _default_agy_worker, WorkloadProject
+from .workload_bench import _build_worker_prompt, _call_worker, read_submitted_document, WorkloadProject
 
 DEFAULT_PIPELINES_REL = Path(".agents") / "bench" / "pipelines.yaml"
 DEFAULT_PIPELINE_TEL_REL = Path(".agents") / "bench_pipeline_telemetry.jsonl"
@@ -83,6 +83,7 @@ class StageResult:
     elapsed_ms: float
     output_path: str
     error_summary: str = ""
+    advisory: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -398,7 +399,8 @@ def run_end_to_end_pipeline(
     *,
     project_id: str | None = None,
     stage_subset: list[str] | None = None,
-    mode: str = "agy_live",
+    mode: str = "local",
+    documents_dir: Path | None = None,
     enable_judgment_gate: bool = True,
     max_retries: int = 1,
     timeout_s: float = 180.0,
@@ -425,7 +427,7 @@ def run_end_to_end_pipeline(
     out_dir = root / ".agents" / "bench_runs" / f"{run_id}_{project_cfg['id']}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    worker = agy_worker_fn or _default_agy_worker
+    worker = agy_worker_fn
     j_worker = judge_worker_fn or worker
     target_dur = int(project_cfg.get("target_duration_s", 180))
     stage_texts: dict[str, str] = {}
@@ -484,7 +486,7 @@ def run_end_to_end_pipeline(
         _emit(f"  [Stage {stage_num}/8 | {gate_label}] START {form_id} ({filename}) ...")
 
         eff_dur = target_dur if form_id == "av_script" else None
-        max_attempts = 1 if mode == "offline" else (1 + max(0, max_retries))
+        max_attempts = 1 if mode == "offline" or worker is None else (1 + max(0, max_retries))
         retries_used = 0
         feedback_suffix = ""
         levers_pulled: list[str] = []
@@ -492,6 +494,7 @@ def run_end_to_end_pipeline(
         gate1_ok = False
         gate2_verdict = "OFFLINE_SKIPPED" if mode == "offline" else ("SKIPPED" if not enable_judgment_gate else "PENDING")
         err_summary = ""
+        advisory: dict[str, Any] = {}
         rubric_score = 0.0
         flow_score = 0.0
         board_score = 0.0
@@ -504,15 +507,18 @@ def run_end_to_end_pipeline(
                 retries_used += 1
                 _emit(f"    -> repair retry ({attempt}/{max_attempts - 1}) for {form_id} after: {err_summary[:140]}")
 
+            ratchet_lessons: list[str] = []
             if mode == "offline":
                 ok_gen = True
                 candidate_text = _synthesize_offline_stage(project_cfg, form_id)
+            elif worker is None:
+                ok_gen, candidate_text = read_submitted_document(documents_dir, project_cfg["id"], filename)
             else:
                 upstream_digest = _summarize_upstream(stage_texts)
                 proj_obj = WorkloadProject(
                     id=f"{project_cfg['id']}:{form_id}",
                     domain=str(project_cfg.get("domain", "cpl_research")),
-                    mode="agy_live",
+                    mode="local",
                     form=form_id,
                     intent=(
                         f"Project: {project_cfg['title']}\n"
@@ -528,7 +534,7 @@ def run_end_to_end_pipeline(
                 ratchet_lessons = get_active_promoted_lessons(
                     root, form_id, use_case_id=project_cfg["id"] if enable_judgment_gate else None, limit=4
                 )
-                base_prompt = _build_agy_worker_prompt(
+                base_prompt = _build_worker_prompt(
                     proj_obj,
                     form_id=form_id,
                     judgment_lessons=ratchet_lessons,
@@ -538,6 +544,11 @@ def run_end_to_end_pipeline(
                 ok_gen, candidate_text = _call_worker(worker, full_prompt, root, timeout_s, effort)
 
             if not ok_gen:
+                if worker is None:
+                    err_summary = candidate_text
+                    candidate_text = ""
+                    gate2_verdict = "INPUT_REQUIRED"
+                    break
                 low_err = candidate_text.lower()
                 if "resource_exhausted" in low_err or "code 429" in low_err or "quota reached" in low_err:
                     quota_hit = True
@@ -597,8 +608,9 @@ def run_end_to_end_pipeline(
                     use_case_intent=role_focus,
                     persist_lesson=True,
                 )
+                advisory = jv.advisory
                 gate2_verdict = jv.verdict
-                if jv.verdict == "UNAVAILABLE":
+                if jv.verdict not in ("SIGN_OFF", "REVISE", "KILL"):
                     low_j = jv.raw_error.lower()
                     if "resource_exhausted" in low_j or "code 429" in low_j or "quota reached" in low_j:
                         quota_hit = True
@@ -659,6 +671,7 @@ def run_end_to_end_pipeline(
             elapsed_ms=st_ms,
             output_path=out_rel,
             error_summary=err_summary,
+            advisory=advisory,
         )
         stage_results.append(sr)
         _emit(
@@ -686,10 +699,12 @@ def run_end_to_end_pipeline(
         "project_id": project_cfg["id"],
         "project_title": project_cfg["title"],
         "mode": mode,
+        "document_source": "fixture" if mode == "offline" else ("callback" if worker else "submitted"),
         "quota_exhausted": quota_hit,
         "elapsed_ms": elapsed_ms,
         "output_dir": str(out_dir.relative_to(root) if out_dir.is_relative_to(root) else out_dir).replace("\\", "/"),
         "stages_passed": stages_passed,
+        "all_stages_signed_off": bool(stage_results) and all(s.gate2_verdict == "SIGN_OFF" for s in stage_results),
         "stages_total": len(stage_results),
         "parity": parity.to_dict(),
         "stages": [asdict(s) for s in stage_results],
@@ -722,7 +737,8 @@ def run_end_to_end_pipeline(
 def run_workflow_matrix(
     repo_root: Path,
     *,
-    mode: str = "agy_live",
+    mode: str = "local",
+    documents_dir: Path | None = None,
     rounds: int = 15,
     enable_judgment_gate: bool = True,
     reset: bool = False,
@@ -733,7 +749,11 @@ def run_workflow_matrix(
     root = Path(repo_root).resolve()
     manifest = load_pipeline_manifest(root)
     project_ids = [p["id"] for p in manifest["projects"]]
-    state_path = root / DEFAULT_MATRIX_STATE_REL
+    # Resume only within the same input collection and review policy. The old
+    # unscoped cursor cannot distinguish fixture runs from submitted documents.
+    context = [mode, str(Path(documents_dir).resolve()) if documents_dir else None, enable_judgment_gate]
+    scope = hashlib.sha256(json.dumps(context).encode("utf-8")).hexdigest()[:16]
+    state_path = root / DEFAULT_MATRIX_STATE_REL.with_stem(f"bench_matrix_state_{scope}")
     stop_file = root / ".agents" / "bench.stop"
 
     state: dict[str, Any] = {"cursor": 0, "completed_runs": 0, "passed_runs": 0}
@@ -769,12 +789,16 @@ def run_workflow_matrix(
         res = run_end_to_end_pipeline(
             root,
             project_id=pid,
+            documents_dir=documents_dir,
             stage_subset=None if perm["kind"] == "full" else list(perm["forms"]),
             mode=mode,
             enable_judgment_gate=enable_judgment_gate,
             progress_fn=progress_fn,
         )
         runs_out.append({"permutation_id": perm["id"], "kind": perm["kind"], "forms": perm["forms"], **res})
+        if any(stage["gate2_verdict"] == "INPUT_REQUIRED" for stage in res["stages"]):
+            stopped_reason = "document_input_required"
+            break
         cursor += 1
         state["cursor"] = cursor
         state["completed_runs"] = int(state.get("completed_runs", 0)) + 1
