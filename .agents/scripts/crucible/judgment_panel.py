@@ -23,6 +23,8 @@ DEFAULT_RUBRICS_REL = Path(".agents") / "bench" / "judgment_rubrics.yaml"
 DEFAULT_LESSONS_REL = Path(".agents") / "ml_judgment_lessons.json"
 
 VALID_VERDICTS = ("SIGN_OFF", "REVISE", "KILL")
+SIGN_OFF_THRESHOLD = 0.85
+REVIEW_AXES = ("axis_1_integrity", "axis_2_rhetorical_force", "axis_3_executability")
 
 
 @dataclass
@@ -176,8 +178,8 @@ def build_adversarial_judge_prompt(
             "}",
             "",
             "Rules for verdict:",
-            "- SIGN_OFF only if judgment_score >= 0.82 AND EVERY axis in axis_scores >= 0.82 AND org_voice_flags is empty AND zero serious executive/feasibility objections remain.",
-            "- REVISE if salvageable with targeted changes (any axis 0.50-0.81 or minor org/voice/logic gap).",
+            f"- SIGN_OFF only if judgment_score >= {SIGN_OFF_THRESHOLD:.2f} AND EVERY axis in axis_scores >= {SIGN_OFF_THRESHOLD:.2f} AND org_voice_flags is empty AND zero serious executive/feasibility objections remain.",
+            f"- REVISE if salvageable with targeted changes (any axis from 0.50 to below {SIGN_OFF_THRESHOLD:.2f}, or a minor org/voice/logic gap).",
             "- KILL if fundamentally unconvincing, unshootable, politically risky, off-voice, or AI slop (any axis < 0.50).",
             "",
             "=== CANDIDATE DOCUMENT ===",
@@ -185,6 +187,16 @@ def build_adversarial_judge_prompt(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _review_score(value: Any, field_name: str) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError, OverflowError):
+        score = -1.0
+    if isinstance(value, bool) or not 0.0 <= score <= 1.0:
+        raise ValueError(f"{field_name} requires an explicit number between 0 and 1")
+    return score
 
 
 def parse_judge_response(raw_output: str) -> JudgmentVerdict:
@@ -225,10 +237,22 @@ def parse_judge_response(raw_output: str) -> JudgmentVerdict:
             raw_error=f"invalid_judge_verdict: {verdict!r}",
         )
 
+    axis_raw = parsed.get("axis_scores")
+    if not isinstance(axis_raw, dict):
+        axis_raw = {}
     try:
-        score = max(0.0, min(1.0, round(float(parsed.get("judgment_score", 0.0)), 3)))
-    except (TypeError, ValueError):
-        score = 0.0
+        score = _review_score(parsed.get("judgment_score"), "judgment_score")
+        axis_scores = {
+            key: _review_score(axis_raw.get(key), f"axis_scores.{key}")
+            for key in REVIEW_AXES
+        }
+    except ValueError as exc:
+        return JudgmentVerdict(
+            ok=False,
+            verdict="UNAVAILABLE",
+            judgment_score=0.0,
+            raw_error=str(exc),
+        )
 
     flags = [str(x).strip() for x in (parsed.get("org_voice_flags") or []) if str(x).strip()]
     crit_raw = parsed.get("criteria_scores") or {}
@@ -240,22 +264,9 @@ def parse_judge_response(raw_output: str) -> JudgmentVerdict:
             except (TypeError, ValueError):
                 continue
 
-    axis_raw = parsed.get("axis_scores") or {}
-    axis_scores: dict[str, float] = {}
-    for ax_key in ("axis_1_integrity", "axis_2_rhetorical_force", "axis_3_executability"):
-        val = axis_raw.get(ax_key) if isinstance(axis_raw, dict) else None
-        if val is not None:
-            try:
-                axis_scores[ax_key] = max(0.0, min(1.0, round(float(val), 3)))
-            except (TypeError, ValueError):
-                axis_scores[ax_key] = score
-        else:
-            axis_scores[ax_key] = score
-
-    min_axis = min(axis_scores.values()) if axis_scores else score
-
-    # Enforce strict non-masking SIGN_OFF invariant: ALL 3 Root Axes >= 0.85 and zero org/voice flags
-    if verdict == "SIGN_OFF" and (score < 0.85 or min_axis < 0.85 or bool(flags)):
+    if verdict == "SIGN_OFF" and (
+        score < SIGN_OFF_THRESHOLD or min(axis_scores.values()) < SIGN_OFF_THRESHOLD or flags
+    ):
         verdict = "REVISE"
 
     return JudgmentVerdict(

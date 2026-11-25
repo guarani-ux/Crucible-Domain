@@ -278,6 +278,29 @@ def test_non_redundant_trial_loop_tracks_rubric_and_drr(tmp_path: Path) -> None:
     assert r2["stopped_reason"] in ("diminishing_returns_reached", "rounds_completed", "frontier_exhausted")
 
 
+def test_gate2_does_not_sign_off_without_an_explicit_assessment_of_each_axis() -> None:
+    import json
+    from crucible.judgment_panel import parse_judge_response
+
+    executability = "axis_3_executability"
+    scores = {"axis_1_integrity": 0.94, "axis_2_rhetorical_force": 0.94, executability: 0.94}
+    response = {"verdict": "SIGN_OFF", "judgment_score": 0.94, "org_voice_flags": []}
+    incomplete = {key: value for key, value in scores.items() if key != executability}
+    for invalid_axes in (incomplete, {**scores, executability: "not assessed"}, {**scores, executability: 1.1}):
+        rejected = parse_judge_response(json.dumps({**response, "axis_scores": invalid_axes}))
+        assert not rejected.ok
+        assert rejected.verdict == "UNAVAILABLE"
+        assert executability in rejected.raw_error
+
+    assessed_low = parse_judge_response(json.dumps({**response, "axis_scores": {**scores, executability: 0.60}}))
+    assert assessed_low.verdict == "REVISE"
+    assert assessed_low.axis_scores[executability] == 0.60
+
+    complete = parse_judge_response(json.dumps({**response, "axis_scores": scores}))
+    assert complete.ok
+    assert complete.axis_scores == scores
+
+
 def test_gate2_adversarial_judgment_panel_enforces_signoff_and_persists_lessons(tmp_path: Path) -> None:
     import json
     import shutil
@@ -319,6 +342,11 @@ def test_gate2_adversarial_judgment_panel_enforces_signoff_and_persists_lessons(
             {
                 "verdict": "SIGN_OFF",
                 "judgment_score": 0.90,
+                "axis_scores": {
+                    "axis_1_integrity": 0.90,
+                    "axis_2_rhetorical_force": 0.90,
+                    "axis_3_executability": 0.90,
+                },
                 "org_voice_flags": ["patronizing charity framing"],
                 "top_executive_objection": "Tone undermines patron agency",
             }
@@ -375,6 +403,11 @@ def test_gate2_adversarial_judgment_panel_enforces_signoff_and_persists_lessons(
                 {
                     "verdict": "REVISE",
                     "judgment_score": 0.68,
+                    "axis_scores": {
+                        "axis_1_integrity": 0.70,
+                        "axis_2_rhetorical_force": 0.55,
+                        "axis_3_executability": 0.70,
+                    },
                     "weakest_quote": "Approve Episode 1 YouTube pre-flight scope",
                     "top_executive_objection": "Missing opportunity-cost comparison against simpler options.",
                     "required_cut": "Remove redundant background sentence.",
@@ -388,6 +421,11 @@ def test_gate2_adversarial_judgment_panel_enforces_signoff_and_persists_lessons(
             {
                 "verdict": "SIGN_OFF",
                 "judgment_score": 0.91,
+                "axis_scores": {
+                    "axis_1_integrity": 0.91,
+                    "axis_2_rhetorical_force": 0.92,
+                    "axis_3_executability": 0.91,
+                },
                 "weakest_quote": "",
                 "top_executive_objection": "",
                 "required_cut": "none",
