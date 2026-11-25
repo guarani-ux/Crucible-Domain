@@ -122,8 +122,57 @@ form_protocols:
     - belief_delta_matrix
     - causal_spine
     craft_principles:
-    - 'CEO Altitude: frame strategic upside, counterargument steelman, resource commitment,
-      and patron service promise cleanly.'
-    - Never cite 2023-2026 plan as active or misuse Vision 2040 as a single-video
-      KPI.
+    - 'CEO Altitude: lead with the Decision Request in the top 25%, frame strategic upside, counterargument steelman, resource commitment, and patron service promise cleanly.'
+    - 'Owned Holds: every unresolved dependency, clearance, or budget unknown MUST carry a named accountable owner.'
+    - Never cite 2023-2026 plan as active or misuse Vision 2040 as a single-video KPI.
+    evolved_upgrades: []
+  research_note:
+    required_graph_nodes:
+    - reality_and_custody
+    - belief_delta_matrix
+    - causal_spine
+    craft_principles:
+    - 'Signal Before Hypothesis: present observed evidence and verified local citations BEFORE stating hypotheses or proposed bets.'
+    - 'Falsifiability & Transfer Limits: explicitly state what does NOT transfer, boundary conditions, and the exact next test / baseline metric.'
+    - Keep stakeholder body free of raw internal paths; place source references in Internal Custody & Sources.
+    evolved_upgrades: []
+  treatment:
+    required_graph_nodes:
+    - reality_and_custody
+    - belief_delta_matrix
+    - causal_spine
+    craft_principles:
+    - 'Premise First: state the core premise, hook, and logline in the top 35% of the document.'
+    - 'Visual & Narrative Arc: define the concrete visual approach, sound world, and act-by-act emotional/causal arc.'
+    - 'Intent vs Availability Separation: explicitly mark pending location, talent, or clearance holds with named owners.'
+    evolved_upgrades: []
+  call_sheet:
+    required_graph_nodes:
+    - reality_and_custody
+    - belief_delta_matrix
+    - causal_spine
+    craft_principles:
+    - 'Cold-Receiver Shootability: include a structured operational table (>=2 rows) with call time/date, exact location/branch, crew/cast roles, and safety/equipment notes.'
+    - 'Zero Unverified Assumptions: mark unconfirmed talent, branch permissions, or gear holds explicitly with named owners.'
+    - 'Single-Location Realism: match crew size and schedule to actual branch hours and access constraints.'
+    evolved_upgrades: []
+  shot_list:
+    required_graph_nodes:
+    - reality_and_custody
+    - belief_delta_matrix
+    - causal_spine
+    craft_principles:
+    - 'Standard Framing & Coverage: include a structured shot table (>=3 rows) using standard framing codes (WS, MS, MCU, CU, ECU, OTS, B-Roll), movement, audio/nat-sound cue, and purpose.'
+    - 'Visual-First Coverage: every shot must advance the causal spine or prove a service truth without redundant coverage.'
+    - 'Location & Gear Custody: note practical lighting, audio, and lab safety constraints per setup.'
+    evolved_upgrades: []
+  content_calendar:
+    required_graph_nodes:
+    - reality_and_custody
+    - belief_delta_matrix
+    - causal_spine
+    craft_principles:
+    - 'Cross-Platform Divergence: include a structured schedule table (>=3 rows) across distinct platforms (YouTube, Instagram, LinkedIn, Facebook) with platform-native hooks, formats, publish windows, and CTAs.'
+    - 'Zero Copy-Paste Recycling: each platform entry must adapt angle, length, and tone to its native audience physics.'
+    - 'Governance Holds: mark unapproved release dates or G06 sign-off gates explicitly with named owners.'
     evolved_upgrades: []

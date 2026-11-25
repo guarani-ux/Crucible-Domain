@@ -159,9 +159,9 @@ def validate_sensemaking_graph(
 
     # 4. Node 4: causal_spine
     cs = graph.get("causal_spine") if isinstance(graph.get("causal_spine"), dict) else {}
-    _chk(bool(str(cs.get("hook_gap", "")).strip()), "missing_hook_gap", "L3:HOOK_AND_TENSION_MECHANICS")
 
     if form_id == "av_script":
+        _chk(bool(str(cs.get("hook_gap", "")).strip()), "missing_hook_gap", "L3:HOOK_AND_TENSION_MECHANICS")
         beats = cs.get("beats") or []
         min_beats = int(len_cfg.get("min_beats", 3))
         max_wpm = float(len_cfg.get("max_wpm", 150))
@@ -282,6 +282,46 @@ def validate_sensemaking_graph(
             cap_ok = (isinstance(beats, list) and len(beats) > 0 and bool(str(beats[0].get("muted_caption", "")).strip()) and (captioned_beats / len(beats)) >= 0.80)
             _chk(cap_ok, f"platform_{platform}_requires_muted_first_captions", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
 
+    elif form_id in ("production_brief", "leadership_report"):
+        _chk(bool(str(cs.get("decision_request", "")).strip()), f"{form_id}_missing_decision_request", "L3:EXECUTIVE_DECISION_FRAMING")
+        _chk(bool(str(cs.get("opportunity_cost", "")).strip()), f"{form_id}_missing_opportunity_cost", "L3:EXECUTIVE_DECISION_FRAMING")
+        if form_id == "leadership_report":
+            _chk(bool(str(cs.get("counterargument_steelman", "")).strip()), "leadership_report_missing_counterargument_steelman", "L3:EXECUTIVE_DECISION_FRAMING")
+
+    elif form_id == "research_note":
+        signals = cs.get("observed_signals")
+        hyps = cs.get("hypotheses")
+        _chk(isinstance(signals, list) and len(signals) >= 2, "research_note_missing_observed_signals", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+        _chk(isinstance(hyps, list) and len(hyps) >= 1, "research_note_missing_hypotheses", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+        _chk(bool(str(cs.get("transfer_limits", "")).strip()), "research_note_missing_transfer_limits", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+        _chk(bool(str(cs.get("next_test", "")).strip()), "research_note_missing_next_test", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+
+    elif form_id == "treatment":
+        _chk(bool(str(cs.get("premise", "")).strip()), "treatment_missing_premise", "L3:HOOK_AND_TENSION_MECHANICS")
+        _chk(bool(str(cs.get("visual_approach", "")).strip()), "treatment_missing_visual_approach", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        acts = cs.get("acts")
+        _chk(isinstance(acts, list) and len(acts) >= 2, "treatment_missing_narrative_acts", "L3:MULTI_TRACK_STORY_ARCHITECTURE")
+
+    elif form_id == "call_sheet":
+        rows = cs.get("schedule_rows")
+        _chk(isinstance(rows, list) and len(rows) >= 2, "call_sheet_too_few_schedule_rows", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+        _chk(bool(str(cs.get("location", "")).strip()), "call_sheet_missing_location", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+
+    elif form_id == "shot_list":
+        shots = cs.get("shots")
+        _chk(isinstance(shots, list) and len(shots) >= 3, "shot_list_too_few_shots", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+        framing_ok = isinstance(shots, list) and all(
+            bool(re.search(r"\b(ws|ms|cu|ecu|mcu|ots|b-roll|wide|medium|close-up)\b", str(s.get("framing", "")).lower()))
+            for s in shots if isinstance(s, dict)
+        )
+        _chk(framing_ok, "shot_list_missing_standard_framing_codes", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+
+    elif form_id == "content_calendar":
+        rows = cs.get("calendar_rows")
+        _chk(isinstance(rows, list) and len(rows) >= 3, "content_calendar_too_few_rows", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        plats = {str(r.get("platform", "")).strip().lower() for r in (rows if isinstance(rows, list) else []) if isinstance(r, dict)}
+        _chk(len(plats) >= 3, f"content_calendar_needs_3plus_platforms: {sorted(plats)}", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+
     score = round(passed / max(1, total), 3)
     return GraphValidationReport(
         ok=(len(violations) == 0),
@@ -357,6 +397,89 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
         lines.append("")
         lines.append("## Timing & Accessibility Notes")
         lines.append(f"- Target cadence `<= 150 WPM`; captions and visual-first action carry meaning on mute.")
+        lines.append("")
+
+    elif form_id == "production_brief":
+        lines.append("## Decision Request & Mandate")
+        lines.append(f"- **Decision Request:** {cs.get('decision_request', '')}")
+        lines.append(f"- **Opportunity Cost of Inaction:** {cs.get('opportunity_cost', '')}")
+        lines.append("")
+        lines.append("## Scope & Deliverables")
+        for item in cs.get("deliverables") or []:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    elif form_id == "leadership_report":
+        lines.append("## Executive Decision Request")
+        lines.append(f"- **Recommendation / Ask:** {cs.get('decision_request', '')}")
+        lines.append(f"- **Strategic Upside & Opportunity Cost:** {cs.get('opportunity_cost', '')}")
+        lines.append("")
+        lines.append("## Counterargument Steelman & Resource Commitment")
+        lines.append(f"- **Strongest Counterargument:** {cs.get('counterargument_steelman', '')}")
+        lines.append(f"- **Resource Commitment:** {cs.get('resource_commitment', '')}")
+        lines.append("")
+
+    elif form_id == "research_note":
+        lines.append("## Observed Evidence & Signals")
+        for sig in cs.get("observed_signals") or []:
+            lines.append(f"- **Observed Signal:** {sig}")
+        lines.append("")
+        lines.append("## Hypotheses & Proposed Bets")
+        for hyp in cs.get("hypotheses") or []:
+            lines.append(f"- **Hypothesis:** {hyp}")
+        lines.append("")
+        lines.append("## Transfer Limits & Next Test")
+        lines.append(f"- **Transfer Limits (What Does Not Transfer):** {cs.get('transfer_limits', '')}")
+        lines.append(f"- **Next Falsification Test & Baseline:** {cs.get('next_test', '')}")
+        lines.append("")
+
+    elif form_id == "treatment":
+        lines.append("## Premise & Hook")
+        lines.append(f"- **Premise / Logline:** {cs.get('premise', '')}")
+        lines.append(f"- **Visual & Sound Approach:** {cs.get('visual_approach', '')}")
+        lines.append("")
+        lines.append("## Narrative Arc")
+        for act in cs.get("acts") or []:
+            lines.append(f"- {act}")
+        lines.append("")
+
+    elif form_id == "call_sheet":
+        lines.append("## Shoot Overview")
+        lines.append(f"- **Shoot Date & Call Time:** {cs.get('shoot_date', 'TBD — Producer to confirm')}")
+        lines.append(f"- **Location / Branch:** {cs.get('location', 'Central Library — Digital Media Lab')}")
+        lines.append(f"- **Safety & Lab Rules:** {cs.get('safety_notes', 'No food or drinks near digitization decks.')}")
+        lines.append("")
+        lines.append("## Operational Schedule & Crew/Cast")
+        lines.append("")
+        lines.append("| Call Time | Unit / Block | Crew / Cast Roles | Notes |")
+        lines.append("| --- | --- | --- | --- |")
+        for r in cs.get("schedule_rows") or []:
+            if isinstance(r, dict):
+                lines.append(f"| {r.get('call_time', '')} | {r.get('block', '')} | {r.get('crew_cast', '')} | {r.get('notes', '')} |")
+        lines.append("")
+
+    elif form_id == "shot_list":
+        lines.append("## Coverage Strategy & Location Custody")
+        lines.append(f"- **Location:** {cs.get('location', 'Central Library — Digital Media Lab')}")
+        lines.append(f"- **Visual & Audio Approach:** {cs.get('coverage_note', 'Single-location handheld + tripod coverage with clean nat-sound.')}")
+        lines.append("")
+        lines.append("## Structured Shot List")
+        lines.append("")
+        lines.append("| Shot # | Framing | Subject & Action | Audio / Nat Sound | Purpose |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for s in cs.get("shots") or []:
+            if isinstance(s, dict):
+                lines.append(f"| {s.get('shot_id', '')} | {s.get('framing', '')} | {s.get('action', '')} | {s.get('audio_cue', '')} | {s.get('purpose', '')} |")
+        lines.append("")
+
+    elif form_id == "content_calendar":
+        lines.append("## Cross-Platform Distribution Plan")
+        lines.append("")
+        lines.append("| Platform | Format | Publish Window | Native Hook | Call to Action |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for r in cs.get("calendar_rows") or []:
+            if isinstance(r, dict):
+                lines.append(f"| {r.get('platform', '')} | {r.get('format', '')} | {r.get('publish_window', '')} | {r.get('hook', '')} | {r.get('cta', '')} |")
         lines.append("")
 
     # Cleanly isolated Zone 2: Internal Custody & Sources (keeps stakeholder body free of internal jargon)
@@ -715,11 +838,14 @@ def build_sensemaking_graph_prompt(
         "    {\"role\": \"Communications Director\", \"current_skepticism\": \"...\", \"target_state\": \"...\", \"shift_trigger\": \"...\"}",
         "  ],",
         "  \"creative_modality\": {",
-        "    \"audio_strategy\": \"<choose the best sonic mode for THIS story: host_led | patron_sot_led | observational_nat_sound | hybrid — and explain why it avoids monotone narrator VO>\",",
-        "    \"visual_rhythm_strategy\": \"<how distinct camera cuts, breathing room/silence, and visual resets sustain attention across the runtime>\",",
-        "    \"intention_to_outcome_contract\": \"<explicit link: what viewer feels/realizes -> exact patron action that proves it worked>\"",
+        "    \"audio_strategy\": \"<choose the best sonic/voice mode for THIS deliverable and explain why it fits the audience>\",",
+        "    \"visual_rhythm_strategy\": \"<how visual/structural hierarchy sustains attention and clarity>\",",
+        "    \"intention_to_outcome_contract\": \"<explicit link: what reader/viewer realizes -> exact action that proves it worked>\"",
         "  },",
-        "  \"causal_spine\": {",
+    ])
+    if form_id == "av_script":
+        lines.extend([
+            "  \"causal_spine\": {",
             '    "hook_gap": "<unresolved opening visual/curiosity gap>",',
             '    "a_story_action": "<external patron problem/action>",',
             '    "b_story_human_shift": "<human emotional shift>",',
@@ -728,11 +854,168 @@ def build_sensemaking_graph_prompt(
             '      {"start_s": 0, "end_s": 15, "causal_link": "SETUP|BUT|THEREFORE|PAYOFF", "visual_first_action": "<concrete camera action>", "spoken_beat": "<conversational spoken words matching word budget>", "muted_caption": "<short on-screen caption>"}',
             "    ]",
             "  }",
-            "}",
-            "Keep spoken_beat, visual_first_action, and muted_caption 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
-        ]
-    )
+        ])
+    elif form_id in ("production_brief", "leadership_report"):
+        extra = '    "counterargument_steelman": "<strongest objection and how we answer it>",\n    "resource_commitment": "<crew, hours, and budget scope>",\n' if form_id == "leadership_report" else '    "deliverables": ["<deliverable 1>", "<deliverable 2>"],\n'
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "decision_request": "<clear executive decision ask in top 25%>",',
+            '    "opportunity_cost": "<concrete cost of inaction>",',
+            extra.rstrip("\n"),
+            "  }",
+        ])
+    elif form_id == "research_note":
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "observed_signals": ["<verified local observation 1>", "<verified local observation 2>"],',
+            '    "hypotheses": ["<testable hypothesis 1>"],',
+            '    "transfer_limits": "<explicit boundary: what does NOT transfer>",',
+            '    "next_test": "<exact falsification test and baseline metric>"',
+            "  }",
+        ])
+    elif form_id == "treatment":
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "premise": "<sharp premise/logline in top 35%>",',
+            '    "visual_approach": "<concrete visual, camera, and sound world>",',
+            '    "acts": ["Act 1: ...", "Act 2: ...", "Act 3: ..."]',
+            "  }",
+        ])
+    elif form_id == "call_sheet":
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "shoot_date": "<date and call time>",',
+            '    "location": "<Central Library — Digital Media Lab>",',
+            '    "safety_notes": "<practical lab safety notes>",',
+            '    "schedule_rows": [{"call_time": "09:00", "block": "Setup", "crew_cast": "Producer, Camera Op", "notes": "Verify deck power"}]',
+            "  }",
+        ])
+    elif form_id == "shot_list":
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "location": "<Central Library — Digital Media Lab>",',
+            '    "coverage_note": "<single-location coverage strategy>",',
+            '    "shots": [{"shot_id": "S01", "framing": "ECU", "action": "<concrete visual action>", "audio_cue": "<nat sound or VO>", "purpose": "<story beat>"}]',
+            "  }",
+        ])
+    elif form_id == "content_calendar":
+        lines.extend([
+            "  \"causal_spine\": {",
+            '    "calendar_rows": [{"platform": "YouTube", "format": "3m Mini-Doc", "publish_window": "Week 1 Tue", "hook": "<native hook>", "cta": "<native CTA>"}]',
+            "  }",
+        ])
+    lines.extend([
+        "}",
+        "Keep stakeholder body copy 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
+    ])
     return "\n".join(lines) + "\n"
+
+
+def synthesize_canonical_graph(
+    *,
+    form_id: str = "av_script",
+    platform: str = "youtube",
+    target_duration_s: int = 180,
+    topic: str = "Free VHS Digitization at Central Library",
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    """Synthesize a verified canonical Sensemaking Graph for ANY of the 8 document forms."""
+    if form_id == "av_script":
+        return synthesize_canonical_av_graph(
+            platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
+        )
+
+    base: dict[str, Any] = {
+        "title": f"{topic} — {form_id.replace('_', ' ').title()}",
+        "form_id": form_id,
+        "platform": platform,
+        "target_duration_s": target_duration_s,
+        "reality_and_custody": {
+            "official_mandates": ["Experiences", "Technology"],
+            "service_promise": "Free self-directed VHS digitization at Central Library with a free library card.",
+            "immediate_patron_action": "Reserve a free digitization station at calgarylibrary.ca.",
+            "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],
+            "owned_holds": [
+                {"item": "Confirm patron release form and shoot date", "owner": "Media Production Manager"},
+            ],
+        },
+        "belief_delta_matrix": [
+            {"role": "Calgary Patron", "current_skepticism": "Assumes VHS transfer is costly.", "target_state": "Knows it is free with a library card.", "shift_trigger": "Clear patron utility proof."},
+            {"role": "Media Production Manager", "current_skepticism": "Worries about shoot feasibility.", "target_state": "Confident in single-location shootability.", "shift_trigger": "Concrete crew, lab safety, and owned holds."},
+            {"role": "Communications Director", "current_skepticism": "Worries about scope drift.", "target_state": "Confident in mandate alignment.", "shift_trigger": "Explicit 2027-2030 mandate & owned holds."},
+        ],
+        "creative_modality": {
+            "audio_strategy": "Form-native executive/operational voice with zero brochure fluff.",
+            "visual_rhythm_strategy": "Scannable hierarchy with concrete proof upfront.",
+            "intention_to_outcome_contract": "Reader verifies feasibility and approves next action -> patron books free lab slot.",
+        },
+    }
+
+    if form_id == "production_brief":
+        base["causal_spine"] = {
+            "decision_request": "Approve single-location Central Library shoot to promote free VHS digitization.",
+            "opportunity_cost": "Patrons continue paying commercial shops or losing degrading family tapes while free stations sit underutilized.",
+            "deliverables": ["3-minute YouTube mini-doc", "30-second Instagram/Facebook vertical cutdown", "45-second LinkedIn civic proof cut"],
+        }
+    elif form_id == "leadership_report":
+        base["causal_spine"] = {
+            "decision_request": "Approve Q2 Digital Media Lab awareness campaign under Experiences and Technology mandates.",
+            "opportunity_cost": "Leaving digitization capacity under-promoted misses a high-trust patron acquisition moment.",
+            "counterargument_steelman": "Station demand could spike beyond Central Library capacity; mitigated by linking directly to online booking slots.",
+            "resource_commitment": "One 4-hour single-location shoot with existing internal crew; zero external vendor spend.",
+        }
+    elif form_id == "research_note":
+        base["causal_spine"] = {
+            "observed_signals": [
+                "Observed baseline: flat single-pass prompts failed 0/8 stages on Attempt 1, whereas upstream Sensemaking Graphs cleared 6/6 platforms on Attempt 1.",
+                "Observed audience signal: concrete free-card utility outperforms abstract institutional slogans.",
+            ],
+            "hypotheses": ["Moving creative modality and domain facts upstream reduces Gate 2 revisions across all 8 document forms."],
+            "transfer_limits": "Does not transfer to unverified external claims or multi-branch shoots without branch-specific clearance.",
+            "next_test": "Run paired A/B evaluation across all 8 forms measuring Gate 1 pass rate and Gate 2 score against baseline.",
+        }
+    elif form_id == "treatment":
+        base["causal_spine"] = {
+            "premise": "A Calgarian rescues a fading 1994 family VHS tape for free at Central Library, turning a quiet preservation task into a multi-generational memory.",
+            "visual_approach": "Natural sunlit Central Library atrium paired with intimate close-ups of the analog VCR deck, live waveform monitor, and unscripted patron reactions.",
+            "acts": [
+                "Act 1 (Setup): The fragile 1994 cassette and the barrier of commercial transfer costs.",
+                "Act 2 (Complication & Action): Booking a free self-directed Central Library station; real-time 1:1 capture onto personal USB.",
+                "Act 3 (Payoff): Hearing a lost family voice return cleanly, closing on a direct card booking invitation.",
+            ],
+        }
+    elif form_id == "call_sheet":
+        base["causal_spine"] = {
+            "shoot_date": "TBD — Media Production Manager to confirm (08:30 Call Time)",
+            "location": "Central Library — Digital Media Lab (800 3 St SE, Calgary)",
+            "safety_notes": "No food or drinks near digitization decks; keep walkways clear for public patrons.",
+            "schedule_rows": [
+                {"call_time": "08:30", "block": "Load-In & Lab Check", "crew_cast": "Producer, Camera Op, Lab Specialist", "notes": "Test VCR deck and monitor glare"},
+                {"call_time": "09:30", "block": "Patron Transfer & B-Roll", "crew_cast": "Camera Op, Host, Patron [HOLD]", "notes": "Capture real-time playback and nat sound"},
+                {"call_time": "11:00", "block": "Wrap & Gear Custody", "crew_cast": "Full Crew", "notes": "Restore station and log media cards"},
+            ],
+        }
+    elif form_id == "shot_list":
+        base["causal_spine"] = {
+            "location": "Central Library — Digital Media Lab",
+            "coverage_note": "Single-location tripod + handheld coverage with clean natural sound.",
+            "shots": [
+                {"shot_id": "S01", "framing": "ECU", "action": "Hands open worn 1994 VHS cardboard sleeve under desk light", "audio_cue": "NAT: cardboard rustle", "purpose": "Hook tactile urgency"},
+                {"shot_id": "S02", "framing": "MS", "action": "Patron slides cassette into Central Library converter deck", "audio_cue": "NAT: mechanical deck click", "purpose": "Prove self-directed ease"},
+                {"shot_id": "S03", "framing": "CU", "action": "Preview monitor clears from static to family footage; USB export completes", "audio_cue": "NAT: tape playback hum", "purpose": "Visual payoff and USB custody"},
+                {"shot_id": "S04", "framing": "WS", "action": "Patron exits sunlit Central Library atrium holding USB drive", "audio_cue": "Room tone + closing VO", "purpose": "Resolution and booking CTA"},
+            ],
+        }
+    elif form_id == "content_calendar":
+        base["causal_spine"] = {
+            "calendar_rows": [
+                {"platform": "YouTube", "format": "3m Mini-Doc (16:9)", "publish_window": "Week 1 Tue 10:00", "hook": "What happens when no VCR works anymore?", "cta": "Reserve a free slot at calgarylibrary.ca"},
+                {"platform": "Instagram", "format": "30s Reel (9:16)", "publish_window": "Week 1 Thu 12:00", "hook": "OLD VHS TAPES FADING? (visual interrupt)", "cta": "Save this Reel & book free with your card"},
+                {"platform": "LinkedIn", "format": "45s Civic Proof (4:5)", "publish_window": "Week 2 Mon 08:30", "hook": "Public libraries preserve family history for free.", "cta": "Explore Digital Media Lab access"},
+                {"platform": "Facebook", "format": "60s Walkthrough (4:5)", "publish_window": "Week 2 Wed 18:00", "hook": "Bring one tape and a USB to Central Library.", "cta": "Share with a neighbor & reserve free"},
+            ],
+        }
+    return base
 
 
 def compile_and_evaluate(
@@ -755,8 +1038,8 @@ def compile_and_evaluate(
 
     for attempt in range(attempts):
         if mode == "offline":
-            graph = synthesize_canonical_av_graph(
-                platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
+            graph = synthesize_canonical_graph(
+                form_id=form_id, platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
             )
         else:
             from .workload_bench import _call_worker, _default_agy_worker

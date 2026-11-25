@@ -284,3 +284,46 @@ def test_bidirectional_sensemaking_compiler_and_cyclical_capability_evolver(tmp_
     assert (bench_dir / "golden_exemplars.json").is_file()
 
 
+def test_all_8_document_types_compile_and_validate() -> None:
+    from crucible.sensemaking_compiler import (
+        build_sensemaking_graph_prompt,
+        compile_and_evaluate,
+        synthesize_canonical_graph,
+        validate_sensemaking_graph,
+    )
+
+    all_forms = (
+        "av_script",
+        "production_brief",
+        "leadership_report",
+        "research_note",
+        "treatment",
+        "call_sheet",
+        "shot_list",
+        "content_calendar",
+    )
+    for fid in all_forms:
+        res = compile_and_evaluate(
+            ROOT,
+            form_id=fid,
+            platform="youtube",
+            target_duration_s=180,
+            mode="offline",
+        )
+        assert res["ok"] is True, f"{fid} failed: graph={res['graph_validation']['violations']} flow={res.get('flow_score')}"
+        assert res["graph_validation"]["graph_score"] == 1.0, fid
+        assert res["flow_score"] == 1.0, fid
+        prompt = build_sensemaking_graph_prompt(
+            form_id=fid, platform="youtube", target_duration_s=180, assignment="VHS Digitization", repo_root=ROOT
+        )
+        assert f'"form_id": "{fid}"' in prompt
+
+    # Negative-path check: missing decision_request in leadership_report must be BLOCKED
+    bad_lr = synthesize_canonical_graph(form_id="leadership_report", repo_root=ROOT)
+    bad_lr["causal_spine"]["decision_request"] = ""
+    bad_val = validate_sensemaking_graph(bad_lr, form_id="leadership_report", repo_root=ROOT)
+    assert bad_val.ok is False
+    assert any("missing_decision_request" in v for v in bad_val.violations)
+
+
+
