@@ -1951,10 +1951,13 @@ def main(argv: list[str] | None = None) -> int:
             replay_out=args.replay_out,
         )
     if args.subcommand == "bench":
+        supplied_documents = args.documents_dir is not None or (
+            args.from_json is not None and args.query[:1] == ["compile"]
+        )
         return cmd_bench(
             root,
             args.query,
-            bench_mode=args.mode or ("local" if args.documents_dir is not None else "offline"),
+            bench_mode=args.mode or ("local" if supplied_documents else "offline"),
             documents_dir=args.documents_dir,
             advice_only=args.advice_only,
             reviewer=args.reviewer, role=args.role, case_id=args.case_id,
