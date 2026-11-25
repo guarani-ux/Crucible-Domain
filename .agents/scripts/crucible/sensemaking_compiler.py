@@ -30,6 +30,7 @@ from .doc_flow_engine import (
 from .root_axis_engine import evaluate_root_axes
 
 DEFAULT_PROTOCOLS_REL = Path(".agents") / "bench" / "craft_protocols.yaml"
+DEFAULT_DOMAIN_FACTS_REL = Path(".agents") / "bench" / "domain_facts.yaml"
 
 INTERNAL_LEAK_TOKENS = ("#L", ".agents/", "BENCH_CANDIDATE")
 UNVERIFIED_PRICE_RE = re.compile(r"\$\d+(?:\.\d{2})?(?:\s*[-–]\s*\$?\d+)?(?:\s*(?:per|a)\s+\w+)?", re.IGNORECASE)
@@ -582,6 +583,66 @@ def synthesize_canonical_av_graph(
     }
 
 
+def load_domain_facts(repo_root: Path, topic: str) -> dict[str, list[str]]:
+    """Retrieve verified upstream physical/service facts and forbidden myths matching the topic."""
+    path = Path(repo_root) / DEFAULT_DOMAIN_FACTS_REL
+    if not path.is_file():
+        return {"verified_facts": [], "forbidden_myths_and_jabs": []}
+    import yaml  # type: ignore
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+    low_topic = topic.lower()
+    facts: list[str] = []
+    myths: list[str] = []
+    for _tid, cfg in (raw.get("topics") or {}).items():
+        if not isinstance(cfg, dict):
+            continue
+        kws = [str(k).lower() for k in (cfg.get("match_keywords") or [])]
+        if any(kw in low_topic for kw in kws):
+            facts.extend(str(x) for x in (cfg.get("verified_facts") or []))
+            myths.extend(str(x) for x in (cfg.get("forbidden_myths_and_jabs") or []))
+    return {"verified_facts": facts, "forbidden_myths_and_jabs": myths}
+
+
+def compute_beat_budget_plan(platform: str, target_duration_s: int) -> list[dict[str, Any]]:
+    """Pre-compile exact beat-by-beat timing, causal link, and spoken word-count budgets (~125 WPM) upstream."""
+    dur = max(15, int(target_duration_s))
+    if dur <= 15:
+        splits = [(0, 4, "SETUP"), (4, 10, "BUT"), (10, dur, "THEREFORE")]
+    elif dur <= 30:
+        splits = [(0, 6, "SETUP"), (6, 18, "BUT"), (18, dur, "THEREFORE")]
+    elif dur <= 45:
+        splits = [(0, 10, "SETUP"), (10, 26, "BUT"), (26, dur, "THEREFORE")]
+    elif dur <= 60:
+        splits = [(0, 10, "SETUP"), (10, 26, "BUT"), (26, 45, "THEREFORE"), (45, dur, "PAYOFF")]
+    elif dur <= 180:
+        splits = [
+            (0, 15, "SETUP"),
+            (15, 45, "BUT"),
+            (45, 85, "THEREFORE"),
+            (85, 120, "BUT"),
+            (120, 155, "THEREFORE"),
+            (155, dur, "PAYOFF"),
+        ]
+    else:
+        splits = [
+            (0, 25, "SETUP"),
+            (25, 75, "BUT"),
+            (75, 130, "THEREFORE"),
+            (130, 185, "BUT"),
+            (185, 245, "THEREFORE"),
+            (245, dur, "PAYOFF"),
+        ]
+
+    plan: list[dict[str, Any]] = []
+    for s_s, e_s, link in splits:
+        b_dur = max(1, e_s - s_s)
+        min_w = max(5, int(round(b_dur * 105.0 / 60.0)))
+        max_w = max(min_w + 3, int(round(b_dur * 138.0 / 60.0)))
+        plan.append({"start_s": s_s, "end_s": e_s, "causal_link": link, "word_budget": f"{min_w}-{max_w} words"})
+    return plan
+
+
 def build_sensemaking_graph_prompt(
     *,
     form_id: str,
@@ -590,9 +651,11 @@ def build_sensemaking_graph_prompt(
     assignment: str,
     repo_root: Path,
 ) -> str:
-    """Build the upstream Sensemaking Graph generation prompt governed by `craft_protocols.yaml`."""
+    """Build the upstream Sensemaking Graph generation prompt governed by `craft_protocols.yaml`, domain facts, and beat budgets."""
     protocols = load_craft_protocols(repo_root)
     charter = load_organization_charter(repo_root=repo_root)
+    dom_facts = load_domain_facts(repo_root, assignment)
+    beat_plan = compute_beat_budget_plan(platform, target_duration_s) if form_id == "av_script" else []
     plat_cfg = (protocols.get("platform_physics") or {}).get(platform.lower(), {})
     len_cfg = _resolve_length_arch(protocols, target_duration_s)
     form_cfg = (protocols.get("form_protocols") or {}).get(form_id, {})
@@ -603,42 +666,58 @@ def build_sensemaking_graph_prompt(
         f"Official Mandates ONLY: {', '.join(charter.official_mandates)}",
         f"Form: {form_id} | Platform: {platform} | Target Runtime: {target_duration_s}s",
         f"Platform Physics: {plat_cfg.get('physics_rule', 'Native platform pacing')}",
-        f"Length Architecture: min_beats={len_cfg.get('min_beats')}, max_wpm={len_cfg.get('max_wpm')}, max_beat_s={len_cfg.get('max_beat_s')}, require_abc={len_cfg.get('require_abc_tracks')}, require_but_therefore={len_cfg.get('require_but_therefore')}",
-        "Upstream Craft Principles:",
-        *[f"  - {p}" for p in (form_cfg.get("craft_principles") or [])],
-        *[f"  - [EVOLVED] {u}" for u in (form_cfg.get("evolved_upgrades") or [])[-3:]],
-        f"Assignment: {assignment}",
-        "",
-        "Return ONLY valid JSON matching this exact schema (no prose outside JSON):",
-        "{",
-        '  "title": "<concise title>",',
-        f'  "form_id": "{form_id}",',
-        f'  "platform": "{platform}",',
-        f'  "target_duration_s": {target_duration_s},',
-        '  "reality_and_custody": {',
-        '    "official_mandates": ["Experiences", "Technology"],',
-        '    "service_promise": "<free public library card service promise with patron dignity>",',
-        '    "immediate_patron_action": "<concrete patron CTA>",',
-        '    "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],',
-        '    "owned_holds": [{"item": "<unconfirmed fact or clearance>", "owner": "<Accountable Role e.g. Producer>"}]',
-        "  },",
-        '  "belief_delta_matrix": [',
-        '    {"role": "Calgary Patron", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
-        '    {"role": "Media Production Manager", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
-        '    {"role": "Communications Director", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."}',
-        "  ],",
-        '  "causal_spine": {',
-        '    "hook_gap": "<unresolved opening visual/curiosity gap>",',
-        '    "a_story_action": "<external patron problem/action>",',
-        '    "b_story_human_shift": "<human emotional shift>",',
-        '    "c_story_service_truth": "<institutional library value truth>",',
-        '    "beats": [',
-        '      {"start_s": 0, "end_s": 25, "causal_link": "SETUP|BUT|THEREFORE|PAYOFF", "visual_first_action": "<concrete camera action>", "spoken_beat": "<concise spoken words <=150 WPM>", "muted_caption": "<short on-screen caption>"}',
-        "    ]",
-        "  }",
-        "}",
-        "Keep spoken_beat, visual_first_action, and muted_caption 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
+        f"Length Architecture: min_beats={len_cfg.get('min_beats')}, target_wpm=115-135 (strict floor >=95 WPM, ceiling <=145 WPM, overlap <=0.30, avg sentence <=16 words)",
     ]
+    if dom_facts["verified_facts"]:
+        lines.append("UPSTREAM VERIFIED DOMAIN FACTS (MUST OBEY — ZERO FACTUAL HALLUCINATIONS):")
+        for f in dom_facts["verified_facts"]:
+            lines.append(f"  + {f}")
+    if dom_facts["forbidden_myths_and_jabs"]:
+        lines.append("FORBIDDEN MYTHS, INVENTED PRICES & BROCHURE CLICHÉS (NEVER USE):")
+        for m in dom_facts["forbidden_myths_and_jabs"]:
+            lines.append(f"  - {m}")
+    if beat_plan:
+        lines.append("PRE-COMPILED BEAT TIMING & SPOKEN WORD-COUNT BUDGET (FOLLOW EXACTLY):")
+        for bp in beat_plan:
+            lines.append(f"  * {bp['start_s']:>3}s-{bp['end_s']:>3}s [{bp['causal_link']:<9}] -> spoken_beat MUST be {bp['word_budget']} (warm conversational speech, zero brochure prose)")
+    lines.extend(
+        [
+            "Upstream Craft Principles:",
+            *[f"  - {p}" for p in (form_cfg.get("craft_principles") or [])],
+            *[f"  - [EVOLVED] {u}" for u in (form_cfg.get("evolved_upgrades") or [])[-3:]],
+            f"Assignment: {assignment}",
+            "",
+            "Return ONLY valid JSON matching this exact schema (no prose outside JSON):",
+            "{",
+            '  "title": "<concise title>",',
+            f'  "form_id": "{form_id}",',
+            f'  "platform": "{platform}",',
+            f'  "target_duration_s": {target_duration_s},',
+            '  "reality_and_custody": {',
+            '    "official_mandates": ["Experiences", "Technology"],',
+            '    "service_promise": "<free public library card service promise with patron dignity>",',
+            '    "immediate_patron_action": "<concrete patron CTA>",',
+            '    "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],',
+            '    "owned_holds": [{"item": "<unconfirmed fact or clearance>", "owner": "<Accountable Role e.g. Producer>"}]',
+            "  },",
+            '  "belief_delta_matrix": [',
+            '    {"role": "Calgary Patron", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
+            '    {"role": "Media Production Manager", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
+            '    {"role": "Communications Director", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."}',
+            "  ],",
+            '  "causal_spine": {',
+            '    "hook_gap": "<unresolved opening visual/curiosity gap>",',
+            '    "a_story_action": "<external patron problem/action>",',
+            '    "b_story_human_shift": "<human emotional shift>",',
+            '    "c_story_service_truth": "<institutional library value truth>",',
+            '    "beats": [',
+            '      {"start_s": 0, "end_s": 15, "causal_link": "SETUP|BUT|THEREFORE|PAYOFF", "visual_first_action": "<concrete camera action>", "spoken_beat": "<conversational spoken words matching word budget>", "muted_caption": "<short on-screen caption>"}',
+            "    ]",
+            "  }",
+            "}",
+            "Keep spoken_beat, visual_first_action, and muted_caption 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
