@@ -262,10 +262,18 @@ def test_bidirectional_sensemaking_compiler_and_cyclical_capability_evolver(tmp_
     assert attr["attributed_l3"][0]["l0_id"] == "L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN"
 
     # 4. Isolated cyclical upstream promotion bumps craft_protocols.yaml version & writes golden_exemplars.json
+    import yaml as _yaml
+
     bench_dir = tmp_path / ".agents" / "bench"
     bench_dir.mkdir(parents=True, exist_ok=True)
     for fname in ("craft_protocols.yaml", "sensemaking_ontology.yaml", "org_charter.yaml", "axis_contracts.yaml"):
         shutil.copy(ROOT / ".agents" / "bench" / fname, bench_dir / fname)
+    # Reset tmp_path copy to baseline v1.0.0 so test is independent of live repo promotions
+    p_copy = bench_dir / "craft_protocols.yaml"
+    p_raw = _yaml.safe_load(p_copy.read_text(encoding="utf-8"))
+    p_raw["version"] = "1.0.0"
+    p_raw["form_protocols"]["av_script"]["evolved_upgrades"] = []
+    p_copy.write_text(_yaml.safe_dump(p_raw, sort_keys=False), encoding="utf-8")
 
     ev = evolve_form_capability(tmp_path, form_id="av_script", apply_upgrade=True)
     assert ev["ok"] is True

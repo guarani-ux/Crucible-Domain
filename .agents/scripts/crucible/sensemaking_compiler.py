@@ -261,9 +261,15 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
     title = str(graph.get("title", "Untitled Deliverable")).strip()
     platform = str(graph.get("platform", "youtube")).strip()
     target_dur = int(graph.get("target_duration_s", 180))
-    rc = graph.get("reality_and_custody") or {}
-    bdm = graph.get("belief_delta_matrix") or []
-    cs = graph.get("causal_spine") or {}
+    rc = graph.get("reality_and_custody") if isinstance(graph.get("reality_and_custody"), dict) else {}
+    bdm = graph.get("belief_delta_matrix") if isinstance(graph.get("belief_delta_matrix"), list) else []
+    raw_cs = graph.get("causal_spine")
+    if isinstance(raw_cs, dict):
+        cs = raw_cs
+    elif isinstance(raw_cs, list):
+        cs = {"beats": raw_cs}
+    else:
+        cs = {}
 
     mandates = ", ".join(str(m) for m in (rc.get("official_mandates") or []))
     service_promise = str(rc.get("service_promise", "")).strip()
@@ -293,7 +299,9 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
         lines.append("| Timecode | Audio | Video |")
         lines.append("| --- | --- | --- |")
         for b in cs.get("beats") or []:
-            tc = f"{_fmt_mmss(b['start_s'])}-{_fmt_mmss(b['end_s'])}"
+            if not isinstance(b, dict):
+                continue
+            tc = f"{_fmt_mmss(b.get('start_s', 0))}-{_fmt_mmss(b.get('end_s', 0))}"
             link = str(b.get("causal_link", "")).upper()
             spoken = str(b.get("spoken_beat", "")).strip()
             visual = str(b.get("visual_first_action", "")).strip()
@@ -310,9 +318,10 @@ def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_scrip
     lines.append(f"- **Official 2027-2030 Mandates:** {mandates}")
     lines.append(f"- **Service Promise:** {service_promise}")
     lines.append(f"- **Primary Grounding Sources:** {', '.join(f'`{c}`' for c in cites)}")
-    lines.append("- **Stakeholder Belief Shifts Modeled:** " + "; ".join(f"{r['role']} ({r['shift_trigger']})" for r in bdm[:4]))
+    lines.append("- **Stakeholder Belief Shifts Modeled:** " + "; ".join(f"{r.get('role', '')} ({r.get('shift_trigger', '')})" for r in bdm[:4] if isinstance(r, dict)))
     for h in holds:
-        lines.append(f"- [UNKNOWN — OWNER TO CONFIRM] {h['item']} — Owner: {h['owner']}")
+        if isinstance(h, dict):
+            lines.append(f"- [UNKNOWN — OWNER TO CONFIRM] {h.get('item', '')} — Owner: {h.get('owner', '')}")
     lines.append("")
     return "\n".join(lines)
 
@@ -564,7 +573,34 @@ def build_sensemaking_graph_prompt(
         *[f"  - [EVOLVED] {u}" for u in (form_cfg.get("evolved_upgrades") or [])[-3:]],
         f"Assignment: {assignment}",
         "",
-        "Return JSON with exact top-level keys: title, form_id, platform, target_duration_s, reality_and_custody, belief_delta_matrix, causal_spine.",
+        "Return ONLY valid JSON matching this exact schema (no prose outside JSON):",
+        "{",
+        '  "title": "<concise title>",',
+        f'  "form_id": "{form_id}",',
+        f'  "platform": "{platform}",',
+        f'  "target_duration_s": {target_duration_s},',
+        '  "reality_and_custody": {',
+        '    "official_mandates": ["Experiences", "Technology"],',
+        '    "service_promise": "<free public library card service promise with patron dignity>",',
+        '    "immediate_patron_action": "<concrete patron CTA>",',
+        '    "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],',
+        '    "owned_holds": [{"item": "<unconfirmed fact or clearance>", "owner": "<Accountable Role e.g. Producer>"}]',
+        "  },",
+        '  "belief_delta_matrix": [',
+        '    {"role": "Calgary Patron", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
+        '    {"role": "Media Production Manager", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
+        '    {"role": "Communications Director", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."}',
+        "  ],",
+        '  "causal_spine": {',
+        '    "hook_gap": "<unresolved opening visual/curiosity gap>",',
+        '    "a_story_action": "<external patron problem/action>",',
+        '    "b_story_human_shift": "<human emotional shift>",',
+        '    "c_story_service_truth": "<institutional library value truth>",',
+        '    "beats": [',
+        '      {"start_s": 0, "end_s": 25, "causal_link": "SETUP|BUT|THEREFORE|PAYOFF", "visual_first_action": "<concrete camera action>", "spoken_beat": "<concise spoken words <=150 WPM>", "muted_caption": "<short on-screen caption>"}',
+        "    ]",
+        "  }",
+        "}",
         "Keep spoken_beat, visual_first_action, and muted_caption 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
     ]
     return "\n".join(lines) + "\n"

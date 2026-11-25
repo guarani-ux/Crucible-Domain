@@ -241,6 +241,7 @@ def parse_document_ast(text: str) -> DocumentAST:
         dur_s = end_s - start_s
         audio_words = len(re.findall(r"\b[\w'-]+\b", audio))
         beat_wpm = round((audio_words / dur_s) * 60.0, 1) if dur_s > 0 else 999.0
+        video_visual_only = re.sub(r"\[CAPTION:[^\]]*\]", "", video, flags=re.IGNORECASE).strip()
         beats.append(
             TimecodeBeat(
                 start_s=start_s,
@@ -250,7 +251,7 @@ def parse_document_ast(text: str) -> DocumentAST:
                 video=video,
                 audio_words=audio_words,
                 beat_wpm=beat_wpm,
-                av_overlap=_jaccard_overlap(audio, video),
+                av_overlap=_jaccard_overlap(audio, video_visual_only),
             )
         )
 
