@@ -15,7 +15,7 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 from statistics import fmean
-from typing import Any
+from typing import Any, BinaryIO
 
 from .doc_flow_engine import GOLDEN_SPECIMENS
 from .doc_ml_scorer import FEATURE_NAMES, extract_document_features
@@ -48,6 +48,17 @@ def _validate(row: dict[str, Any]) -> None:
         raise ValueError("Invalid document features")
 
 
+def _lock_writer(handle: BinaryIO) -> None:
+    """Serialize local writers until the handle closes, including after process exit."""
+    if os.name == "nt":
+        import msvcrt
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(handle, fcntl.LOCK_EX)
+
+
 def append_expert_label(repo_root: Path, file_path: Path, form_id: str, verdict: str, *,
                        reviewer: str, role: str, case_id: str, evidence: str,
                        training_authorized: bool) -> dict[str, Any]:
@@ -70,20 +81,33 @@ def append_expert_label(repo_root: Path, file_path: Path, form_id: str, verdict:
     directory.mkdir(parents=True, exist_ok=True)
     # Content-addressed immutable examples make repeated or concurrent imports idempotent.
     target = directory / (hashlib.sha256(payload).hexdigest() + ".json")
-    descriptor, temporary = tempfile.mkstemp(dir=directory)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(payload)
-        os.replace(temporary, target)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
+    with (directory / ".writer.lock").open("a+b") as lock:
+        _lock_writer(lock)
+        try:
+            _load(repo_root, form_id, pending=row)
+        except (TypeError, KeyError, OverflowError) as exc:
+            raise ValueError(f"Invalid professional review data: {exc}") from exc
+        if not target.exists():
+            descriptor, temporary = tempfile.mkstemp(dir=directory)
+            try:
+                with os.fdopen(descriptor, "wb") as handle:
+                    handle.write(payload)
+                os.replace(temporary, target)
+            finally:
+                Path(temporary).unlink(missing_ok=True)
     return {key: value for key, value in row.items() if key != "features"}
 
 
-def _load(root: Path, form_id: str) -> list[dict[str, Any]]:
+def _load(root: Path, form_id: str, *, pending: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if form_id not in FORMS:
         raise ValueError(f"Unsupported document form: {form_id}")
     documents: dict[str, dict[str, Any]] = {}
+
+    def register(row: dict[str, Any]) -> None:
+        old = documents.setdefault(row["document_sha256"], row)
+        if any(old[k] != row[k] for k in ("case_id", "verdict", "features")):
+            raise ValueError("Conflicting reviews or case identities for one document revision")
+
     for path in sorted((root / STORE / form_id).glob("*.json")):
         payload = path.read_bytes()
         if hashlib.sha256(payload).hexdigest() != path.stem:
@@ -92,9 +116,9 @@ def _load(root: Path, form_id: str) -> list[dict[str, Any]]:
         _validate(row)
         if row["form_id"] != form_id:
             raise ValueError("Expert review filed under the wrong form")
-        old = documents.setdefault(row["document_sha256"], row)
-        if any(old[k] != row[k] for k in ("case_id", "verdict", "features")):
-            raise ValueError("Conflicting reviews or case identities for one document revision")
+        register(row)
+    if pending is not None:
+        register(pending)
     return list(documents.values())
 
 

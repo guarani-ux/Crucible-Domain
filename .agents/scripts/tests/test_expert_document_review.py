@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from pathlib import Path
 
 import pytest
@@ -35,9 +37,11 @@ def test_permission_provenance_and_failure_states(tmp_path):
     files = list((tmp_path / er.STORE).rglob("*.json"))
     assert len(files) == 1
     assert "A sample text." not in files[0].read_text()
-    record(tmp_path, "A sample text.", "case", "fail")
+    with pytest.raises(ValueError, match="Conflicting reviews"):
+        record(tmp_path, "A sample text.", "case", "fail")
+    assert files == list((tmp_path / er.STORE).rglob("*.json"))
     result = er.train_expert_model(tmp_path, "production_brief")
-    assert "Conflicting reviews" in result["reason"]
+    assert result["case_count"] == 1
     assert "document_sha256" in row
 
 
@@ -60,8 +64,9 @@ def test_separates_cases_and_abstains_on_foreign_form(tmp_path):
     assert er.assess_document("An entirely different document. " * 60, "production_brief",
                               repo_root=tmp_path)["recommendation"] == "abstain"
     # Same document cannot enter the training partition under a second assignment.
-    record(tmp_path, good + "\nOne", "Different", "pass")
-    assert not er.train_expert_model(tmp_path, "production_brief")["ok"]
+    with pytest.raises(ValueError, match="Conflicting reviews"):
+        record(tmp_path, good + "\nOne", "Different", "pass")
+    assert er.train_expert_model(tmp_path, "production_brief") == result
 
 
 def test_insufficient_distinct_assignments_and_corrupt_record(tmp_path):
@@ -105,3 +110,26 @@ def test_advice_abstention_keeps_revision_diagnostics(tmp_path):
     assert any("missing_grounding_citation" in v for v in audit["flow"]["violations"])
     assert "communications_strategist" in audit["board"]["blocking_roles"]
     assert "citation_grounding_mode:strict" in audit["recommended_levers"]
+
+
+def test_concurrent_conflicting_labels_preserve_one_revision(tmp_path):
+    draft = tmp_path / "brief.md"
+    draft.write_text("The lighting plan needs a named owner.", encoding="utf-8")
+    start = Barrier(2)
+
+    def submit(verdict):
+        start.wait(timeout=10)
+        try:
+            er.append_expert_label(tmp_path, draft, "production_brief", verdict,
+                                   reviewer="Test curator", role="Production editor",
+                                   case_id="same", evidence="Test-only receipt",
+                                   training_authorized=True)
+        except ValueError as exc:
+            assert "Conflicting reviews" in str(exc)
+            return False
+        return True
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(submit, ("pass", "fail"))) == [False, True]
+    assert len(list((tmp_path / er.STORE).rglob("*.json"))) == 1
+    assert er.train_expert_model(tmp_path, "production_brief")["case_count"] == 1
