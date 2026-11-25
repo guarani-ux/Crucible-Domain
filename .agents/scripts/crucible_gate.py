@@ -1531,12 +1531,21 @@ def cmd_bench(
             return usage_error("Document is empty")
         if advice_only:
             expert = _resolve_crucible_submodule("expert_document_review")
-            advice = expert.assess_document(text, form_id, repo_root=root)
+            advice = expert.assess_document(text, form_id, repo_root=root, include_audit=True)
             if as_json:
                 print(json.dumps(advice, indent=2, ensure_ascii=False))
             else:
                 print(f"Editorial recommendation: {advice['recommendation']} ({form_id})")
                 print(advice["reason"])
+                audit = advice.get("mechanical_audit")
+                if audit:
+                    print("Mechanical audit:", "PASS" if audit["ok"] else "BLOCKED")
+                    for violation in audit["flow"]["violations"]:
+                        print(f"  {violation}")
+                    for label, items in (("Blocking roles", audit["board"]["blocking_roles"]),
+                                         ("Recommended levers", audit["recommended_levers"])):
+                        if items:
+                            print(f"  {label}: {', '.join(items)}")
                 print("Professional sign-off is still required.")
             return 0 if advice["ok"] else 1
 

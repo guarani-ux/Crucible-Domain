@@ -93,3 +93,15 @@ def test_review_cli_without_provider_can_return_advice_without_release(tmp_path)
     assert release.returncode == 1
     assert json.loads(release.stdout)["verdict"] == "UNAVAILABLE"
     assert not (tmp_path / ".agents/ml_outcome_ratchet.json").exists()
+
+
+def test_advice_abstention_keeps_revision_diagnostics(tmp_path):
+    advice = er.assess_document("## Hypothesis\nA new proposal.", "research_note",
+                                repo_root=tmp_path, include_audit=True)
+    assert advice["recommendation"] == "abstain" and advice["requires_human_review"]
+    assert not advice["ok"]
+    audit = advice["mechanical_audit"]
+    assert not audit["ok"]
+    assert any("missing_grounding_citation" in v for v in audit["flow"]["violations"])
+    assert "communications_strategist" in audit["board"]["blocking_roles"]
+    assert "citation_grounding_mode:strict" in audit["recommended_levers"]

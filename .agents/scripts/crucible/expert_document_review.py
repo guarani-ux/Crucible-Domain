@@ -159,11 +159,23 @@ def train_expert_model(repo_root: Path, form_id: str) -> dict[str, Any]:
     return info
 
 
-def assess_document(text: str, form_id: str, *, repo_root: Path) -> dict[str, Any]:
+def assess_document(text: str, form_id: str, *, repo_root: Path, include_audit: bool = False) -> dict[str, Any]:
     info, centers, radii = _train(repo_root, form_id)
     result = {**info, "recommendation": "abstain", "requires_human_review": True}
+    if not info["ok"] and not (include_audit and form_id in FORMS):
+        return result
+    features, context = extract_document_features(text, form_id, repo_root=repo_root)
+    if include_audit:
+        flow = context["flow_eval"]
+        board = context["board_eval"]
+        result["mechanical_audit"] = {
+            "ok": flow.passed and board.buy_in_ready,
+            "flow": flow.to_dict(),
+            "board": board.to_dict(),
+            "recommended_levers": context["levers"],
+        }
     if info["ok"]:
-        prediction, distance = _classify(centers, _features(text, form_id, repo_root))
+        prediction, distance = _classify(centers, [features[key] for key in FEATURE_NAMES])
         if prediction == "abstain" or distance > radii[prediction] + 1e-10:
             result.update(ok=False, reason="Ambiguous or outside validated feature distances.")
         else:
