@@ -289,7 +289,7 @@ def run_adversarial_judgment(
         text, form_id, repo_root=repo_root, use_case_intent=use_case_intent
     )
     try:
-        ok, raw = worker_fn(prompt, repo_root, timeout_s, effort="medium")
+        ok, raw = worker_fn(prompt, repo_root, timeout_s, effort="low")
     except TypeError:
         ok, raw = worker_fn(prompt, repo_root, timeout_s)
 

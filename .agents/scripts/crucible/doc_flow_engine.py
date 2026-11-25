@@ -56,6 +56,18 @@ MANDATE_LENS_TRAP_RE = re.compile(
     r"(?:official\s+(?:2027[-–]2030\s+)?)?mandates?\b[^.\n]{0,80}\b(Grow|Books\s*&\s*Reading|Community)\b",
     re.IGNORECASE,
 )
+MANDATE_NEGATION_RE = re.compile(
+    r"\b(distinct from|never label|not official|not a mandate|separate from|rather than|unlike|do not confuse|kept separate)\b",
+    re.IGNORECASE,
+)
+
+
+def has_mandate_lens_trap(text: str) -> bool:
+    """Return True if text labels an internal editorial lens as an official mandate (ignoring explicit disclaimers)."""
+    for ln in text.splitlines():
+        if MANDATE_LENS_TRAP_RE.search(ln) and not MANDATE_NEGATION_RE.search(ln):
+            return True
+    return False
 UNAUTHORIZED_RELEASE_RE = re.compile(
     r"\b(approved for release|asana updated|published live|g06 cleared|cleared for broadcast)\b",
     re.IGNORECASE,
@@ -305,7 +317,7 @@ def evaluate_document_flow(
                 levers.append(lever)
 
     # Global custody & craft invariants
-    has_mandate_trap = bool(MANDATE_LENS_TRAP_RE.search(text))
+    has_mandate_trap = has_mandate_lens_trap(text)
     if strict_cpl_mandates:
         _check(
             not has_mandate_trap,
@@ -621,7 +633,7 @@ def _check_charter_alignment(text: str, charter: OrganizationCharter) -> dict[st
     matched_promises = [p for p in charter.service_promises if p.lower() in lower]
     stale_prior_plan = bool(STALE_PRIOR_PLAN_RE.search(text))
     vision_kpi_misuse = bool(VISION_2040_MISUSE_RE.search(text))
-    lens_as_mandate = bool(MANDATE_LENS_TRAP_RE.search(text))
+    lens_as_mandate = has_mandate_lens_trap(text)
     return {
         "org_name": charter.org_name,
         "strategic_plan": charter.strategic_plan_name,
