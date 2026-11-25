@@ -42,7 +42,7 @@ SLOP_PATTERNS = (
 
 TIMECODE_SPAN_RE = re.compile(r"(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})")
 TIMECODE_ROW_RE = re.compile(
-    r"^\|\s*(?:[^|]*\|\s*)?(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|"
+    r"^\|\s*(?:[^|]*\|\s*)?[`*_\s]*(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})[`*_\s]*\|\s*(.*?)\s*\|\s*(.*?)\s*\|"
 )
 CITATION_RE = re.compile(
     r"(?:[\w./-]+\.(?:md|py|json|yaml|yml|csv|docx|pdf)\b|\b(?:GROUND_TRUTH|MW-\d{2}|MP-\d{2}|MK-\d{2}|CD-\d{2}|CH-\d{2}|OP-\d{2}|K-[A-Z]+-\d{2})\b)"
@@ -224,12 +224,16 @@ def parse_document_ast(text: str) -> DocumentAST:
     if cur_table:
         tables.append(cur_table)
 
-    # Extract contiguous A/V timecode beats
+    # Extract contiguous A/V timecode beats from the primary A/V script table only
     beats: list[TimecodeBeat] = []
+    in_tc_table = False
     for line in lines:
         tm = TIMECODE_ROW_RE.match(line.strip())
         if not tm:
+            if in_tc_table and not line.strip().startswith("|"):
+                break
             continue
+        in_tc_table = True
         start_s = int(tm.group(1)) * 60 + int(tm.group(2))
         end_s = int(tm.group(3)) * 60 + int(tm.group(4))
         audio = tm.group(5).strip()
