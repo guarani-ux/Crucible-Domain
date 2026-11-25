@@ -148,7 +148,16 @@ def validate_sensemaking_graph(
     )
     _chk(bdm_ok, "incomplete_belief_delta_matrix (need >=3 roles with skepticism -> target -> trigger)", "L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY")
 
-    # 3. Node 3: causal_spine
+    # 3. Node 3: creative_modality & intention_to_outcome (non-formulaic upstream creative strategy)
+    cm = graph.get("creative_modality") if isinstance(graph.get("creative_modality"), dict) else {}
+    if cm:
+        cm_ok = all(
+            bool(str(cm.get(k, "")).strip())
+            for k in ("audio_strategy", "visual_rhythm_strategy", "intention_to_outcome_contract")
+        )
+        _chk(cm_ok, "incomplete_creative_modality_or_intention_outcome_contract", "L3:HOOK_AND_TENSION_MECHANICS")
+
+    # 4. Node 4: causal_spine
     cs = graph.get("causal_spine") if isinstance(graph.get("causal_spine"), dict) else {}
     _chk(bool(str(cs.get("hook_gap", "")).strip()), "missing_hook_gap", "L3:HOOK_AND_TENSION_MECHANICS")
 
@@ -700,12 +709,17 @@ def build_sensemaking_graph_prompt(
             '    "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],',
             '    "owned_holds": [{"item": "<unconfirmed fact or clearance>", "owner": "<Accountable Role e.g. Producer>"}]',
             "  },",
-            '  "belief_delta_matrix": [',
-            '    {"role": "Calgary Patron", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
-            '    {"role": "Media Production Manager", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."},',
-            '    {"role": "Communications Director", "current_skepticism": "...", "target_state": "...", "shift_trigger": "..."}',
-            "  ],",
-            '  "causal_spine": {',
+        "  \"belief_delta_matrix\": [",
+        "    {\"role\": \"Calgary Patron\", \"current_skepticism\": \"...\", \"target_state\": \"...\", \"shift_trigger\": \"...\"},",
+        "    {\"role\": \"Media Production Manager\", \"current_skepticism\": \"...\", \"target_state\": \"...\", \"shift_trigger\": \"...\"},",
+        "    {\"role\": \"Communications Director\", \"current_skepticism\": \"...\", \"target_state\": \"...\", \"shift_trigger\": \"...\"}",
+        "  ],",
+        "  \"creative_modality\": {",
+        "    \"audio_strategy\": \"<choose the best sonic mode for THIS story: host_led | patron_sot_led | observational_nat_sound | hybrid — and explain why it avoids monotone narrator VO>\",",
+        "    \"visual_rhythm_strategy\": \"<how distinct camera cuts, breathing room/silence, and visual resets sustain attention across the runtime>\",",
+        "    \"intention_to_outcome_contract\": \"<explicit link: what viewer feels/realizes -> exact patron action that proves it worked>\"",
+        "  },",
+        "  \"causal_spine\": {",
             '    "hook_gap": "<unresolved opening visual/curiosity gap>",',
             '    "a_story_action": "<external patron problem/action>",',
             '    "b_story_human_shift": "<human emotional shift>",',
@@ -730,99 +744,129 @@ def compile_and_evaluate(
     topic: str = "Free VHS Digitization at Central Library",
     mode: str = "offline",
     enable_judgment_gate: bool = False,
+    max_retries: int = 1,
     worker_fn: Callable[..., tuple[bool, str]] | None = None,
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
-    """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + 3-Axis Verify."""
-    if mode == "offline":
-        graph = synthesize_canonical_av_graph(
-            platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
-        )
-    else:
-        from .workload_bench import _call_worker, _default_agy_worker
+    """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + Gate 2 + Upstream Re-Compile."""
+    attempts = 1 if mode == "offline" else (1 + max(0, max_retries))
+    feedback_note = ""
+    last_result: dict[str, Any] = {"ok": False, "platform": platform, "target_duration_s": target_duration_s}
 
-        wfn = worker_fn or _default_agy_worker
-        prompt = build_sensemaking_graph_prompt(
+    for attempt in range(attempts):
+        if mode == "offline":
+            graph = synthesize_canonical_av_graph(
+                platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
+            )
+        else:
+            from .workload_bench import _call_worker, _default_agy_worker
+
+            wfn = worker_fn or _default_agy_worker
+            prompt = (
+                build_sensemaking_graph_prompt(
+                    form_id=form_id,
+                    platform=platform,
+                    target_duration_s=target_duration_s,
+                    assignment=topic,
+                    repo_root=repo_root,
+                )
+                + feedback_note
+            )
+            eff = "medium" if attempt > 0 else "low"
+            ok, raw = _call_worker(wfn, prompt, repo_root, timeout_s, eff)
+            if not ok:
+                return {"ok": False, "error": raw[:240], "platform": platform, "target_duration_s": target_duration_s}
+            cleaned = raw.strip()
+            m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+            if m:
+                cleaned = m.group(1).strip()
+            else:
+                s, e = cleaned.find("{"), cleaned.rfind("}")
+                if s >= 0 and e > s:
+                    cleaned = cleaned[s : e + 1]
+            try:
+                graph = json.loads(cleaned)
+            except Exception as exc:
+                feedback_note = f"\nPrevious output had invalid JSON ({exc}); return ONLY valid JSON.\n"
+                last_result = {"ok": False, "error": f"graph_json_parse_error: {exc}", "platform": platform, "target_duration_s": target_duration_s}
+                continue
+
+        g_val = validate_sensemaking_graph(
+            graph,
             form_id=form_id,
             platform=platform,
             target_duration_s=target_duration_s,
-            assignment=topic,
             repo_root=repo_root,
+            strict_wpm_floor=(mode != "offline"),
         )
-        ok, raw = _call_worker(wfn, prompt, repo_root, timeout_s, "low")
-        if not ok:
-            return {"ok": False, "error": raw[:240], "platform": platform, "target_duration_s": target_duration_s}
-        cleaned = raw.strip()
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
-        if m:
-            cleaned = m.group(1).strip()
-        else:
-            s, e = cleaned.find("{"), cleaned.rfind("}")
-            if s >= 0 and e > s:
-                cleaned = cleaned[s : e + 1]
-        try:
-            graph = json.loads(cleaned)
-        except Exception as exc:
-            return {"ok": False, "error": f"graph_json_parse_error: {exc}", "platform": platform, "target_duration_s": target_duration_s}
+        markdown = project_graph_to_markdown(graph, form_id=form_id)
+        fe = evaluate_document_flow(markdown, form_id, target_duration_s=target_duration_s)
+        bd = evaluate_stakeholder_board(markdown, form_id, flow_eval=fe, target_duration_s=target_duration_s, repo_root=repo_root)
+        ax = evaluate_root_axes(markdown, form_id, target_duration_s=target_duration_s, repo_root=repo_root)
+        gate1_ok = g_val.ok and fe.passed and bd.buy_in_ready and ax.passed
 
-    g_val = validate_sensemaking_graph(
-        graph,
-        form_id=form_id,
-        platform=platform,
-        target_duration_s=target_duration_s,
-        repo_root=repo_root,
-        strict_wpm_floor=(mode != "offline"),
-    )
-    markdown = project_graph_to_markdown(graph, form_id=form_id)
-    fe = evaluate_document_flow(markdown, form_id, target_duration_s=target_duration_s)
-    bd = evaluate_stakeholder_board(markdown, form_id, flow_eval=fe, target_duration_s=target_duration_s, repo_root=repo_root)
-    ax = evaluate_root_axes(markdown, form_id, target_duration_s=target_duration_s, repo_root=repo_root)
-    gate1_ok = g_val.ok and fe.passed and bd.buy_in_ready and ax.passed
+        gate2_dict: dict[str, Any] = {"verdict": "SKIPPED", "ok": True}
+        if gate1_ok and mode != "offline" and enable_judgment_gate:
+            from .judgment_panel import run_adversarial_judgment
+            from .outcome_ratchet import record_paired_outcome
+            from .workload_bench import _default_agy_worker
 
-    gate2_dict: dict[str, Any] = {"verdict": "SKIPPED", "ok": True}
-    if gate1_ok and mode != "offline" and enable_judgment_gate:
-        from .judgment_panel import run_adversarial_judgment
-        from .outcome_ratchet import record_paired_outcome
-        from .workload_bench import _default_agy_worker
-
-        j_worker = worker_fn or _default_agy_worker
-        jv = run_adversarial_judgment(
-            markdown,
-            form_id,
-            repo_root=repo_root,
-            worker_fn=j_worker,
-            timeout_s=min(90.0, timeout_s),
-            use_case_intent=f"{platform} {target_duration_s}s {topic}",
-            persist_lesson=True,
-        )
-        gate2_dict = jv.to_dict()
-        if jv.verdict in ("SIGN_OFF", "REVISE", "KILL"):
-            record_paired_outcome(
-                repo_root,
-                form_id=form_id,
-                use_case_id=f"{platform}_{target_duration_s}s",
-                axis_scores=jv.axis_scores,
-                verdict=jv.verdict,
-                weakest_engine=jv.weakest_engine,
-                proposed_lesson=jv.reusable_judgment_lesson,
+            j_worker = worker_fn or _default_agy_worker
+            jv = run_adversarial_judgment(
+                markdown,
+                form_id,
+                repo_root=repo_root,
+                worker_fn=j_worker,
+                timeout_s=min(90.0, timeout_s),
+                use_case_intent=f"{platform} {target_duration_s}s {topic}",
+                persist_lesson=True,
             )
+            gate2_dict = jv.to_dict()
+            if jv.verdict in ("SIGN_OFF", "REVISE", "KILL"):
+                record_paired_outcome(
+                    repo_root,
+                    form_id=form_id,
+                    use_case_id=f"{platform}_{target_duration_s}s",
+                    axis_scores=jv.axis_scores,
+                    verdict=jv.verdict,
+                    weakest_engine=jv.weakest_engine,
+                    proposed_lesson=jv.reusable_judgment_lesson,
+                )
 
-    return {
-        "ok": gate1_ok and bool(gate2_dict.get("ok", False)),
-        "form_id": form_id,
-        "platform": platform,
-        "target_duration_s": target_duration_s,
-        "graph_validation": g_val.to_dict(),
-        "flow_score": fe.flow_score,
-        "board_score": bd.board_score,
-        "blocking_roles": bd.blocking_roles,
-        "axes": {
-            "I": ax.axis_1_integrity,
-            "II": ax.axis_2_rhetorical_force,
-            "III": ax.axis_3_executability,
-        },
-        "failed_probes": ax.failed_probes,
-        "gate2": gate2_dict,
-        "markdown": markdown,
-        "graph": graph,
-    }
+        last_result = {
+            "ok": gate1_ok and bool(gate2_dict.get("ok", False)),
+            "attempts_used": attempt + 1,
+            "form_id": form_id,
+            "platform": platform,
+            "target_duration_s": target_duration_s,
+            "graph_validation": g_val.to_dict(),
+            "flow_score": fe.flow_score,
+            "board_score": bd.board_score,
+            "blocking_roles": bd.blocking_roles,
+            "axes": {
+                "I": ax.axis_1_integrity,
+                "II": ax.axis_2_rhetorical_force,
+                "III": ax.axis_3_executability,
+            },
+            "failed_probes": ax.failed_probes,
+            "gate2": gate2_dict,
+            "markdown": markdown,
+            "graph": graph,
+        }
+        if last_result["ok"]:
+            return last_result
+
+        # Feed exact Gate 1 or Gate 2 critique straight back into the upstream Sensemaking Graph re-compile
+        if not gate1_ok:
+            feedback_note = f"\nUPSTREAM GRAPH REPAIR REQUIRED: fix violations {g_val.violations[:4]} and probes {ax.failed_probes[:3]}.\n"
+        elif gate2_dict.get("verdict") in ("REVISE", "KILL"):
+            feedback_note = (
+                f"\nUPSTREAM GRAPH REPAIR FROM ADVERSARIAL BUYING PANEL ({gate2_dict.get('verdict')}): "
+                f"Objection: {gate2_dict.get('top_executive_objection')} | "
+                f"Required Cut: {gate2_dict.get('required_cut')} | "
+                f"Fix: {gate2_dict.get('actionable_fix')}\n"
+            )
+        else:
+            break
+
+    return last_result
