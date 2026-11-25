@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 DEFAULT_RATCHET_REL = Path(".agents") / "ml_outcome_ratchet.json"
 
 AXIS_KEYS = ("axis_1_integrity", "axis_2_rhetorical_force", "axis_3_executability")
+TRIAL_PREFIX = "[TESTING CANDIDATE] "
 
 
 def _default_state() -> dict[str, Any]:
@@ -61,7 +63,7 @@ def get_active_promoted_lessons(
     if use_case_id and isinstance(candidate, dict) and candidate.get("use_case_id") == use_case_id:
         lesson = str(candidate.get("lesson") or "")
         if lesson and lesson not in lessons:
-            lessons.append(f"[TESTING CANDIDATE] {lesson}")
+            lessons.append(f"{TRIAL_PREFIX}{lesson}")
     return lessons[-limit:]
 
 
@@ -74,10 +76,11 @@ def record_paired_outcome(
     verdict: str,
     weakest_engine: str = "",
     proposed_lesson: str = "",
+    writer_lessons: Sequence[str] = (),
     min_gain: float = 0.05,
     max_regression: float = 0.05,
 ) -> dict[str, Any]:
-    """Record a 3-Axis observation, evaluate any pending CANDIDATE on a paired (form, use_case), and ratchet."""
+    """Record a review and resolve a pending trial only if its label reached the writer."""
     state = load_ratchet_state(repo_root)
     f_rec = state["forms"].setdefault(
         form_id,
@@ -106,9 +109,13 @@ def record_paired_outcome(
 
     ratchet_event: dict[str, Any] = {"action": "observed", "form_id": form_id, "use_case_id": use_case_id}
 
-    # Evaluate pending candidate if this is a paired follow-up on the same (form_id, use_case_id)
     cand = f_rec.get("pending_candidate")
-    if isinstance(cand, dict) and cand.get("use_case_id") == use_case_id:
+    if (
+        isinstance(cand, dict)
+        and cand.get("use_case_id") == use_case_id
+        and cand.get("lesson")
+        and f"{TRIAL_PREFIX}{cand['lesson']}" in writer_lessons
+    ):
         before_axes = cand["before_axes"]
         target_axis = cand["target_axis"]
         deltas = {k: round(clean_axes[k] - float(before_axes.get(k, 0.0)), 3) for k in AXIS_KEYS}

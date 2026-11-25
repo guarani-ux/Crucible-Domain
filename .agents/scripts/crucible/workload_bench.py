@@ -1072,6 +1072,7 @@ def run_workload_bench(
                                         verdict=jv.verdict,
                                         weakest_engine=jv.weakest_engine,
                                         proposed_lesson=jv.reusable_judgment_lesson,
+                                        writer_lessons=j_lessons,
                                     )
                                 if r_ev.get("action") in ("PROMOTED", "QUARANTINED"):
                                     _safe_progress(

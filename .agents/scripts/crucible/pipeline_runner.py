@@ -616,6 +616,7 @@ def run_end_to_end_pipeline(
                     verdict=jv.verdict,
                     weakest_engine=jv.weakest_engine,
                     proposed_lesson=jv.reusable_judgment_lesson,
+                    writer_lessons=ratchet_lessons,
                 )
                 if not jv.ok:
                     err_summary = (

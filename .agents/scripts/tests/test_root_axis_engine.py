@@ -120,14 +120,19 @@ def test_controlled_ab_outcome_ratchet_promotes_proven_gain_and_quarantines_regr
     active_during = get_active_promoted_lessons(tmp_path, "av_script", use_case_id="3m-patron-story-mini-doc")
     assert any("TESTING CANDIDATE" in s for s in active_during)
 
-    ev2 = record_paired_outcome(
-        tmp_path,
+    followup = dict(
         form_id="av_script",
         use_case_id="3m-patron-story-mini-doc",
         axis_scores={"axis_1_integrity": 0.91, "axis_2_rhetorical_force": 0.88, "axis_3_executability": 0.89},
         verdict="SIGN_OFF",
-        weakest_engine="",
     )
+    assert record_paired_outcome(tmp_path, **followup)["action"] == "observed"
+    assert record_paired_outcome(
+        tmp_path, **followup, writer_lessons=["[TESTING CANDIDATE] A different lesson."]
+    )["action"] == "observed"
+    assert get_active_promoted_lessons(tmp_path, "av_script", use_case_id=followup["use_case_id"]) == active_during
+
+    ev2 = record_paired_outcome(tmp_path, **followup, writer_lessons=active_during)
     assert ev2["action"] == "PROMOTED"
     assert "Weave B-story human emotional turn before minute 2." in get_active_promoted_lessons(tmp_path, "av_script")
 
@@ -145,6 +150,7 @@ def test_controlled_ab_outcome_ratchet_promotes_proven_gain_and_quarantines_regr
         use_case_id="ep01-preflight-brief",
         axis_scores={"axis_1_integrity": 0.55, "axis_2_rhetorical_force": 0.80, "axis_3_executability": 0.86},
         verdict="REVISE",
+        writer_lessons=get_active_promoted_lessons(tmp_path, "production_brief", use_case_id="ep01-preflight-brief"),
     )
     assert ev_bad["action"] == "QUARANTINED"
     assert "Drop citations to sound punchier." not in get_active_promoted_lessons(tmp_path, "production_brief")
@@ -167,7 +173,8 @@ def test_quarantined_review_guidance_stays_out_of_both_writer_prompts(tmp_path: 
         record_judgment_lesson(tmp_path, form, JudgmentVerdict(False, "REVISE", 0.70, reusable_judgment_lesson=lesson))
         pair = dict(form_id=form, use_case_id=project, axis_scores=scores, verdict="REVISE")
         record_paired_outcome(tmp_path, **pair, proposed_lesson=lesson)
-        assert record_paired_outcome(tmp_path, **pair)["action"] == "QUARANTINED"
+        supplied = get_active_promoted_lessons(tmp_path, form, use_case_id=project)
+        assert record_paired_outcome(tmp_path, **pair, writer_lessons=supplied)["action"] == "QUARANTINED"
 
     prompts = []
 

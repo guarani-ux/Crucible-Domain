@@ -27,6 +27,7 @@ from .doc_flow_engine import (
     has_mandate_lens_trap,
     load_organization_charter,
 )
+from .outcome_ratchet import get_active_promoted_lessons, record_paired_outcome
 from .root_axis_engine import evaluate_root_axes
 
 DEFAULT_PROTOCOLS_REL = Path(".agents") / "bench" / "craft_protocols.yaml"
@@ -1113,7 +1114,9 @@ def compile_and_evaluate(
     feedback_note = ""
     last_result: dict[str, Any] = {"ok": False, "platform": platform, "target_duration_s": target_duration_s}
 
+    use_case_id = f"{platform}_{target_duration_s}s"
     for attempt in range(attempts):
+        writer_lessons: list[str] = []
         if from_json_path is not None:
             try:
                 graph = _parse_graph_object(Path(from_json_path).read_text(encoding="utf-8"))
@@ -1142,6 +1145,11 @@ def compile_and_evaluate(
                 )
                 + feedback_note
             )
+            if enable_judgment_gate:
+                writer_lessons = get_active_promoted_lessons(repo_root, form_id, use_case_id=use_case_id, limit=4)
+                if writer_lessons:
+                    prompt += "\nApply these editorial lessons when building the graph:\n"
+                    prompt += "\n".join(f"- {lesson}" for lesson in writer_lessons) + "\n"
             eff = "medium" if attempt > 0 else "low"
             ok, raw = _call_worker(wfn, prompt, repo_root, timeout_s, eff)
             if not ok:
@@ -1178,7 +1186,6 @@ def compile_and_evaluate(
         gate2_dict: dict[str, Any] = {"verdict": "SKIPPED", "ok": True}
         if gate1_ok and mode != "offline" and enable_judgment_gate:
             from .judgment_panel import run_adversarial_judgment
-            from .outcome_ratchet import record_paired_outcome
             from .workload_bench import _default_agy_worker
 
             j_worker = worker_fn or _default_agy_worker
@@ -1196,11 +1203,12 @@ def compile_and_evaluate(
                 record_paired_outcome(
                     repo_root,
                     form_id=form_id,
-                    use_case_id=f"{platform}_{target_duration_s}s",
+                    use_case_id=use_case_id,
                     axis_scores=jv.axis_scores,
                     verdict=jv.verdict,
                     weakest_engine=jv.weakest_engine,
                     proposed_lesson=jv.reusable_judgment_lesson,
+                    writer_lessons=writer_lessons,
                 )
 
         last_result = {
