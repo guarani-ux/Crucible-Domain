@@ -31,7 +31,7 @@ from .doc_flow_engine import (
     parse_document_ast,
 )
 from .form_diagnostics import FORM_PROFILES, diagnose_form_deliverable
-from .judgment_panel import load_judgment_lessons, run_adversarial_judgment
+from .judgment_panel import run_adversarial_judgment
 from .lever_control import load_lever_registry, pull_lever
 from .outcome_ratchet import get_active_promoted_lessons, record_paired_outcome
 from .root_axis_engine import evaluate_root_axes
@@ -525,7 +525,9 @@ def run_end_to_end_pipeline(
                     ),
                     deliverable=filename,
                 )
-                ratchet_lessons = get_active_promoted_lessons(root, form_id) or load_judgment_lessons(root, form_id)
+                ratchet_lessons = get_active_promoted_lessons(
+                    root, form_id, use_case_id=project_cfg["id"] if enable_judgment_gate else None, limit=4
+                )
                 base_prompt = _build_agy_worker_prompt(
                     proj_obj,
                     form_id=form_id,

@@ -932,11 +932,11 @@ def run_workload_bench(
                                 except Exception:
                                     pass
                             merged_rules = list(dict.fromkeys(form_lever_rules + list(mastery_ctx.get("learned_rules", []))))
-                            from .judgment_panel import load_judgment_lessons
                             from .outcome_ratchet import get_active_promoted_lessons
 
-                            ratchet_lessons = get_active_promoted_lessons(root, form_id)
-                            j_lessons = ratchet_lessons or load_judgment_lessons(root, form_id)
+                            j_lessons = get_active_promoted_lessons(
+                                root, form_id, use_case_id=(uc_id or proj.id) if enable_judgment_gate else None, limit=4
+                            )
                             prompt = (
                                 _build_agy_worker_prompt(
                                     eff_proj,

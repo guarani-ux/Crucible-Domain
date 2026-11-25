@@ -48,16 +48,21 @@ def save_ratchet_state(repo_root: Path, state: dict[str, Any]) -> None:
     p.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def get_active_promoted_lessons(repo_root: Path, form_id: str, *, limit: int = 5) -> list[str]:
-    """Return ONLY lessons that passed paired A/B promotion (plus at most 1 active CANDIDATE under test)."""
+def get_active_promoted_lessons(
+    repo_root: Path, form_id: str, *, use_case_id: str | None = None, limit: int = 5
+) -> list[str]:
+    """Return promoted lessons and, for a matching judged use case, its labeled trial lesson."""
+    if limit <= 0:
+        return []
     state = load_ratchet_state(repo_root)
     f_rec = state.get("forms", {}).get(form_id, {})
-    promoted = [str(x["lesson"]) for x in f_rec.get("promoted_lessons", []) if isinstance(x, dict) and x.get("lesson")]
-    cand = f_rec.get("pending_candidate")
-    out = promoted[-limit:]
-    if isinstance(cand, dict) and cand.get("lesson") and str(cand["lesson"]) not in out:
-        out.append(f"[TESTING CANDIDATE] {cand['lesson']}")
-    return out
+    lessons = [str(x["lesson"]) for x in f_rec.get("promoted_lessons", []) if isinstance(x, dict) and x.get("lesson")]
+    candidate = f_rec.get("pending_candidate")
+    if use_case_id and isinstance(candidate, dict) and candidate.get("use_case_id") == use_case_id:
+        lesson = str(candidate.get("lesson") or "")
+        if lesson and lesson not in lessons:
+            lessons.append(f"[TESTING CANDIDATE] {lesson}")
+    return lessons[-limit:]
 
 
 def record_paired_outcome(

@@ -115,7 +115,9 @@ def test_controlled_ab_outcome_ratchet_promotes_proven_gain_and_quarantines_regr
         proposed_lesson="Weave B-story human emotional turn before minute 2.",
     )
     assert ev1["action"] == "STAGED_CANDIDATE"
-    active_during = get_active_promoted_lessons(tmp_path, "av_script")
+    assert get_active_promoted_lessons(tmp_path, "av_script") == []
+    assert get_active_promoted_lessons(tmp_path, "av_script", use_case_id="another-project") == []
+    active_during = get_active_promoted_lessons(tmp_path, "av_script", use_case_id="3m-patron-story-mini-doc")
     assert any("TESTING CANDIDATE" in s for s in active_during)
 
     ev2 = record_paired_outcome(
@@ -150,6 +152,43 @@ def test_controlled_ab_outcome_ratchet_promotes_proven_gain_and_quarantines_regr
     mat = build_outcome_matrix(tmp_path)
     assert mat["total_promoted_lessons"] == 1
     assert mat["total_quarantined_lessons"] == 1
+
+
+def test_quarantined_review_guidance_stays_out_of_both_writer_prompts(tmp_path: Path) -> None:
+    import shutil
+    from crucible.judgment_panel import JudgmentVerdict, record_judgment_lesson
+    from crucible.pipeline_runner import run_end_to_end_pipeline
+    from crucible.workload_bench import load_workload_manifest, run_workload_bench
+
+    shutil.copytree(ROOT / ".agents" / "bench", tmp_path / ".agents" / "bench")
+    lesson = "Synthetic guidance rejected in a paired evaluation."
+    scores = {"axis_1_integrity": 0.90, "axis_2_rhetorical_force": 0.65, "axis_3_executability": 0.88}
+    for form, project in (("production_brief", "brief-fixture"), ("research_note", "cpl-ycd-ep01-vhs-3m")):
+        record_judgment_lesson(tmp_path, form, JudgmentVerdict(False, "REVISE", 0.70, reusable_judgment_lesson=lesson))
+        pair = dict(form_id=form, use_case_id=project, axis_scores=scores, verdict="REVISE")
+        record_paired_outcome(tmp_path, **pair, proposed_lesson=lesson)
+        assert record_paired_outcome(tmp_path, **pair)["action"] == "QUARANTINED"
+
+    prompts = []
+
+    def capture(prompt, *_args, **_kwargs):
+        prompts.append(prompt)
+        return False, "controlled stop after writer prompt"
+
+    manifest = load_workload_manifest({
+        "version": "1.0",
+        "defaults": {"max_retries": 0},
+        "projects": [{
+            "id": "brief-fixture", "domain": "cpl_research", "mode": "agy_live",
+            "form": "production_brief", "intent": "Draft a production brief.", "deliverable": "brief.md",
+        }],
+    })
+    run_workload_bench(tmp_path, manifest, mode_filter="agy_live", enable_judgment_gate=True, agy_worker_fn=capture)
+    workload_prompts = list(prompts)
+    prompts.clear()
+    run_end_to_end_pipeline(tmp_path, stage_subset=["research_note"], max_retries=0, agy_worker_fn=capture)
+    assert workload_prompts and prompts
+    assert all(lesson not in prompt for prompt in [*workload_prompts, *prompts])
 
 
 def test_cli_bench_test_validity_and_inspect_end_to_end() -> None:
