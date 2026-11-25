@@ -1282,6 +1282,7 @@ def cmd_bench(
             platform=plat,
             target_duration_s=dur,
             mode=comp_mode,
+            enable_judgment_gate=(not no_judge and comp_mode != "offline"),
         )
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
@@ -1289,15 +1290,21 @@ def cmd_bench(
             status = "PASS" if res.get("ok") else "BLOCKED"
             gv = res.get("graph_validation") or {}
             ax = res.get("axes") or {}
+            g2 = res.get("gate2") or {}
+            g2_str = f" | gate2={g2.get('verdict', 'SKIPPED')}({g2.get('judgment_score', 0.0):.2f})" if g2.get("verdict") != "SKIPPED" else ""
             print(
                 f"Bidirectional Sensemaking Compiler ({status}): form={res.get('form_id')} | "
                 f"platform={plat} | duration={dur}s | mode={comp_mode} | "
                 f"graph={gv.get('graph_score', 0.0):.2f} ({gv.get('checks_passed', 0)}/{gv.get('checks_total', 0)}) | "
                 f"flow={res.get('flow_score', 0.0):.2f} | board={res.get('board_score', 0.0):.2f} | "
-                f"axes=I:{ax.get('I', 0):.2f}/II:{ax.get('II', 0):.2f}/III:{ax.get('III', 0):.2f}"
+                f"axes=I:{ax.get('I', 0):.2f}/II:{ax.get('II', 0):.2f}/III:{ax.get('III', 0):.2f}{g2_str}"
             )
             if gv.get("violations"):
                 print(f"  Upstream Graph Violations: {gv['violations']}")
+            if g2.get("verdict") in ("REVISE", "KILL"):
+                print(f"  Gate 2 Objection: {g2.get('top_executive_objection')}")
+                print(f"  Gate 2 Cut:       {g2.get('required_cut')}")
+                print(f"  Gate 2 Fix:       {g2.get('actionable_fix')}")
             if res.get("error"):
                 print(f"  Error: {res['error']}")
         return 0 if res.get("ok") else 1

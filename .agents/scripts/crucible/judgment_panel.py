@@ -254,8 +254,8 @@ def parse_judge_response(raw_output: str) -> JudgmentVerdict:
 
     min_axis = min(axis_scores.values()) if axis_scores else score
 
-    # Enforce non-masking SIGN_OFF invariant: NO strong axis can mask a failing axis or org/voice flag
-    if verdict == "SIGN_OFF" and (score < 0.82 or min_axis < 0.82 or bool(flags)):
+    # Enforce strict non-masking SIGN_OFF invariant: ALL 3 Root Axes >= 0.85 and zero org/voice flags
+    if verdict == "SIGN_OFF" and (score < 0.85 or min_axis < 0.85 or bool(flags)):
         verdict = "REVISE"
 
     return JudgmentVerdict(

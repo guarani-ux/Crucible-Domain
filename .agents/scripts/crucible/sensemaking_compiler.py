@@ -32,6 +32,11 @@ from .root_axis_engine import evaluate_root_axes
 DEFAULT_PROTOCOLS_REL = Path(".agents") / "bench" / "craft_protocols.yaml"
 
 INTERNAL_LEAK_TOKENS = ("#L", ".agents/", "BENCH_CANDIDATE")
+UNVERIFIED_PRICE_RE = re.compile(r"\$\d+(?:\.\d{2})?(?:\s*[-–]\s*\$?\d+)?(?:\s*(?:per|a)\s+\w+)?", re.IGNORECASE)
+BROCHURE_SLOP_RE = re.compile(
+    r"\b(full custody of|magnetic ink|saved in minutes|in today'?s fast-paced|delve into|synergy|game-?changer|transformative journey|unlock the power)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -79,6 +84,7 @@ def validate_sensemaking_graph(
     platform: str = "youtube",
     target_duration_s: int = 180,
     repo_root: Path | None = None,
+    strict_wpm_floor: bool = False,
 ) -> GraphValidationReport:
     """Mechanically validate an upstream Sensemaking Graph BEFORE rendering prose (0 LLM tokens)."""
     protocols = load_craft_protocols(repo_root) if repo_root else {}
@@ -212,14 +218,44 @@ def validate_sensemaking_graph(
 
         _chk(contiguous and total_dur > 0, "non_contiguous_beat_timestamps", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
         _chk(
-            (target_duration_s * 0.80) <= total_dur <= (target_duration_s * 1.20),
-            f"runtime_mismatch: {total_dur}s vs target {target_duration_s}s",
+            (target_duration_s * 0.90) <= total_dur <= (target_duration_s * 1.10),
+            f"runtime_mismatch_strict: {total_dur}s outside +/-10% of target {target_duration_s}s",
             "L3:FIELD_FEASIBILITY_AND_CUSTODY",
         )
-        _chk(avg_wpm <= max_wpm + 5.0 and max_beat_wpm <= 175.0, f"wpm_exceeded: avg={avg_wpm}, max_beat={max_beat_wpm:.1f}", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
-        _chk(avg_ov <= 0.45, f"visual_first_counterpoint_failed: overlap={avg_ov:.2f}", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        _chk(
+            avg_wpm <= min(max_wpm, 145.0) and max_beat_wpm <= 155.0,
+            f"wpm_exceeded_strict: avg={avg_wpm} (<=145), max_beat={max_beat_wpm:.1f} (<=155)",
+            "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS",
+        )
+        if strict_wpm_floor and target_duration_s >= 30:
+            _chk(
+                avg_wpm >= 95.0,
+                f"fake_runtime_stretch_wpm_too_low: avg={avg_wpm} WPM (<95 WPM floor for {target_duration_s}s)",
+                "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS",
+            )
+        _chk(avg_ov <= 0.30, f"visual_first_counterpoint_strict: overlap={avg_ov:.2f} (>0.30)", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
         _chk(longest_beat <= max(max_beat_s, int(plat_cfg.get("retention_reset_max_s", 90))), f"beat_too_long_for_platform: {longest_beat}s", "L3:HOOK_AND_TENSION_MECHANICS")
         _chk(surface_leaks == 0, f"internal_jargon_leaked_into_script_surface: {surface_leaks}", "L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY")
+
+        # Strict spoken-ear prosody: Beat 1 hook window, nominalization density <= 12%, breath-length sentences <= 16 words
+        beat1_dur = (int(beats[0].get("end_s", 0)) - int(beats[0].get("start_s", 0))) if (isinstance(beats, list) and beats and isinstance(beats[0], dict)) else 999
+        max_hook_s = 6 if platform.lower() == "instagram" else (15 if target_duration_s <= 60 else 30)
+        _chk(beat1_dur <= max_hook_s, f"slow_opening_hook: beat1={beat1_dur}s (limit <={max_hook_s}s for {platform})", "L3:HOOK_AND_TENSION_MECHANICS")
+
+        all_spoken = " ".join(str(b.get("spoken_beat", "")) for b in (beats if isinstance(beats, list) else []) if isinstance(b, dict))
+        spoken_words_list = re.findall(r"[a-zA-Z]+", all_spoken)
+        nom_hits = sum(1 for w in spoken_words_list if len(w) >= 8 and re.search(r"(tion|sion|ment|ity|ance|ence)$", w.lower()))
+        nom_ratio = round(nom_hits / max(1, len(spoken_words_list)), 3)
+        _chk(nom_ratio <= 0.12, f"bureaucratic_nominalizations: {nom_ratio:.1%} (>12% limit)", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+
+        spoken_sents = [s.strip() for s in re.split(r"[.!?]+", all_spoken) if len(s.strip()) > 2]
+        avg_spoken_sent = round(sum(len(re.findall(r"\b[\w'-]+\b", s)) for s in spoken_sents) / max(1, len(spoken_sents)), 1)
+        _chk(avg_spoken_sent <= 16.5, f"long_unbreathable_sentences: avg={avg_spoken_sent} words (limit <=16.5)", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        _chk(not UNVERIFIED_PRICE_RE.search(all_spoken), "unverified_competitor_or_dollar_claim_in_spoken_copy", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+        _chk(not BROCHURE_SLOP_RE.search(all_spoken), "brochure_slop_or_factual_cliche_in_spoken_copy", "L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY")
+        metrics["nominalization_ratio"] = nom_ratio
+        metrics["avg_spoken_sentence_words"] = avg_spoken_sent
+        metrics["beat1_duration_s"] = beat1_dur
 
         if req_bt:
             bt_ok = ("BUT" in causal_tags) and ("THEREFORE" in causal_tags)
@@ -614,6 +650,7 @@ def compile_and_evaluate(
     target_duration_s: int = 180,
     topic: str = "Free VHS Digitization at Central Library",
     mode: str = "offline",
+    enable_judgment_gate: bool = False,
     worker_fn: Callable[..., tuple[bool, str]] | None = None,
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
@@ -650,15 +687,49 @@ def compile_and_evaluate(
             return {"ok": False, "error": f"graph_json_parse_error: {exc}", "platform": platform, "target_duration_s": target_duration_s}
 
     g_val = validate_sensemaking_graph(
-        graph, form_id=form_id, platform=platform, target_duration_s=target_duration_s, repo_root=repo_root
+        graph,
+        form_id=form_id,
+        platform=platform,
+        target_duration_s=target_duration_s,
+        repo_root=repo_root,
+        strict_wpm_floor=(mode != "offline"),
     )
     markdown = project_graph_to_markdown(graph, form_id=form_id)
     fe = evaluate_document_flow(markdown, form_id, target_duration_s=target_duration_s)
     bd = evaluate_stakeholder_board(markdown, form_id, flow_eval=fe, target_duration_s=target_duration_s, repo_root=repo_root)
     ax = evaluate_root_axes(markdown, form_id, target_duration_s=target_duration_s, repo_root=repo_root)
+    gate1_ok = g_val.ok and fe.passed and bd.buy_in_ready and ax.passed
+
+    gate2_dict: dict[str, Any] = {"verdict": "SKIPPED", "ok": True}
+    if gate1_ok and mode != "offline" and enable_judgment_gate:
+        from .judgment_panel import run_adversarial_judgment
+        from .outcome_ratchet import record_paired_outcome
+        from .workload_bench import _default_agy_worker
+
+        j_worker = worker_fn or _default_agy_worker
+        jv = run_adversarial_judgment(
+            markdown,
+            form_id,
+            repo_root=repo_root,
+            worker_fn=j_worker,
+            timeout_s=min(90.0, timeout_s),
+            use_case_intent=f"{platform} {target_duration_s}s {topic}",
+            persist_lesson=True,
+        )
+        gate2_dict = jv.to_dict()
+        if jv.verdict in ("SIGN_OFF", "REVISE", "KILL"):
+            record_paired_outcome(
+                repo_root,
+                form_id=form_id,
+                use_case_id=f"{platform}_{target_duration_s}s",
+                axis_scores=jv.axis_scores,
+                verdict=jv.verdict,
+                weakest_engine=jv.weakest_engine,
+                proposed_lesson=jv.reusable_judgment_lesson,
+            )
 
     return {
-        "ok": g_val.ok and fe.passed and bd.buy_in_ready and ax.passed,
+        "ok": gate1_ok and bool(gate2_dict.get("ok", False)),
         "form_id": form_id,
         "platform": platform,
         "target_duration_s": target_duration_s,
@@ -672,6 +743,7 @@ def compile_and_evaluate(
             "III": ax.axis_3_executability,
         },
         "failed_probes": ax.failed_probes,
+        "gate2": gate2_dict,
         "markdown": markdown,
         "graph": graph,
     }

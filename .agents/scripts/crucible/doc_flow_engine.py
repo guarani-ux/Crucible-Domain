@@ -38,6 +38,9 @@ SLOP_PATTERNS = (
     r"\bseamless(?:ly)?\b",
     r"\btransformative journey\b",
     r"\bunlock the power\b",
+    r"\bfull custody of\b",
+    r"\bmagnetic ink\b",
+    r"\bsaved in minutes\b",
 )
 
 TIMECODE_SPAN_RE = re.compile(r"(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})")
