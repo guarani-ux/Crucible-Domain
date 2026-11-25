@@ -167,6 +167,42 @@ def test_cli_bench_test_validity_and_inspect_end_to_end() -> None:
     assert data["counterexamples_caught"] == data["counterexamples_total"]
 
 
+def test_cli_import_compiles_submitted_graph_and_rejects_invalid_input(tmp_path: Path) -> None:
+    """Keep saved Web UI graphs on the compiler's checked path without regenerating them."""
+    from crucible.sensemaking_compiler import synthesize_canonical_graph
+
+    graph_path = tmp_path / "graph.json"
+    command = [
+        sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "bench", "compile",
+        "youtube", "180", "--from-json", str(graph_path), "--json",
+    ]
+
+    for raw in ('{"unfinished":', '[{"title": "Not a graph object"}]'):
+        graph_path.write_text(raw, encoding="utf-8")
+        rejected = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+        assert rejected.returncode == 1
+        assert "invalid_json_file" in json.loads(rejected.stdout)["error"], rejected.stderr
+
+    for form in ("av_script", "research_note"):
+        graph = synthesize_canonical_graph(form_id=form, repo_root=ROOT)
+        title = f"Imported working title for {form}"
+        graph["title"] = title
+        graph_path.write_text(json.dumps(graph), encoding="utf-8")
+        args = [*command, "--form", form]
+        compiled = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, check=False)
+        assert compiled.returncode == 0, compiled.stderr or compiled.stdout
+        result = json.loads(compiled.stdout)
+        assert result["ok"] is True
+        assert title in result["markdown"]
+        assert result["gate2"]["verdict"] == "SKIPPED"
+
+    del graph["reality_and_custody"]["owned_holds"]
+    graph_path.write_text(json.dumps(graph), encoding="utf-8")
+    blocked = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, check=False)
+    assert blocked.returncode == 1
+    assert "unowned_or_missing_holds_in_graph" in json.loads(blocked.stdout)["graph_validation"]["violations"]
+
+
 def test_end_to_end_8_stage_pipeline_and_cross_document_cold_receiver_parity(tmp_path: Path) -> None:
     import shutil
     from crucible.pipeline_runner import audit_pipeline_parity, load_pipeline_manifest, run_end_to_end_pipeline

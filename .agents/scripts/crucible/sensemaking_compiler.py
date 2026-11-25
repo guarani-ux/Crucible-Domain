@@ -1070,6 +1070,13 @@ def resolve_portable_worker(mode: str) -> Callable[..., tuple[bool, str]]:
     return _default_agy_worker
 
 
+def _parse_graph_object(text: str) -> dict[str, Any]:
+    graph = json.loads(text)
+    if not isinstance(graph, dict) or not graph:
+        raise ValueError("expected a non-empty graph object")
+    return graph
+
+
 def compile_and_evaluate(
     repo_root: Path,
     *,
@@ -1108,10 +1115,15 @@ def compile_and_evaluate(
 
     for attempt in range(attempts):
         if from_json_path is not None:
-            raw_json = Path(from_json_path).read_text(encoding="utf-8")
-            graph = _extract_json_object(raw_json)
-            if not graph:
-                return {"ok": False, "error": f"invalid_json_file: {from_json_path}", "platform": platform, "target_duration_s": target_duration_s}
+            try:
+                graph = _parse_graph_object(Path(from_json_path).read_text(encoding="utf-8"))
+            except (OSError, ValueError, RecursionError) as exc:
+                return {
+                    "ok": False,
+                    "error": f"invalid_json_file: {from_json_path}: {exc}",
+                    "platform": platform,
+                    "target_duration_s": target_duration_s,
+                }
         elif mode == "offline":
             graph = synthesize_canonical_graph(
                 form_id=form_id, platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
@@ -1143,7 +1155,7 @@ def compile_and_evaluate(
                 if s >= 0 and e > s:
                     cleaned = cleaned[s : e + 1]
             try:
-                graph = json.loads(cleaned)
+                graph = _parse_graph_object(cleaned)
             except Exception as exc:
                 feedback_note = f"\nPrevious output had invalid JSON ({exc}); return ONLY valid JSON.\n"
                 last_result = {"ok": False, "error": f"graph_json_parse_error: {exc}", "platform": platform, "target_duration_s": target_duration_s}
