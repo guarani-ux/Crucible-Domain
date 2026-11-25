@@ -19,11 +19,13 @@ flowchart LR
 ```
 
 > **Full Machine-Readable Architecture & Capability Manifest:** See [04_InRAM_ML_and_Control_Plane_Architecture.md](Graphs/04_InRAM_ML_and_Control_Plane_Architecture.md) and [capability_map.json](Graphs/capability_map.json).
+> **Document Compiler & Multi-AI Guide (Antigravity, Claude Code, Codex CLI, ChatGPT Web UI, Custom VMs):** See [DOCUMENT_COMPILER_GUIDE.md](DOCUMENT_COMPILER_GUIDE.md) for all 8 document types and copy-paste use cases.
 
 ## Use-Case Routing Matrix (For AI Agents & Humans)
 
 | Use Case | Entry Point / Command | Spoke or Engine | Output & Verification Gate |
 | :--- | :--- | :--- | :--- |
+| **Compile any of 8 document types (any AI/VM)** | `python .agents/scripts/crucible_gate.py bench compile youtube 180 --form <form> --mode <agy_live\|claude_live\|codex_live\|custom_cli\|prompt\|offline>` | [Document Compiler Guide](DOCUMENT_COMPILER_GUIDE.md) (`sensemaking_compiler.py`) | Upstream Sensemaking Graph $\rightarrow$ 2-Zone Markdown $\rightarrow$ Gate 1 + Gate 2 (`SIGN_OFF >= 0.85`) |
 | **Orient at session start** | `python .agents/scripts/crucible_gate.py session-start` | Context Compiler (`ram_ml_daemon.py` / `crucible_gate.py`) | Active domain, changed AST symbols, priority tests, watch blockers |
 | **Verify task clarity before coding** | `python .agents/scripts/crucible_gate.py ml-preflight "<outcome>"` | Outcome Clarity Gate (`ram_ml_engine.py`) | `REALIGNMENT_REQUIRED` (names gaps) or `READY` + 3-step plan |
 | **Run fast-fail tests & full verification** | `pwsh -File scripts/verify_all.ps1` | ML Test-Ranker + 22-Check Parallel Pool + Mutation Gate | ML-ordered pytest + `--strict` gate + 5/5 mutation kills + live logging |

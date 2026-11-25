@@ -1018,6 +1018,58 @@ def synthesize_canonical_graph(
     return base
 
 
+def _make_subprocess_worker(cmd_template: list[str], *, use_stdin: bool = False) -> Callable[..., tuple[bool, str]]:
+    """Create a portable CLI worker for Claude Code, Codex CLI, or any custom VM/terminal AI command."""
+    import subprocess as _sp
+
+    def _worker(prompt: str, repo_root: Path, timeout_s: float = 120.0, effort: str = "low") -> tuple[bool, str]:
+        del effort
+        cmd = list(cmd_template) if use_stdin else [*cmd_template, prompt]
+        try:
+            proc = _sp.run(
+                cmd,
+                input=prompt if use_stdin else None,
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_s,
+                check=False,
+            )
+            out = (proc.stdout or "").strip()
+            if proc.returncode != 0 and not out:
+                return False, (proc.stderr or f"exit_code={proc.returncode}").strip()
+            return True, out
+        except Exception as exc:
+            return False, f"portable_worker_error: {exc}"
+
+    return _worker
+
+
+def resolve_portable_worker(mode: str) -> Callable[..., tuple[bool, str]]:
+    """Resolve an AI CLI worker for Antigravity, Claude Code, Codex CLI, or any custom VM/terminal command."""
+    import os as _os
+    import shlex as _shlex
+
+    m = mode.lower().strip()
+    if m == "claude_live":
+        return _make_subprocess_worker(["claude", "-p"], use_stdin=False)
+    if m == "codex_live":
+        return _make_subprocess_worker(["codex", "exec"], use_stdin=False)
+    if m == "custom_cli":
+        raw_cmd = _os.environ.get("CRUCIBLE_AI_CMD", "").strip()
+        if not raw_cmd:
+            def _missing_env(prompt: str, repo_root: Path, timeout_s: float = 120.0, effort: str = "low") -> tuple[bool, str]:
+                del prompt, repo_root, timeout_s, effort
+                return False, "CRUCIBLE_AI_CMD environment variable is not set for --mode custom_cli"
+            return _missing_env
+        return _make_subprocess_worker(_shlex.split(raw_cmd), use_stdin=True)
+    from .workload_bench import _default_agy_worker
+
+    return _default_agy_worker
+
+
 def compile_and_evaluate(
     repo_root: Path,
     *,
@@ -1029,22 +1081,45 @@ def compile_and_evaluate(
     enable_judgment_gate: bool = False,
     max_retries: int = 1,
     worker_fn: Callable[..., tuple[bool, str]] | None = None,
+    from_json_path: Path | None = None,
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
     """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + Gate 2 + Upstream Re-Compile."""
-    attempts = 1 if mode == "offline" else (1 + max(0, max_retries))
+    if mode == "prompt":
+        prompt_text = build_sensemaking_graph_prompt(
+            form_id=form_id,
+            platform=platform,
+            target_duration_s=target_duration_s,
+            assignment=topic,
+            repo_root=repo_root,
+        )
+        return {
+            "ok": True,
+            "mode": "prompt",
+            "form_id": form_id,
+            "platform": platform,
+            "target_duration_s": target_duration_s,
+            "prompt": prompt_text,
+        }
+
+    attempts = 1 if (mode == "offline" or from_json_path is not None) else (1 + max(0, max_retries))
     feedback_note = ""
     last_result: dict[str, Any] = {"ok": False, "platform": platform, "target_duration_s": target_duration_s}
 
     for attempt in range(attempts):
-        if mode == "offline":
+        if from_json_path is not None:
+            raw_json = Path(from_json_path).read_text(encoding="utf-8")
+            graph = _extract_json_object(raw_json)
+            if not graph:
+                return {"ok": False, "error": f"invalid_json_file: {from_json_path}", "platform": platform, "target_duration_s": target_duration_s}
+        elif mode == "offline":
             graph = synthesize_canonical_graph(
                 form_id=form_id, platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
             )
         else:
-            from .workload_bench import _call_worker, _default_agy_worker
+            from .workload_bench import _call_worker
 
-            wfn = worker_fn or _default_agy_worker
+            wfn = worker_fn or resolve_portable_worker(mode)
             prompt = (
                 build_sensemaking_graph_prompt(
                     form_id=form_id,

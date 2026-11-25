@@ -1258,6 +1258,7 @@ def cmd_bench(
     max_minutes: float = 0.0,
     workers: int | None = None,
     no_judge: bool = False,
+    from_json: str | None = None,
     project_ids: list[str] | None = None,
     as_json: bool = False,
 ) -> int:
@@ -1273,17 +1274,23 @@ def cmd_bench(
 
     if action == "compile":
         sc = _resolve_crucible_submodule("sensemaking_compiler")
-        plat = parts[1] if len(parts) >= 2 else "youtube"
+        plat = parts[1] if len(parts) >= 2 and not parts[1].startswith("--") else "youtube"
         dur = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 180
-        comp_mode = "offline" if bench_mode == "offline" else "agy_live"
+        valid_modes = {"offline", "agy_live", "claude_live", "codex_live", "custom_cli", "prompt"}
+        comp_mode = bench_mode if bench_mode in valid_modes else "agy_live"
+        from_json_arg = Path(from_json) if from_json else None
         res = sc.compile_and_evaluate(
             root,
             form_id=form_filter or "av_script",
             platform=plat,
             target_duration_s=dur,
             mode=comp_mode,
-            enable_judgment_gate=(not no_judge and comp_mode != "offline"),
+            from_json_path=from_json_arg,
+            enable_judgment_gate=(not no_judge and comp_mode not in ("offline", "prompt") and from_json_arg is None),
         )
+        if comp_mode == "prompt":
+            print(json.dumps(res, indent=2, ensure_ascii=False) if as_json else res.get("prompt", ""))
+            return 0
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
         else:
@@ -1811,7 +1818,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target", type=int, default=10, help="Graduation target count for 'g5-check'.")
     parser.add_argument("--verify-cmd", type=str, default="", help="Verification command for 'ml-preflight'.")
     parser.add_argument("--autofix", action="store_true", help="Auto-repair mechanical stale_sha256 hashes in 'kernel'.")
-    parser.add_argument("--mode", type=str, default="offline", choices=("offline", "all", "plumbing", "hybrid", "agy_live"), help="Execution mode for 'bench run' (default: offline).")
+    parser.add_argument("--mode", type=str, default="offline", choices=("offline", "all", "plumbing", "hybrid", "agy_live", "claude_live", "codex_live", "custom_cli", "prompt"), help="Execution mode for 'bench run/compile' (default: offline).")
+    parser.add_argument("--from-json", type=str, default=None, help="Load a saved Sensemaking Graph JSON file (e.g., from ChatGPT/Web UI) in 'bench compile'.")
     parser.add_argument("--rounds", type=int, default=1, help="Number of rounds to execute in 'bench run'.")
     parser.add_argument("--interval-min", type=float, default=0.0, help="Minutes between rounds in 'bench run'.")
     parser.add_argument("--adaptive", action="store_true", help="Enable UCB1 bandit craft selection & diminishing-returns frontier rotation in 'bench run'.")
@@ -1855,6 +1863,7 @@ def main(argv: list[str] | None = None) -> int:
             max_minutes=args.max_minutes,
             workers=args.workers,
             no_judge=args.no_judge,
+            from_json=args.from_json,
             project_ids=args.project,
             as_json=args.json,
         )
