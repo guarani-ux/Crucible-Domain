@@ -20,6 +20,8 @@ Thumbs.db
 .agents/bench_trial_telemetry.jsonl
 .agents/bench_pipeline_telemetry.jsonl
 .agents/bench_matrix_state.json
+.agents/capability_evolution_log.jsonl
+.agents/bench/golden_exemplars.json
 .agents/bench.stop
 .agents/bench_runs/
 .agents/bench_telemetry.jsonl

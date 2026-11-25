@@ -1,0 +1,641 @@
+#!/usr/bin/env python3
+"""Bidirectional Sensemaking Graph Compiler (Upstream Generative Core -> Medium Projection).
+
+Turns the L0->L4 Sensemaking Ontology bidirectional: instead of jumping straight from a flat prompt
+to raw Markdown prose, builds and validates an explicit 3-node upstream Sensemaking Graph:
+  1. reality_and_custody   (verified facts, 2027-2030 mandates, service promise, owned holds, citations)
+  2. belief_delta_matrix   (current skepticism -> target state -> shift trigger per stakeholder & patron)
+  3. causal_spine          (hook gap, A/B/C story tracks, But/Therefore Visual-First beats or SCQA options)
+
+Validates all platform physics (YouTube/Instagram/LinkedIn/Facebook/Live) and length architectures
+(15s/30s/45s/60s/180s/300s) upstream in <2ms, then projects into a clean 2-zone Markdown deliverable
+(Clean Stakeholder Surface + Internal Custody & Sources appendix).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Callable
+
+from .doc_flow_engine import (
+    _jaccard_overlap,
+    evaluate_document_flow,
+    evaluate_stakeholder_board,
+    has_mandate_lens_trap,
+    load_organization_charter,
+)
+from .root_axis_engine import evaluate_root_axes
+
+DEFAULT_PROTOCOLS_REL = Path(".agents") / "bench" / "craft_protocols.yaml"
+
+INTERNAL_LEAK_TOKENS = ("#L", ".agents/", "BENCH_CANDIDATE")
+
+
+@dataclass
+class GraphValidationReport:
+    ok: bool
+    form_id: str
+    platform: str
+    target_duration_s: int
+    graph_score: float
+    checks_passed: int
+    checks_total: int
+    violations: list[str] = field(default_factory=list)
+    failed_l3_nodes: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def load_craft_protocols(repo_root: Path) -> dict[str, Any]:
+    """Load the versioned upstream Craft Protocols YAML."""
+    path = Path(repo_root) / DEFAULT_PROTOCOLS_REL
+    if not path.is_file():
+        return {"version": "0.0.0", "platform_physics": {}, "av_length_architectures": {}, "form_protocols": {}}
+    import yaml  # type: ignore
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _resolve_length_arch(protocols: dict[str, Any], target_duration_s: int) -> dict[str, Any]:
+    archs = protocols.get("av_length_architectures") or {}
+    # Pick closest defined length key
+    keys = sorted(int(k) for k in archs.keys()) if archs else []
+    if not keys:
+        return {"min_beats": 3, "max_wpm": 150, "require_abc_tracks": target_duration_s >= 60, "require_but_therefore": target_duration_s >= 30, "max_beat_s": 60}
+    best_k = min(keys, key=lambda k: abs(k - target_duration_s))
+    return dict(archs.get(best_k) or archs.get(str(best_k)) or {})
+
+
+def validate_sensemaking_graph(
+    graph: dict[str, Any],
+    *,
+    form_id: str = "av_script",
+    platform: str = "youtube",
+    target_duration_s: int = 180,
+    repo_root: Path | None = None,
+) -> GraphValidationReport:
+    """Mechanically validate an upstream Sensemaking Graph BEFORE rendering prose (0 LLM tokens)."""
+    protocols = load_craft_protocols(repo_root) if repo_root else {}
+    plat_cfg = (protocols.get("platform_physics") or {}).get(platform.lower(), {})
+    len_cfg = _resolve_length_arch(protocols, target_duration_s)
+
+    violations: list[str] = []
+    failed_l3: list[str] = []
+    metrics: dict[str, Any] = {}
+    passed = 0
+    total = 0
+
+    def _chk(ok: bool, msg: str, l3_node: str) -> None:
+        nonlocal passed, total
+        total += 1
+        if ok:
+            passed += 1
+        else:
+            violations.append(msg)
+            if l3_node and l3_node not in failed_l3:
+                failed_l3.append(l3_node)
+
+    # 1. Node 1: reality_and_custody
+    rc = graph.get("reality_and_custody") if isinstance(graph.get("reality_and_custody"), dict) else {}
+    mandates = [str(m) for m in (rc.get("official_mandates") or [])]
+    valid_mandates = {"Collections", "Experiences", "Expertise", "Spaces", "Technology"}
+    mandate_ok = bool(mandates) and all(m in valid_mandates for m in mandates) and not has_mandate_lens_trap(" ".join(mandates))
+    _chk(mandate_ok, f"invalid_or_missing_mandates: {mandates}", "L3:STRATEGIC_CHARTER_AND_TRADEOFFS")
+
+    holds = rc.get("owned_holds") or []
+    holds_ok = (
+        isinstance(holds, list)
+        and len(holds) >= 1
+        and all(
+            isinstance(h, dict)
+            and str(h.get("item", "")).strip()
+            and str(h.get("owner", "")).strip().lower() not in ("", "tbd", "unknown", "none")
+            for h in holds
+        )
+    )
+    _chk(holds_ok, "unowned_or_missing_holds_in_graph", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+
+    cites = [str(c) for c in (rc.get("source_citations") or []) if str(c).strip()]
+    _chk(len(cites) >= 1, "missing_source_citations_in_graph", "L3:SOURCE_PROVENANCE_AND_EVIDENCE")
+    _chk(bool(str(rc.get("service_promise", "")).strip()), "missing_service_promise_in_graph", "L3:STRATEGIC_CHARTER_AND_TRADEOFFS")
+
+    # 2. Node 2: belief_delta_matrix
+    bdm = graph.get("belief_delta_matrix") or []
+    bdm_ok = (
+        isinstance(bdm, list)
+        and len(bdm) >= 3
+        and all(
+            isinstance(row, dict)
+            and str(row.get("role", "")).strip()
+            and str(row.get("current_skepticism", "")).strip()
+            and str(row.get("target_state", "")).strip()
+            and str(row.get("shift_trigger", "")).strip()
+            for row in bdm
+        )
+    )
+    _chk(bdm_ok, "incomplete_belief_delta_matrix (need >=3 roles with skepticism -> target -> trigger)", "L3:RHETORICAL_PERSUASION_AND_PSYCHOLOGY")
+
+    # 3. Node 3: causal_spine
+    cs = graph.get("causal_spine") if isinstance(graph.get("causal_spine"), dict) else {}
+    _chk(bool(str(cs.get("hook_gap", "")).strip()), "missing_hook_gap", "L3:HOOK_AND_TENSION_MECHANICS")
+
+    if form_id == "av_script":
+        beats = cs.get("beats") or []
+        min_beats = int(len_cfg.get("min_beats", 3))
+        max_wpm = float(len_cfg.get("max_wpm", 150))
+        max_beat_s = int(len_cfg.get("max_beat_s", 60))
+        req_abc = bool(len_cfg.get("require_abc_tracks", target_duration_s >= 60))
+        req_bt = bool(len_cfg.get("require_but_therefore", target_duration_s >= 30))
+        muted_first = bool(plat_cfg.get("muted_first", False))
+
+        _chk(isinstance(beats, list) and len(beats) >= min_beats, f"too_few_beats: {len(beats)} < {min_beats}", "L3:HOOK_AND_TENSION_MECHANICS")
+
+        contiguous = True
+        prev_end = -1
+        total_audio_words = 0
+        overlaps: list[float] = []
+        max_beat_wpm = 0.0
+        longest_beat = 0
+        causal_tags: set[str] = set()
+        captioned_beats = 0
+        surface_leaks = 0
+
+        for b in beats if isinstance(beats, list) else []:
+            if not isinstance(b, dict):
+                contiguous = False
+                continue
+            s_s = int(b.get("start_s", -1))
+            e_s = int(b.get("end_s", -1))
+            dur = e_s - s_s
+            if s_s < 0 or dur <= 0 or (prev_end >= 0 and s_s < prev_end):
+                contiguous = False
+            prev_end = e_s
+            longest_beat = max(longest_beat, dur)
+
+            spoken = str(b.get("spoken_beat", "")).strip()
+            visual = str(b.get("visual_first_action", "")).strip()
+            caption = str(b.get("muted_caption", "")).strip()
+            causal_tags.add(str(b.get("causal_link", "")).strip().upper())
+
+            w_cnt = len(re.findall(r"\b[\w'-]+\b", spoken))
+            total_audio_words += w_cnt
+            bwpm = (w_cnt / dur) * 60.0 if dur > 0 else 999.0
+            max_beat_wpm = max(max_beat_wpm, bwpm)
+            overlaps.append(_jaccard_overlap(spoken, visual))
+            if caption:
+                captioned_beats += 1
+            if any(tok in spoken or tok in visual or tok in caption for tok in INTERNAL_LEAK_TOKENS):
+                surface_leaks += 1
+
+        total_dur = (int(beats[-1].get("end_s", 0)) - int(beats[0].get("start_s", 0))) if (isinstance(beats, list) and beats) else 0
+        avg_wpm = round((total_audio_words / total_dur) * 60.0, 1) if total_dur > 0 else 0.0
+        avg_ov = round(sum(overlaps) / len(overlaps), 3) if overlaps else 1.0
+
+        metrics.update(
+            {
+                "beat_count": len(beats) if isinstance(beats, list) else 0,
+                "total_duration_s": total_dur,
+                "avg_wpm": avg_wpm,
+                "max_beat_wpm": round(max_beat_wpm, 1),
+                "avg_av_overlap": avg_ov,
+                "longest_beat_s": longest_beat,
+                "causal_tags": sorted(causal_tags),
+                "captioned_ratio": round(captioned_beats / max(1, len(beats)), 2) if isinstance(beats, list) else 0.0,
+            }
+        )
+
+        _chk(contiguous and total_dur > 0, "non_contiguous_beat_timestamps", "L3:FIELD_FEASIBILITY_AND_CUSTODY")
+        _chk(
+            (target_duration_s * 0.80) <= total_dur <= (target_duration_s * 1.20),
+            f"runtime_mismatch: {total_dur}s vs target {target_duration_s}s",
+            "L3:FIELD_FEASIBILITY_AND_CUSTODY",
+        )
+        _chk(avg_wpm <= max_wpm + 5.0 and max_beat_wpm <= 175.0, f"wpm_exceeded: avg={avg_wpm}, max_beat={max_beat_wpm:.1f}", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        _chk(avg_ov <= 0.45, f"visual_first_counterpoint_failed: overlap={avg_ov:.2f}", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+        _chk(longest_beat <= max(max_beat_s, int(plat_cfg.get("retention_reset_max_s", 90))), f"beat_too_long_for_platform: {longest_beat}s", "L3:HOOK_AND_TENSION_MECHANICS")
+        _chk(surface_leaks == 0, f"internal_jargon_leaked_into_script_surface: {surface_leaks}", "L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY")
+
+        if req_bt:
+            bt_ok = ("BUT" in causal_tags) and ("THEREFORE" in causal_tags)
+            _chk(bt_ok, f"missing_but_therefore_causality: tags={sorted(causal_tags)}", "L3:HOOK_AND_TENSION_MECHANICS")
+
+        if req_abc:
+            abc_ok = all(
+                bool(str(cs.get(k, "")).strip())
+                for k in ("a_story_action", "b_story_human_shift", "c_story_service_truth")
+            )
+            _chk(abc_ok, "missing_a_b_c_story_tracks", "L3:MULTI_TRACK_STORY_ARCHITECTURE")
+
+        if muted_first:
+            cap_ok = (isinstance(beats, list) and len(beats) > 0 and bool(str(beats[0].get("muted_caption", "")).strip()) and (captioned_beats / len(beats)) >= 0.80)
+            _chk(cap_ok, f"platform_{platform}_requires_muted_first_captions", "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS")
+
+    score = round(passed / max(1, total), 3)
+    return GraphValidationReport(
+        ok=(len(violations) == 0),
+        form_id=form_id,
+        platform=platform,
+        target_duration_s=target_duration_s,
+        graph_score=score,
+        checks_passed=passed,
+        checks_total=total,
+        violations=violations,
+        failed_l3_nodes=failed_l3,
+        metrics=metrics,
+    )
+
+
+def _fmt_mmss(sec: int) -> str:
+    m, s = divmod(max(0, int(sec)), 60)
+    return f"{m:02d}:{s:02d}"
+
+
+def project_graph_to_markdown(graph: dict[str, Any], *, form_id: str = "av_script") -> str:
+    """Deterministically compile a verified Sensemaking Graph into clean 2-zone Markdown (0 LLM tokens)."""
+    title = str(graph.get("title", "Untitled Deliverable")).strip()
+    platform = str(graph.get("platform", "youtube")).strip()
+    target_dur = int(graph.get("target_duration_s", 180))
+    rc = graph.get("reality_and_custody") or {}
+    bdm = graph.get("belief_delta_matrix") or []
+    cs = graph.get("causal_spine") or {}
+
+    mandates = ", ".join(str(m) for m in (rc.get("official_mandates") or []))
+    service_promise = str(rc.get("service_promise", "")).strip()
+    patron_action = str(rc.get("immediate_patron_action", "")).strip()
+    cites = [str(c) for c in (rc.get("source_citations") or [])]
+    holds = rc.get("owned_holds") or []
+
+    lines: list[str] = [
+        f"# {title}",
+        "",
+        f"**Platform:** {platform.title()} · **Target Runtime:** `{_fmt_mmss(target_dur)}` ({target_dur}s) · **Patron Action:** {patron_action}",
+        "",
+    ]
+
+    if form_id == "av_script":
+        lines.append("## Story Spine & Hook")
+        lines.append(f"- **Opening Hook Gap:** {cs.get('hook_gap', '')}")
+        if cs.get("a_story_action"):
+            lines.append(f"- **A-Story (Action):** {cs['a_story_action']}")
+        if cs.get("b_story_human_shift"):
+            lines.append(f"- **B-Story (Human Shift):** {cs['b_story_human_shift']}")
+        if cs.get("c_story_service_truth"):
+            lines.append(f"- **C-Story (Service Truth):** {cs['c_story_service_truth']}")
+        lines.append("")
+        lines.append("## Timed A/V Script")
+        lines.append("")
+        lines.append("| Timecode | Audio | Video |")
+        lines.append("| --- | --- | --- |")
+        for b in cs.get("beats") or []:
+            tc = f"{_fmt_mmss(b['start_s'])}-{_fmt_mmss(b['end_s'])}"
+            link = str(b.get("causal_link", "")).upper()
+            spoken = str(b.get("spoken_beat", "")).strip()
+            visual = str(b.get("visual_first_action", "")).strip()
+            cap = str(b.get("muted_caption", "")).strip()
+            vid_cell = f"[{link}] {visual}" + (f" [CAPTION: {cap}]" if cap else "")
+            lines.append(f"| {tc} | {spoken} | {vid_cell} |")
+        lines.append("")
+        lines.append("## Timing & Accessibility Notes")
+        lines.append(f"- Target cadence `<= 150 WPM`; captions and visual-first action carry meaning on mute.")
+        lines.append("")
+
+    # Cleanly isolated Zone 2: Internal Custody & Sources (keeps stakeholder body free of internal jargon)
+    lines.append("## Internal Custody & Sources")
+    lines.append(f"- **Official 2027-2030 Mandates:** {mandates}")
+    lines.append(f"- **Service Promise:** {service_promise}")
+    lines.append(f"- **Primary Grounding Sources:** {', '.join(f'`{c}`' for c in cites)}")
+    lines.append("- **Stakeholder Belief Shifts Modeled:** " + "; ".join(f"{r['role']} ({r['shift_trigger']})" for r in bdm[:4]))
+    for h in holds:
+        lines.append(f"- [UNKNOWN — OWNER TO CONFIRM] {h['item']} — Owner: {h['owner']}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def synthesize_canonical_av_graph(
+    *,
+    platform: str = "youtube",
+    target_duration_s: int = 180,
+    topic: str = "Free VHS Digitization at Central Library",
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    """Synthesize a valid canonical Sensemaking Graph for ANY platform & ANY length (15s/30s/45s/60s/180s/300s)."""
+    plat = platform.lower()
+    dur = int(target_duration_s)
+
+    if dur <= 15:
+        beats = [
+            {
+                "start_s": 0, "end_s": 4, "causal_link": "SETUP",
+                "visual_first_action": "ECU dusty 1994 cardboard tape box snapping open under bright desk lamp.",
+                "spoken_beat": "Old family tapes fading in a closet?",
+                "muted_caption": "OLD VHS TAPES FADING?",
+            },
+            {
+                "start_s": 4, "end_s": 10, "causal_link": "BUT",
+                "visual_first_action": "MS patron slides cassette into Central Library converter deck; glowing preview wakes up.",
+                "spoken_beat": "Skip pricey shops—digitize free with your card.",
+                "muted_caption": "DIGITIZE FREE WITH YOUR CARD",
+            },
+            {
+                "start_s": 10, "end_s": 15, "causal_link": "THEREFORE",
+                "visual_first_action": "CU green USB progress bar hits 100%; clean URL card holds.",
+                "spoken_beat": "Book your slot at calgarylibrary.ca.",
+                "muted_caption": "BOOK FREE AT CALGARYLIBRARY.CA",
+            },
+        ]
+    elif dur <= 30:
+        beats = [
+            {
+                "start_s": 0, "end_s": 8, "causal_link": "SETUP",
+                "visual_first_action": "ECU dusty shoebox opens; gloved fingers pull out a handwritten 1994 cassette.",
+                "spoken_beat": "Got family memories trapped on fading VHS tapes?",
+                "muted_caption": "MEMORIES TRAPPED ON VHS?",
+            },
+            {
+                "start_s": 8, "end_s": 18, "causal_link": "BUT",
+                "visual_first_action": "MS Digital Media Lab workstation; patron clicks cassette into deck; waveform monitor lights up.",
+                "spoken_beat": "You don't need a VCR or expensive transfer service—your card unlocks our station free.",
+                "muted_caption": "FREE TRANSFER STATION WITH YOUR CARD",
+            },
+            {
+                "start_s": 18, "end_s": 30, "causal_link": "THEREFORE",
+                "visual_first_action": "CU blinking USB drive handed across desk; warm smiling patron exits sunlit atrium.",
+                "spoken_beat": "Bring a tape and USB drive. Reserve your free session today at calgarylibrary.ca.",
+                "muted_caption": "RESERVE FREE: CALGARYLIBRARY.CA",
+            },
+        ]
+    elif dur <= 45:
+        beats = [
+            {
+                "start_s": 0, "end_s": 12, "causal_link": "SETUP",
+                "visual_first_action": "MCU host stands beside Central Library glass wall holding an old labeled cassette.",
+                "spoken_beat": "Every year, magnetic tape loses a little more color and sound.",
+                "muted_caption": "TAPE FADES EVERY YEAR",
+            },
+            {
+                "start_s": 12, "end_s": 28, "causal_link": "BUT",
+                "visual_first_action": "OTS workstation deck humming quietly; staff points once to capture button then steps back.",
+                "spoken_beat": "Most people think rescuing those clips costs hundreds. Here, your library card opens the booth free.",
+                "muted_caption": "YOUR CARD OPENS THE BOOTH FREE",
+            },
+            {
+                "start_s": 28, "end_s": 45, "causal_link": "THEREFORE",
+                "visual_first_action": "CU export hits complete on screen; clean end card displays booking URL and branch name.",
+                "spoken_beat": "Bring one tape and a USB stick. Book a free slot at calgarylibrary.ca.",
+                "muted_caption": "BOOK FREE AT CALGARYLIBRARY.CA",
+            },
+        ]
+    elif dur <= 60:
+        beats = [
+            {
+                "start_s": 0, "end_s": 12, "causal_link": "SETUP",
+                "visual_first_action": "ECU rusted closet bin opens; worn 1995 wedding VHS spine fills sunlit frame.",
+                "spoken_beat": "What happens to a voice when no player in your house still works?",
+                "muted_caption": "WHEN NO VCR WORKS ANYMORE",
+            },
+            {
+                "start_s": 12, "end_s": 28, "causal_link": "BUT",
+                "visual_first_action": "MS patron enters Central Library Digital Media Lab; librarian gestures to transfer rig without hovering.",
+                "spoken_beat": "Commercial shops charge per hour, but your library card unlocks self-directed digitization stations for free.",
+                "muted_caption": "FREE SELF-DIRECTED TRANSFER LAB",
+            },
+            {
+                "start_s": 28, "end_s": 46, "causal_link": "THEREFORE",
+                "visual_first_action": "CU preview window clears from static into smiling toddler; silent two-second reaction on patron's eyes.",
+                "spoken_beat": "Hit play, watch the footage return in real time, and keep full custody on your own USB drive.",
+                "muted_caption": "SAVED STRAIGHT TO YOUR USB",
+            },
+            {
+                "start_s": 46, "end_s": 60, "causal_link": "PAYOFF",
+                "visual_first_action": "WS sunlit atrium exit; accessible high-contrast booking card holds steady.",
+                "spoken_beat": "Save one tape this week—book a free slot at calgarylibrary.ca.",
+                "muted_caption": "BOOK FREE: CALGARYLIBRARY.CA",
+            },
+        ]
+    elif dur <= 180:
+        beats = [
+            {
+                "start_s": 0, "end_s": 25, "causal_link": "SETUP",
+                "visual_first_action": "ECU cardboard box latch opens under warm kitchen lamp; faded 1994 VHS spines lift into light.",
+                "spoken_beat": "For twenty years, Maria kept her grandfather's guitar nights in a closet bin because no VCR survived.",
+                "muted_caption": "20 YEARS TRAPPED ON MAGNETIC TAPE",
+            },
+            {
+                "start_s": 25, "end_s": 60, "causal_link": "BUT",
+                "visual_first_action": "MS tabletop close-up of slack ribbon trembling; cuts to steep mail-in studio price quote fading out.",
+                "spoken_beat": "Every winter the oxide sheds a little more, but commercial transfer quotes priced her family out.",
+                "muted_caption": "FADING FAST — TRANSFER SHOPS TOO COSTLY",
+            },
+            {
+                "start_s": 60, "end_s": 105, "causal_link": "THEREFORE",
+                "visual_first_action": "OTS Central Library glass booth; lab specialist points to converter switches, then hands mouse back to Maria.",
+                "spoken_beat": "So she booked a free station at Central Library. Staff walk you through setup, then leave you in charge.",
+                "muted_caption": "BOOKED FREE AT CENTRAL LIBRARY",
+            },
+            {
+                "start_s": 105, "end_s": 150, "causal_link": "THEREFORE",
+                "visual_first_action": "CU tracking snow snaps clear into 1994 living room laughter; slow push-in on Maria's eyes widening in silence.",
+                "spoken_beat": "Playback runs minute for minute. When his laugh filled the headphones, three generations got him back.",
+                "muted_caption": "THREE GENERATIONS GOT HIS VOICE BACK",
+            },
+            {
+                "start_s": 150, "end_s": 180, "causal_link": "PAYOFF",
+                "visual_first_action": "WS family tablet screen glowing around dining table; crisp booking card fades in cleanly.",
+                "spoken_beat": "Your library card isn't only for books. Rescue one tape free—reserve at calgarylibrary.ca.",
+                "muted_caption": "RESCUE YOUR TAPES FREE: CALGARYLIBRARY.CA",
+            },
+        ]
+    else:
+        beats = [
+            {
+                "start_s": 0, "end_s": 30, "causal_link": "SETUP",
+                "visual_first_action": "Whip-pan across podcast booth, converter deck, and editing suite; bold chapter title fades cleanly.",
+                "spoken_beat": "Most Calgarians walk past thousands of dollars of free preservation gear every single week.",
+                "muted_caption": "FREE PRESERVATION GEAR DOWNTOWN",
+            },
+            {
+                "start_s": 30, "end_s": 90, "causal_link": "BUT",
+                "visual_first_action": "ECU cracked 1992 cassette spine; patron unpacks box at kitchen counter looking unsure where to begin.",
+                "spoken_beat": "Chapter One: Old family recordings decay quietly in basements, but booking a studio sounds intimidating until you see it.",
+                "muted_caption": "CH 1: WHY TAPES STAY STUCK IN CLOSETS",
+            },
+            {
+                "start_s": 90, "end_s": 150, "causal_link": "THEREFORE",
+                "visual_first_action": "OTS online booking calendar clicking open; cut to keycard tap and RCA cables seating snugly into deck.",
+                "spoken_beat": "Chapter Two: Reserve online with your library card, pack one tape and a USB stick, and check in at Central Library.",
+                "muted_caption": "CH 2: THREE-STEP FREE BOOKING FLOW",
+            },
+            {
+                "start_s": 150, "end_s": 210, "causal_link": "BUT",
+                "visual_first_action": "MS tracking jitter flashes on monitor; specialist leans in briefly, adjusts tracking dial, and steps back.",
+                "spoken_beat": "Chapter Three: What if the picture wobbles? On-site staff help troubleshoot tracking while keeping you in full control.",
+                "muted_caption": "CH 3: LIVE STAFF SUPPORT WITHOUT TAKEOVER",
+            },
+            {
+                "start_s": 210, "end_s": 270, "causal_link": "THEREFORE",
+                "visual_first_action": "CU crisp family footage playing beside 100% export bar; patron pockets USB stick with relieved grin.",
+                "spoken_beat": "Chapter Four: One hour of tape transfers in one hour—then your digital archive travels home ready to share.",
+                "muted_caption": "CH 4: YOUR ARCHIVE HOME ON USB",
+            },
+            {
+                "start_s": 270, "end_s": 300, "causal_link": "PAYOFF",
+                "visual_first_action": "WS sunlit Central Library concourse; accessible high-contrast URL end card holds cleanly.",
+                "spoken_beat": "Pick one forgotten cassette this weekend and book your free transfer slot at calgarylibrary.ca.",
+                "muted_caption": "BOOK FREE: CALGARYLIBRARY.CA",
+            },
+        ]
+
+    return {
+        "title": f"{topic} ({plat.title()} · {dur}s A/V Script)",
+        "form_id": "av_script",
+        "platform": plat,
+        "target_duration_s": dur,
+        "reality_and_custody": {
+            "official_mandates": ["Experiences", "Technology"],
+            "service_promise": "Free self-directed public access with a Calgary Public Library card and patron dignity.",
+            "immediate_patron_action": "Book a free VHS transfer slot at calgarylibrary.ca with your library card.",
+            "source_citations": ["Calgary Public Library/GROUND_TRUTH.md", "MW-04"],
+            "owned_holds": [
+                {"item": "Confirm current lab deck availability and USB rules (CD-01)", "owner": "Service Owner"},
+                {"item": "Signed patron appearance and archival clip cultural clearance (HOLD-04)", "owner": "Producer"},
+                {"item": "G06 release sign-off before upload", "owner": "Communications Director"},
+            ],
+        },
+        "belief_delta_matrix": [
+            {
+                "role": "Calgary Patron",
+                "current_skepticism": "Assumes digitization requires expensive shops and libraries only lend books.",
+                "target_state": "Confident they can rescue tapes free in one easy visit.",
+                "shift_trigger": "Seeing a real neighbor run the converter deck in 3 simple steps.",
+            },
+            {
+                "role": "Media Production Manager",
+                "current_skepticism": "Worries script is over-written (>150 WPM) or unshootable in a working lab.",
+                "target_state": "Approves shootable visual-first beat table with owned clearance holds.",
+                "shift_trigger": "Contiguous timing, <=150 WPM, low audio-video overlap, explicit HOLD-02/04 owners.",
+            },
+            {
+                "role": "Communications Director",
+                "current_skepticism": "Guards against mandate/lens drift, unauthorized release claims, or charity framing.",
+                "target_state": "Signs off on warm institutional voice aligned to 2027-2030 mandates.",
+                "shift_trigger": "Clean stakeholder copy, official Experiences & Technology mandates, G06 held.",
+            },
+        ],
+        "causal_spine": {
+            "hook_gap": "Irreplaceable family memories decaying on obsolete tape when free public rescue gear sits downtown.",
+            "a_story_action": "A patron brings a fragile family VHS tape into Central Library and digitizes it onto a USB drive.",
+            "b_story_human_shift": "From anxious helplessness over fading memories to joyful pride sharing a recovered voice across generations.",
+            "c_story_service_truth": "A library card is a free community pass to modern tools, spaces, and dignified self-directed preservation.",
+            "beats": beats,
+        },
+    }
+
+
+def build_sensemaking_graph_prompt(
+    *,
+    form_id: str,
+    platform: str,
+    target_duration_s: int,
+    assignment: str,
+    repo_root: Path,
+) -> str:
+    """Build the upstream Sensemaking Graph generation prompt governed by `craft_protocols.yaml`."""
+    protocols = load_craft_protocols(repo_root)
+    charter = load_organization_charter(repo_root=repo_root)
+    plat_cfg = (protocols.get("platform_physics") or {}).get(platform.lower(), {})
+    len_cfg = _resolve_length_arch(protocols, target_duration_s)
+    form_cfg = (protocols.get("form_protocols") or {}).get(form_id, {})
+
+    lines = [
+        "Construct ONLY a valid JSON Sensemaking Graph (no Markdown prose outside JSON).",
+        f"Organization: {charter.org_name} | Active Plan: {charter.strategic_plan_name}",
+        f"Official Mandates ONLY: {', '.join(charter.official_mandates)}",
+        f"Form: {form_id} | Platform: {platform} | Target Runtime: {target_duration_s}s",
+        f"Platform Physics: {plat_cfg.get('physics_rule', 'Native platform pacing')}",
+        f"Length Architecture: min_beats={len_cfg.get('min_beats')}, max_wpm={len_cfg.get('max_wpm')}, max_beat_s={len_cfg.get('max_beat_s')}, require_abc={len_cfg.get('require_abc_tracks')}, require_but_therefore={len_cfg.get('require_but_therefore')}",
+        "Upstream Craft Principles:",
+        *[f"  - {p}" for p in (form_cfg.get("craft_principles") or [])],
+        *[f"  - [EVOLVED] {u}" for u in (form_cfg.get("evolved_upgrades") or [])[-3:]],
+        f"Assignment: {assignment}",
+        "",
+        "Return JSON with exact top-level keys: title, form_id, platform, target_duration_s, reality_and_custody, belief_delta_matrix, causal_spine.",
+        "Keep spoken_beat, visual_first_action, and muted_caption 100% free of internal repo paths (#L12, .agents/) or unexplained codes.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def compile_and_evaluate(
+    repo_root: Path,
+    *,
+    form_id: str = "av_script",
+    platform: str = "youtube",
+    target_duration_s: int = 180,
+    topic: str = "Free VHS Digitization at Central Library",
+    mode: str = "offline",
+    worker_fn: Callable[..., tuple[bool, str]] | None = None,
+    timeout_s: float = 120.0,
+) -> dict[str, Any]:
+    """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + 3-Axis Verify."""
+    if mode == "offline":
+        graph = synthesize_canonical_av_graph(
+            platform=platform, target_duration_s=target_duration_s, topic=topic, repo_root=repo_root
+        )
+    else:
+        from .workload_bench import _call_worker, _default_agy_worker
+
+        wfn = worker_fn or _default_agy_worker
+        prompt = build_sensemaking_graph_prompt(
+            form_id=form_id,
+            platform=platform,
+            target_duration_s=target_duration_s,
+            assignment=topic,
+            repo_root=repo_root,
+        )
+        ok, raw = _call_worker(wfn, prompt, repo_root, timeout_s, "low")
+        if not ok:
+            return {"ok": False, "error": raw[:240], "platform": platform, "target_duration_s": target_duration_s}
+        cleaned = raw.strip()
+        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
+        if m:
+            cleaned = m.group(1).strip()
+        else:
+            s, e = cleaned.find("{"), cleaned.rfind("}")
+            if s >= 0 and e > s:
+                cleaned = cleaned[s : e + 1]
+        try:
+            graph = json.loads(cleaned)
+        except Exception as exc:
+            return {"ok": False, "error": f"graph_json_parse_error: {exc}", "platform": platform, "target_duration_s": target_duration_s}
+
+    g_val = validate_sensemaking_graph(
+        graph, form_id=form_id, platform=platform, target_duration_s=target_duration_s, repo_root=repo_root
+    )
+    markdown = project_graph_to_markdown(graph, form_id=form_id)
+    fe = evaluate_document_flow(markdown, form_id, target_duration_s=target_duration_s)
+    bd = evaluate_stakeholder_board(markdown, form_id, flow_eval=fe, target_duration_s=target_duration_s, repo_root=repo_root)
+    ax = evaluate_root_axes(markdown, form_id, target_duration_s=target_duration_s, repo_root=repo_root)
+
+    return {
+        "ok": g_val.ok and fe.passed and bd.buy_in_ready and ax.passed,
+        "form_id": form_id,
+        "platform": platform,
+        "target_duration_s": target_duration_s,
+        "graph_validation": g_val.to_dict(),
+        "flow_score": fe.flow_score,
+        "board_score": bd.board_score,
+        "blocking_roles": bd.blocking_roles,
+        "axes": {
+            "I": ax.axis_1_integrity,
+            "II": ax.axis_2_rhetorical_force,
+            "III": ax.axis_3_executability,
+        },
+        "failed_probes": ax.failed_probes,
+        "markdown": markdown,
+        "graph": graph,
+    }

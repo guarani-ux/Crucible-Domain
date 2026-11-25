@@ -213,3 +213,66 @@ def test_end_to_end_8_stage_pipeline_and_cross_document_cold_receiver_parity(tmp
     assert any("runtime_parity_mismatch" in v for v in bad_par.violations)
     assert any("hold_custody_dropped" in v for v in bad_par.violations)
 
+
+def test_bidirectional_sensemaking_compiler_and_cyclical_capability_evolver(tmp_path: Path) -> None:
+    import shutil
+    from crucible.capability_evolver import (
+        MULTI_CASE_AV_MATRIX,
+        attribute_failures_to_ontology,
+        evolve_form_capability,
+    )
+    from crucible.sensemaking_compiler import (
+        compile_and_evaluate,
+        load_craft_protocols,
+        synthesize_canonical_av_graph,
+        validate_sensemaking_graph,
+    )
+
+    # 1. All 6 platform x length cases compile cleanly upstream -> downstream with zero leaks
+    for plat, dur, topic in MULTI_CASE_AV_MATRIX:
+        res = compile_and_evaluate(
+            ROOT, form_id="av_script", platform=plat, target_duration_s=dur, topic=topic, mode="offline"
+        )
+        assert res["ok"] is True, (plat, dur, res)
+        assert res["graph_validation"]["ok"] is True
+        assert res["flow_score"] == 1.0
+        assert res["axes"] == {"I": 1.0, "II": 1.0, "III": 1.0}
+        body_before_appendix = res["markdown"].split("## Internal Custody & Sources")[0]
+        assert "#L" not in body_before_appendix
+        assert ".agents/" not in body_before_appendix
+
+    # 2. Negative upstream graph check: flat AND_THEN beats + missing IG muted captions + #L12 leak rejected upstream
+    bad_g = synthesize_canonical_av_graph(platform="instagram", target_duration_s=180, repo_root=ROOT)
+    for b in bad_g["causal_spine"]["beats"]:
+        b["causal_link"] = "AND_THEN"
+        b["muted_caption"] = ""
+    bad_g["causal_spine"]["beats"][0]["spoken_beat"] += " See GROUND_TRUTH.md#L12."
+    bad_val = validate_sensemaking_graph(
+        bad_g, form_id="av_script", platform="instagram", target_duration_s=180, repo_root=ROOT
+    )
+    assert not bad_val.ok
+    assert "L3:HOOK_AND_TENSION_MECHANICS" in bad_val.failed_l3_nodes
+    assert "L3:PLATFORM_AND_AV_MEDIUM_PHYSICS" in bad_val.failed_l3_nodes
+    assert "L3:POLITICAL_STEWARDSHIP_AND_AUTHORITY" in bad_val.failed_l3_nodes
+
+    # 3. Bottom-up L4 -> L3 -> L2 -> L1 -> L0 ontology attribution
+    attr = attribute_failures_to_ontology(ROOT, failed_probes=["narrative_tension_and_counterpoint"])
+    assert attr["ok"] is True
+    assert len(attr["attributed_l3"]) >= 1
+    assert attr["attributed_l3"][0]["l0_id"] == "L0:INSTITUTIONAL_SENSEMAKING_AND_ACTION_DESIGN"
+
+    # 4. Isolated cyclical upstream promotion bumps craft_protocols.yaml version & writes golden_exemplars.json
+    bench_dir = tmp_path / ".agents" / "bench"
+    bench_dir.mkdir(parents=True, exist_ok=True)
+    for fname in ("craft_protocols.yaml", "sensemaking_ontology.yaml", "org_charter.yaml", "axis_contracts.yaml"):
+        shutil.copy(ROOT / ".agents" / "bench" / fname, bench_dir / fname)
+
+    ev = evolve_form_capability(tmp_path, form_id="av_script", apply_upgrade=True)
+    assert ev["ok"] is True
+    assert ev["ablation"]["cases_passed"] == 6
+    assert ev["ablation"]["counterfactual_caught"] is True
+    assert ev["promoted"] is True
+    assert load_craft_protocols(tmp_path)["version"] == "1.0.1"
+    assert (bench_dir / "golden_exemplars.json").is_file()
+
+

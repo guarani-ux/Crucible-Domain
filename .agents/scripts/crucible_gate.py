@@ -1266,10 +1266,65 @@ def cmd_bench(
     action = parts[0] if parts else "run"
     default_yaml = root / ".agents" / "bench" / "workloads.yaml"
 
-    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect", "pipeline", "matrix"):
-        msg = "usage: crucible_gate.py bench {validate [<workloads.yaml>] | run [<workloads.yaml>] [--mode offline|all|plumbing|hybrid|agy_live] [--form FORM] [--no-judge] [--rounds N] [--until-exit] [--max-minutes M] [--interval-min M] [--adaptive] [--project ID...] | pipeline [--project ID] [--mode offline|agy_live] [--rounds N] [--no-judge] | matrix [reset] [--mode offline|agy_live] [--rounds N] [--no-judge] | fuzz [--rounds N] | trial [reset] [--rounds N] | test-validity | inspect | audit <file> <form_id> | judge <file> <form_id> | train | score <file> <form_id> | label <file> <form_id> pass|fail | steer [apply] | pull <lever_id> [form_id] | stop | report [<telemetry.jsonl>]}"
+    if action not in ("validate", "run", "report", "stop", "fuzz", "audit", "train", "score", "label", "steer", "pull", "trial", "judge", "test-validity", "inspect", "pipeline", "matrix", "compile", "evolve"):
+        msg = "usage: crucible_gate.py bench {validate | run | pipeline | matrix | compile [platform] [duration_s] [--mode offline|agy_live] | evolve [apply] [--form FORM] | fuzz | trial | test-validity | inspect | audit | judge | train | score | label | steer | pull | stop | report}"
         print(json.dumps({"ok": False, "error": msg}, indent=2) if as_json else msg, file=sys.stdout if as_json else sys.stderr)
         return 2
+
+    if action == "compile":
+        sc = _resolve_crucible_submodule("sensemaking_compiler")
+        plat = parts[1] if len(parts) >= 2 else "youtube"
+        dur = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 180
+        comp_mode = "offline" if bench_mode == "offline" else "agy_live"
+        res = sc.compile_and_evaluate(
+            root,
+            form_id=form_filter or "av_script",
+            platform=plat,
+            target_duration_s=dur,
+            mode=comp_mode,
+        )
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            status = "PASS" if res.get("ok") else "BLOCKED"
+            gv = res.get("graph_validation") or {}
+            ax = res.get("axes") or {}
+            print(
+                f"Bidirectional Sensemaking Compiler ({status}): form={res.get('form_id')} | "
+                f"platform={plat} | duration={dur}s | mode={comp_mode} | "
+                f"graph={gv.get('graph_score', 0.0):.2f} ({gv.get('checks_passed', 0)}/{gv.get('checks_total', 0)}) | "
+                f"flow={res.get('flow_score', 0.0):.2f} | board={res.get('board_score', 0.0):.2f} | "
+                f"axes=I:{ax.get('I', 0):.2f}/II:{ax.get('II', 0):.2f}/III:{ax.get('III', 0):.2f}"
+            )
+            if gv.get("violations"):
+                print(f"  Upstream Graph Violations: {gv['violations']}")
+            if res.get("error"):
+                print(f"  Error: {res['error']}")
+        return 0 if res.get("ok") else 1
+
+    if action == "evolve":
+        ce = _resolve_crucible_submodule("capability_evolver")
+        do_apply = len(parts) >= 2 and parts[1].lower() in ("apply", "--apply")
+        res = ce.evolve_form_capability(root, form_id=form_filter or "av_script", apply_upgrade=do_apply)
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            status = "PASS" if res["ok"] else "BLOCKED"
+            ab = res["ablation"]
+            top = res.get("top_attributed_chain") or {}
+            print(
+                f"Cyclical Capability Evolver ({status}) in {res['elapsed_ms']:.1f}ms: "
+                f"form={res['form_id']} | protocol=v{res['protocol_version']} | "
+                f"ablation={ab['cases_passed']}/{ab['cases_total']} (counterfactual_caught={ab['counterfactual_caught']}) | "
+                f"promoted={res['promoted']}"
+            )
+            if top:
+                print(f"  Attributed Chain: {top.get('l3_id')} -> {top.get('l2_id')} -> {top.get('l1_id')}")
+                print(f"  Upstream Upgrade: {top.get('proposed_upstream_upgrade')}")
+            for c in ab["cases"]:
+                ctag = "PASS" if c["ok"] else "FAIL"
+                print(f"  [{ctag}] {c['platform']:<10} {c['duration_s']:>3}s | graph={c['graph_score']:.2f} flow={c['flow_score']:.2f} board={c['board_score']:.2f} axes={c['axes']}")
+        return 0 if res["ok"] else 1
 
     if action == "matrix":
         pr = _resolve_crucible_submodule("pipeline_runner")
