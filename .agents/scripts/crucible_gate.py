@@ -1305,7 +1305,7 @@ def cmd_bench(
         from_json_arg = _resolve_cli_path(root, from_json) if from_json else None
         res = sc.compile_and_evaluate(
             root,
-            form_id=form_filter or "av_script",
+            form_id=form_filter,
             platform=plat,
             target_duration_s=dur,
             mode=comp_mode,

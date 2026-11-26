@@ -27,6 +27,7 @@ from .doc_flow_engine import (
     has_mandate_lens_trap,
     load_organization_charter,
 )
+from .form_diagnostics import FORM_PROFILES
 from .outcome_ratchet import get_active_promoted_lessons, record_paired_outcome
 from .root_axis_engine import evaluate_root_axes
 
@@ -1034,7 +1035,7 @@ def _parse_graph_object(text: str) -> dict[str, Any]:
 def compile_and_evaluate(
     repo_root: Path,
     *,
-    form_id: str = "av_script",
+    form_id: str | None = "av_script",
     platform: str = "youtube",
     target_duration_s: int = 180,
     topic: str = "Free VHS Digitization at Central Library",
@@ -1046,6 +1047,8 @@ def compile_and_evaluate(
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
     """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + Gate 2 + Upstream Re-Compile."""
+    infer_graph_form = form_id is None
+    form_id = form_id or "av_script"
     if mode == "prompt":
         prompt_text = build_sensemaking_graph_prompt(
             form_id=form_id,
@@ -1091,6 +1094,12 @@ def compile_and_evaluate(
                     "platform": platform,
                     "target_duration_s": target_duration_s,
                 }
+            if infer_graph_form and "form_id" in graph:
+                declared_form = graph["form_id"]
+                if not isinstance(declared_form, str) or declared_form not in FORM_PROFILES:
+                    return {"ok": False, "error": "unsupported graph form_id", "platform": platform,
+                            "target_duration_s": target_duration_s}
+                form_id = declared_form
         elif fixture:
             input_source = "example_fixture"
             graph = synthesize_canonical_graph(

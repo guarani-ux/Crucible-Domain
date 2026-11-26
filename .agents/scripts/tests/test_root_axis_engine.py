@@ -253,11 +253,13 @@ def test_cli_import_compiles_submitted_graph_and_rejects_invalid_input(tmp_path:
         assert result["gate2"]["advisory"]["requires_human_review"] is True
 
         mechanical = subprocess.run(
-            [*args, "--no-judge"], cwd=ROOT, capture_output=True, text=True, check=False,
+            [*command, "--no-judge"], cwd=ROOT, capture_output=True, text=True, check=False,
             env={**os.environ, "PATH": ""},
         )
         assert mechanical.returncode == 0, mechanical.stderr or mechanical.stdout
         mechanical_result = json.loads(mechanical.stdout)
+        assert mechanical_result["form_id"] == form
+        assert mechanical_result["markdown"] == result["markdown"]
         assert mechanical_result["ok"] is True
         assert mechanical_result["gate2"]["verdict"] == "SKIPPED"
 
