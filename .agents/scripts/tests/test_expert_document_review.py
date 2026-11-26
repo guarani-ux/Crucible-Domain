@@ -135,7 +135,7 @@ def test_concurrent_conflicting_labels_preserve_one_revision(tmp_path):
     assert er.train_expert_model(tmp_path, "production_brief")["case_count"] == 1
 
 
-def test_generic_label_routes_by_supplied_provenance(tmp_path):
+def test_generic_label_routes_by_supplied_provenance(tmp_path, capsys):
     from crucible_gate import cmd_bench
 
     draft = tmp_path / "draft.md"
@@ -143,9 +143,14 @@ def test_generic_label_routes_by_supplied_provenance(tmp_path):
     args = ["label", str(draft), "production_brief", "pass"]
     assert cmd_bench(tmp_path, args, reviewer="") == 2
     assert not (tmp_path / ".agents/bench").exists()
+    capsys.readouterr()
 
     assert cmd_bench(tmp_path, args, reviewer="Test reviewer", role="Producer",
                      case_id="test-assignment", evidence="Test-only receipt",
-                     training_authorized=True) == 0
-    assert er.train_expert_model(tmp_path, "production_brief")["case_count"] == 1
+                     training_authorized=True, as_json=True) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert receipt["ok"]
+    readiness = receipt["training_readiness"]
+    assert readiness == er.train_expert_model(tmp_path, "production_brief")
+    assert readiness["case_count"] == 1 and not readiness["ok"]
     assert not (tmp_path / ".agents/bench/human_labels.jsonl").exists()

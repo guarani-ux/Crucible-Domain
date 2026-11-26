@@ -19,10 +19,11 @@ For an existing Markdown draft, use `bench judge DOCUMENT FORM --advice-only --j
 A curator records the exact revision a professional reviewed, their decision, the assignment, and a reference supporting their role and decision. Obtain permission for training use. Keep revisions from one assignment under the same case ID. Examples of relevant judgments include an editor deciding whether a research note separates observations from hypotheses, or a producer deciding whether a brief contains enough information to commission a shoot.
 
 ```sh
-python .agents/scripts/crucible_gate.py bench label-expert draft.md research_note fail --reviewer "$REVIEWER" --role "$ROLE" --case-id "$ASSIGNMENT" --evidence "$REVIEW_RECORD" --training-authorized
-python .agents/scripts/crucible_gate.py bench train-expert research_note --json
+python .agents/scripts/crucible_gate.py bench label-expert draft.md research_note fail --reviewer "$REVIEWER" --role "$ROLE" --case-id "$ASSIGNMENT" --evidence "$REVIEW_RECORD" --training-authorized --json
 python .agents/scripts/crucible_gate.py bench judge next-draft.md research_note --advice-only --json
 ```
+
+A successful label receipt includes `training_readiness` for that form. If `training_readiness.ok` is false, read its reason to see why the classifier abstains. The advice command can still return mechanical diagnostics. When it is true, run the advice command on the next draft. To inspect readiness separately, run `bench train-expert FORM --json`.
 
 The classifier learns per form from local records containing measured features, a document digest and the review provenance. Training checks predictions on held-out assignments, including both pass and fail decisions. Read the case counts and results for each class before interpreting a recommendation. Missing evidence, inadequate performance, ambiguous inputs or a document outside the measured range lead to abstention. A recommendation can help prioritize revisions. It supplies neither claim evidence nor a professional's sign-off. The separate benchmark trainer uses fixtures and mutations to exercise the software.
 

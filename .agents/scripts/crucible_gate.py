@@ -1652,8 +1652,12 @@ def cmd_bench(
             )
         except (OSError, ValueError) as exc:
             return usage_error(str(exc))
-        print(json.dumps({"ok": True, "label": row}, indent=2) if as_json
-              else f"Recorded {row['verdict']} for {row['form_id']} in case {row['case_id']}.")
+        readiness = expert.train_expert_model(root, row["form_id"])
+        if as_json:
+            print(json.dumps({"ok": True, "label": row, "training_readiness": readiness}, indent=2))
+        else:
+            print(f"Recorded {row['verdict']} for {row['form_id']} in case {row['case_id']}.")
+            print(f"Training readiness ({readiness['case_count']} assignments): {readiness['reason']}")
         return 0
 
     if action == "train-expert":
