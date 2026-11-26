@@ -639,3 +639,25 @@ def test_matrix_reviews_submitted_documents_without_provider_or_fixture_cursor(t
     assert receipt["advisory"]["recommendation"] == "abstain"
     assert (tmp_path / receipt["output_path"]).read_text() == target.read_text()
     assert not (tmp_path / ".agents" / "ml_outcome_ratchet.json").exists()
+
+
+def test_pipeline_selects_the_only_submitted_manifest_project(tmp_path: Path) -> None:
+    import shutil
+
+    from crucible.pipeline_runner import load_pipeline_manifest
+
+    shutil.copytree(HUB_ROOT / ".agents" / "bench", tmp_path / ".agents" / "bench")
+    projects = load_pipeline_manifest(tmp_path)["projects"]
+    documents = tmp_path / "submitted"
+    (documents / projects[1]["id"]).mkdir(parents=True)
+    (documents / "unrelated").mkdir()
+
+    run = subprocess.run(
+        [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "bench", "pipeline",
+         "--root", str(tmp_path), "--documents-dir", str(documents), "--json"],
+        capture_output=True, text=True,
+    )
+    result = json.loads(run.stdout)
+    assert run.returncode == 1
+    assert result["project_id"] == projects[1]["id"]
+    assert all(s["gate2_verdict"] == "INPUT_REQUIRED" for s in result["stages"])

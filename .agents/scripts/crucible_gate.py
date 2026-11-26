@@ -1414,6 +1414,14 @@ def cmd_bench(
         stream_fn = (lambda msg: print(msg, flush=True)) if not as_json else None
         manifest = pr.load_pipeline_manifest(root)
         all_pids = [p["id"] for p in manifest["projects"]]
+        if pid is None and documents_dir is not None:
+            try:
+                matches = [entry.name for entry in documents_dir.iterdir()
+                           if entry.name in all_pids and entry.is_dir()]
+            except OSError:
+                matches = []
+            if len(matches) == 1:
+                pid = matches[0]
         total_rounds = max(1, rounds)
         round_results: list[dict[str, Any]] = []
         stop_file = root / ".agents" / "bench.stop"
