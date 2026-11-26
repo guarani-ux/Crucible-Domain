@@ -301,6 +301,24 @@ def test_import_av_graph_uses_declared_target_for_validation(tmp_path: Path) -> 
             assert "platform_instagram_requires_muted_first_captions" in result["graph_validation"]["violations"]
 
 
+def test_unassigned_second_fails_graph_and_rendered_script_checks() -> None:
+    from crucible.doc_flow_engine import evaluate_document_flow
+    from crucible.sensemaking_compiler import (
+        project_graph_to_markdown, synthesize_canonical_av_graph, validate_sensemaking_graph,
+    )
+
+    graph = synthesize_canonical_av_graph(platform="instagram", target_duration_s=15, repo_root=ROOT)
+    beats = graph["causal_spine"]["beats"]
+    beats[-1]["start_s"] = beats[-2]["end_s"] + 1
+    report = validate_sensemaking_graph(graph, platform="instagram", target_duration_s=15, repo_root=ROOT)
+    assert "non_contiguous_beat_timestamps" in report.violations
+
+    markdown = project_graph_to_markdown(graph)
+    flow = evaluate_document_flow(markdown, "av_script", target_duration_s=15)
+    assert not flow.features["timecode_contiguous"]
+    assert any(v.startswith("timecode_gap:") for v in flow.violations)
+
+
 def test_end_to_end_8_stage_pipeline_and_cross_document_cold_receiver_parity(tmp_path: Path) -> None:
     import shutil
     from crucible.pipeline_runner import audit_pipeline_parity, load_pipeline_manifest, run_end_to_end_pipeline

@@ -22,6 +22,7 @@ from typing import Any, Callable
 
 from .doc_flow_engine import (
     _jaccard_overlap,
+    beat_is_contiguous,
     evaluate_document_flow,
     evaluate_stakeholder_board,
     has_mandate_lens_trap,
@@ -191,7 +192,7 @@ def validate_sensemaking_graph(
             s_s = int(b.get("start_s", -1))
             e_s = int(b.get("end_s", -1))
             dur = e_s - s_s
-            if s_s < 0 or dur <= 0 or (prev_end >= 0 and s_s < prev_end):
+            if not beat_is_contiguous(s_s, e_s, prev_end):
                 contiguous = False
             prev_end = e_s
             longest_beat = max(longest_beat, dur)

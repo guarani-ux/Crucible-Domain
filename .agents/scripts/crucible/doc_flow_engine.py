@@ -150,6 +150,11 @@ def _hold_has_named_owner(line: str) -> bool:
     return bool(OWNER_HINT_RE.search(stripped))
 
 
+def beat_is_contiguous(start_s: int, end_s: int, previous_end_s: int) -> bool:
+    """A negative previous end marks the first beat, which may start at an offset."""
+    return 0 <= start_s < end_s and (previous_end_s < 0 or start_s == previous_end_s)
+
+
 def _jaccard_overlap(a: str, b: str) -> float:
     ta, tb = _content_tokens(a), _content_tokens(b)
     if not ta or not tb:
@@ -387,10 +392,13 @@ def evaluate_document_flow(
             "av_table_scaffold:contiguous_beats",
         )
         contiguous = True
+        timing_error = "timecode_inversion_or_zero_duration: non-contiguous beat timestamps"
         prev_end = -1
         for b in beats:
-            if b.duration_s <= 0 or (prev_end >= 0 and b.start_s < prev_end):
+            if not beat_is_contiguous(b.start_s, b.end_s, prev_end):
                 contiguous = False
+                if 0 <= prev_end < b.start_s:
+                    timing_error = f"timecode_gap: no beat covers {prev_end}s to {b.start_s}s"
                 break
             prev_end = b.end_s
         total_dur_s = beats[-1].end_s - beats[0].start_s if beats else 0
@@ -417,7 +425,7 @@ def evaluate_document_flow(
         )
         _check(
             contiguous and len(beats) >= 2,
-            "timecode_inversion_or_zero_duration: non-contiguous beat timestamps",
+            timing_error,
             "timecode_math_validator",
         )
         _check(
