@@ -114,7 +114,7 @@ CORE_ENTRY_DOCS: dict[str, tuple[str, str, str]] = {
     "DOC-COMPILER": (
         "Compile and review documents",
         "DOCUMENT_COMPILER_GUIDE.md",
-        "Render a supplied JSON graph as Markdown, review a production brief against permissioned professional decisions, "
+        "Render a supplied JSON graph as Markdown, review a production brief or media production draft against permissioned professional decisions, "
         "or check a document pack with the local pipeline.",
     ),
     "WOS-GRAPH": (
