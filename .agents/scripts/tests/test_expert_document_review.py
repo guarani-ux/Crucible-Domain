@@ -133,3 +133,19 @@ def test_concurrent_conflicting_labels_preserve_one_revision(tmp_path):
         assert sorted(workers.map(submit, ("pass", "fail"))) == [False, True]
     assert len(list((tmp_path / er.STORE).rglob("*.json"))) == 1
     assert er.train_expert_model(tmp_path, "production_brief")["case_count"] == 1
+
+
+def test_generic_label_routes_by_supplied_provenance(tmp_path):
+    from crucible_gate import cmd_bench
+
+    draft = tmp_path / "draft.md"
+    draft.write_text("Request a crew review before booking the venue.", encoding="utf-8")
+    args = ["label", str(draft), "production_brief", "pass"]
+    assert cmd_bench(tmp_path, args, reviewer="") == 2
+    assert not (tmp_path / ".agents/bench").exists()
+
+    assert cmd_bench(tmp_path, args, reviewer="Test reviewer", role="Producer",
+                     case_id="test-assignment", evidence="Test-only receipt",
+                     training_authorized=True) == 0
+    assert er.train_expert_model(tmp_path, "production_brief")["case_count"] == 1
+    assert not (tmp_path / ".agents/bench/human_labels.jsonl").exists()

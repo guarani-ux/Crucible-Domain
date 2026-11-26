@@ -1636,9 +1636,12 @@ def cmd_bench(
             print(f"PULLED LEVER [{res['lever_id']}] -> forms={len(res['updated_forms'])} | rule: {res['policy_rule']}")
         return 0
 
-    if action == "label-expert":
+    professional_options = training_authorized or any(
+        value is not None for value in (reviewer, role, case_id, evidence)
+    )
+    if action == "label-expert" or (action == "label" and professional_options):
         if len(parts) != 4 or not all((reviewer, role, case_id, evidence, training_authorized)):
-            return usage_error("usage: bench label-expert FILE FORM pass|fail --reviewer ID --role ROLE "
+            return usage_error(f"usage: bench {action} FILE FORM pass|fail --reviewer ID --role ROLE "
                                "--case-id ID --evidence REFERENCE --training-authorized")
         expert = _resolve_crucible_submodule("expert_document_review")
         try:
@@ -1730,9 +1733,12 @@ def cmd_bench(
             print(json.dumps({"ok": False, "error": str(exc)}, indent=2) if as_json else str(exc), file=sys.stdout if as_json else sys.stderr)
             return 2
         if as_json:
-            print(json.dumps({"ok": True, "label": row}, indent=2, ensure_ascii=False))
+            print(json.dumps({
+                "ok": True, "label": row, "assessment_scope": "fixture_benchmark",
+                "professional_signoff": False, "affects_expert_review": False,
+            }, indent=2, ensure_ascii=False))
         else:
-            print(f"Recorded human label: {row['verdict'].upper()} for {row['file']} ({row['form_id']}) -> run 'bench train' to retrain.")
+            print(f"Recorded fixture benchmark label (no expert review or professional sign-off): {row['verdict'].upper()} for {row['file']} ({row['form_id']}) -> run 'bench train' to retrain.")
         return 0
 
     if action == "fuzz":
