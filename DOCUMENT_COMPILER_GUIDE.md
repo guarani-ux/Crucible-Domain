@@ -7,7 +7,7 @@ Crucible renders a source-backed document graph using local Python. The author s
 Install the repository requirements with `python -m pip install -r requirements.txt`. From the project root, run the following with a graph for the indicated form.
 
 ```sh
-python .agents/scripts/crucible_gate.py bench compile youtube 180 --form research_note --from-json graph.json --mode local --json
+python .agents/scripts/crucible_gate.py bench compile youtube 180 --form research_note --from-json graph.json --mode local --no-judge --json
 ```
 
 Inspect the rendered `markdown`, graph validation and `gate2` fields separately. A mechanically valid document can still need professional review. Use `--no-judge` for a mechanical check. Supported forms are `av_script`, `production_brief`, `leadership_report`, `research_note`, `treatment`, `call_sheet`, `shot_list`, and `content_calendar`. To inspect an example graph for a form, run the same command with `--mode offline` and omit `--from-json`. Offline examples contain illustrative content. Use the governing project sources to prepare a real graph.
