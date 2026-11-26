@@ -1295,8 +1295,10 @@ def cmd_bench(
 
     if action == "compile":
         sc = _resolve_crucible_submodule("sensemaking_compiler")
-        plat = parts[1] if len(parts) >= 2 and not parts[1].startswith("--") else "youtube"
-        dur = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else 180
+        plat = parts[1] if len(parts) >= 2 and not parts[1].startswith("--") else None
+        dur = None
+        if len(parts) >= 3:
+            dur = int(parts[2]) if parts[2].isdigit() else 180
         if bench_mode not in {"offline", "local", "prompt"}:
             return usage_error("bench compile accepts --mode offline, local, or prompt")
         if bench_mode == "prompt" and from_json:
@@ -1317,6 +1319,8 @@ def cmd_bench(
             return 0
         if as_json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
+        elif res.get("error") and "platform" not in res:
+            print(f"Compiler blocked: {res['error']}")
         else:
             status = "PASS" if res.get("ok") else "BLOCKED"
             gv = res.get("graph_validation") or {}
@@ -1325,7 +1329,7 @@ def cmd_bench(
             g2_str = f" | gate2={g2.get('verdict', 'SKIPPED')}({g2.get('judgment_score', 0.0):.2f})" if g2.get("verdict") != "SKIPPED" else ""
             print(
                 f"Bidirectional Sensemaking Compiler ({status}): form={res.get('form_id')} | "
-                f"platform={plat} | duration={dur}s | mode={comp_mode} | "
+                f"platform={res.get('platform')} | duration={res.get('target_duration_s')}s | mode={comp_mode} | "
                 f"graph={gv.get('graph_score', 0.0):.2f} ({gv.get('checks_passed', 0)}/{gv.get('checks_total', 0)}) | "
                 f"flow={res.get('flow_score', 0.0):.2f} | board={res.get('board_score', 0.0):.2f} | "
                 f"axes=I:{ax.get('I', 0):.2f}/II:{ax.get('II', 0):.2f}/III:{ax.get('III', 0):.2f}{g2_str}"

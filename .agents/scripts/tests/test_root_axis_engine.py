@@ -280,6 +280,27 @@ def test_cli_import_compiles_submitted_graph_and_rejects_invalid_input(tmp_path:
     assert "unowned_or_missing_holds_in_graph" in json.loads(blocked.stdout)["graph_validation"]["violations"]
 
 
+def test_import_av_graph_uses_declared_target_for_validation(tmp_path: Path) -> None:
+    from crucible.sensemaking_compiler import synthesize_canonical_av_graph
+
+    graph = synthesize_canonical_av_graph(platform="instagram", target_duration_s=15, repo_root=ROOT)
+    path = tmp_path / "cut.json"
+    args = [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "bench", "compile",
+            "--from-json", str(path), "--no-judge", "--json"]
+
+    for captioned in (True, False):
+        if not captioned:
+            for beat in graph["causal_spine"]["beats"]:
+                beat["muted_caption"] = ""
+        path.write_text(json.dumps(graph), encoding="utf-8")
+        proc = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, env={**os.environ, "PATH": ""})
+        result = json.loads(proc.stdout)
+        assert result["platform"] == "instagram" and result["target_duration_s"] == 15
+        assert (proc.returncode == 0) == captioned
+        if not captioned:
+            assert "platform_instagram_requires_muted_first_captions" in result["graph_validation"]["violations"]
+
+
 def test_end_to_end_8_stage_pipeline_and_cross_document_cold_receiver_parity(tmp_path: Path) -> None:
     import shutil
     from crucible.pipeline_runner import audit_pipeline_parity, load_pipeline_manifest, run_end_to_end_pipeline

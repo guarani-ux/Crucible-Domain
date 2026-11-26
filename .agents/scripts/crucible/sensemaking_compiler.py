@@ -1036,8 +1036,8 @@ def compile_and_evaluate(
     repo_root: Path,
     *,
     form_id: str | None = "av_script",
-    platform: str = "youtube",
-    target_duration_s: int = 180,
+    platform: str | None = None,
+    target_duration_s: int | None = None,
     topic: str = "Free VHS Digitization at Central Library",
     mode: str = "offline",
     enable_judgment_gate: bool = False,
@@ -1047,6 +1047,10 @@ def compile_and_evaluate(
     timeout_s: float = 120.0,
 ) -> dict[str, Any]:
     """Run the full bidirectional pipeline: Upstream Graph -> Validate -> Project Markdown -> Gate 1 + Gate 2 + Upstream Re-Compile."""
+    infer_platform = platform is None
+    infer_duration = target_duration_s is None
+    platform = "youtube" if infer_platform else platform
+    target_duration_s = 180 if infer_duration else target_duration_s
     infer_graph_form = form_id is None
     form_id = form_id or "av_script"
     if mode == "prompt":
@@ -1080,7 +1084,6 @@ def compile_and_evaluate(
     feedback_note = ""
     last_result: dict[str, Any] = {"ok": False, "platform": platform, "target_duration_s": target_duration_s}
 
-    use_case_id = f"{platform}_{target_duration_s}s"
     for attempt in range(attempts):
         writer_lessons: list[str] = []
         if from_json_path is not None:
@@ -1100,6 +1103,18 @@ def compile_and_evaluate(
                     return {"ok": False, "error": "unsupported graph form_id", "platform": platform,
                             "target_duration_s": target_duration_s}
                 form_id = declared_form
+            if form_id == "av_script":
+                if infer_platform and "platform" in graph:
+                    declared = graph["platform"]
+                    platforms = load_craft_protocols(repo_root).get("platform_physics", {})
+                    if not isinstance(declared, str) or declared.lower() not in platforms:
+                        return {"ok": False, "error": "unsupported graph platform"}
+                    platform = declared.lower()
+                if infer_duration and "target_duration_s" in graph:
+                    duration = graph["target_duration_s"]
+                    if type(duration) is not int or duration <= 0:
+                        return {"ok": False, "error": "graph target_duration_s must be a positive integer"}
+                    target_duration_s = duration
         elif fixture:
             input_source = "example_fixture"
             graph = synthesize_canonical_graph(
@@ -1120,7 +1135,7 @@ def compile_and_evaluate(
                 + feedback_note
             )
             if enable_judgment_gate:
-                writer_lessons = get_active_promoted_lessons(repo_root, form_id, use_case_id=use_case_id, limit=4)
+                writer_lessons = get_active_promoted_lessons(repo_root, form_id, use_case_id=f"{platform}_{target_duration_s}s", limit=4)
                 if writer_lessons:
                     prompt += "\nApply these editorial lessons when building the graph:\n"
                     prompt += "\n".join(f"- {lesson}" for lesson in writer_lessons) + "\n"
@@ -1151,7 +1166,10 @@ def compile_and_evaluate(
             repo_root=repo_root,
             strict_wpm_floor=(mode != "offline"),
         )
-        markdown = project_graph_to_markdown(graph, form_id=form_id)
+        render_graph = graph
+        if from_json_path is not None and form_id == "av_script":
+            render_graph = {**graph, "platform": platform, "target_duration_s": target_duration_s}
+        markdown = project_graph_to_markdown(render_graph, form_id=form_id)
         fe = evaluate_document_flow(markdown, form_id, target_duration_s=target_duration_s)
         bd = evaluate_stakeholder_board(markdown, form_id, flow_eval=fe, target_duration_s=target_duration_s, repo_root=repo_root)
         ax = evaluate_root_axes(markdown, form_id, target_duration_s=target_duration_s, repo_root=repo_root)
@@ -1175,7 +1193,7 @@ def compile_and_evaluate(
                 record_paired_outcome(
                     repo_root,
                     form_id=form_id,
-                    use_case_id=use_case_id,
+                    use_case_id=f"{platform}_{target_duration_s}s",
                     axis_scores=jv.axis_scores,
                     verdict=jv.verdict,
                     weakest_engine=jv.weakest_engine,
