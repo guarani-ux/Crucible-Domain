@@ -661,3 +661,28 @@ def test_pipeline_selects_the_only_submitted_manifest_project(tmp_path: Path) ->
     assert run.returncode == 1
     assert result["project_id"] == projects[1]["id"]
     assert all(s["gate2_verdict"] == "INPUT_REQUIRED" for s in result["stages"])
+
+
+def test_pipeline_rotates_only_submitted_projects(tmp_path: Path) -> None:
+    import shutil
+
+    from crucible.pipeline_runner import load_pipeline_manifest
+
+    shutil.copytree(HUB_ROOT / ".agents" / "bench", tmp_path / ".agents" / "bench")
+    projects = [p["id"] for p in load_pipeline_manifest(tmp_path)["projects"]][1:3]
+    documents = tmp_path / "submitted"
+    for project in reversed(projects):
+        (documents / project).mkdir(parents=True)
+
+    command = [sys.executable, str(SCRIPTS_DIR / "crucible_gate.py"), "bench", "pipeline",
+               "--root", str(tmp_path), "--documents-dir", str(documents), "--json"]
+    ambiguous = subprocess.run(command, capture_output=True, text=True)
+    assert ambiguous.returncode == 2
+    error = json.loads(ambiguous.stdout)["error"]
+    assert "--project" in error and all(project in error for project in projects)
+
+    batch = subprocess.run([*command, "--rounds", "2"], capture_output=True, text=True)
+    assert batch.returncode == 1  # Recognized packs still require their missing stages.
+    results = json.loads(batch.stdout)["rounds"]
+    assert [r["project_id"] for r in results] == projects
+    assert all(s["gate2_verdict"] == "INPUT_REQUIRED" for r in results for s in r["stages"])

@@ -1417,16 +1417,17 @@ def cmd_bench(
         pid = project_ids[0] if project_ids else (parts[1] if len(parts) >= 2 else None)
         stream_fn = (lambda msg: print(msg, flush=True)) if not as_json else None
         manifest = pr.load_pipeline_manifest(root)
-        all_pids = [p["id"] for p in manifest["projects"]]
+        project_pool = [p["id"] for p in manifest["projects"]]
+        total_rounds = max(1, rounds)
         if pid is None and documents_dir is not None:
             try:
-                matches = [entry.name for entry in documents_dir.iterdir()
-                           if entry.name in all_pids and entry.is_dir()]
-            except OSError:
-                matches = []
-            if len(matches) == 1:
-                pid = matches[0]
-        total_rounds = max(1, rounds)
+                project_pool = [project for project in project_pool if (documents_dir / project).is_dir()]
+            except OSError as exc:
+                return usage_error(f"Cannot inspect submitted projects: {exc}")
+            if not project_pool:
+                return usage_error(f"No manifest project directory found under {documents_dir}")
+            if len(project_pool) > 1 and total_rounds == 1:
+                return usage_error(f"Choose a submitted project with --project: {', '.join(project_pool)}")
         round_results: list[dict[str, Any]] = []
         stop_file = root / ".agents" / "bench.stop"
 
@@ -1437,7 +1438,7 @@ def cmd_bench(
                 except OSError:
                     pass
                 break
-            cur_pid = pid if pid else all_pids[(r_idx - 1) % len(all_pids)]
+            cur_pid = pid if pid else project_pool[(r_idx - 1) % len(project_pool)]
             if total_rounds > 1 and not as_json:
                 print(f"\n=== PIPELINE ROUND {r_idx}/{total_rounds} :: project={cur_pid} ===", flush=True)
             try:
