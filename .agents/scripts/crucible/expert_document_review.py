@@ -13,18 +13,30 @@ import math
 import os
 import tempfile
 from collections import defaultdict
+from functools import cache
 from pathlib import Path
 from statistics import fmean
 from typing import Any, BinaryIO
 
 from .doc_flow_engine import GOLDEN_SPECIMENS
-from .doc_ml_scorer import FEATURE_NAMES, extract_document_features
+from .doc_ml_scorer import FEATURE_NAMES, extract_document_features, iter_benchmark_documents
 from .judgment_panel import JudgmentVerdict
 
 FORMS = {spec["form_id"] for spec in GOLDEN_SPECIMENS.values()}
 VERDICTS = ("pass", "fail")
 STORE = Path(".agents/bench/expert_reviews")
 FEATURE_SCHEMA = "document-features-40-v1"
+
+
+@cache
+def _benchmark_digests() -> frozenset[str]:
+    # Historical records retain only the raw digest. Cover ordinary editor serializations.
+    return frozenset(
+        hashlib.sha256(version.encode(encoding)).hexdigest()
+        for text, _, _, _ in iter_benchmark_documents()
+        for version in (text, text.replace("\n", "\r\n"))
+        for encoding in ("utf-8", "utf-8-sig")
+    )
 
 
 def _features(text: str, form_id: str, root: Path) -> list[float]:
@@ -68,12 +80,15 @@ def append_expert_label(repo_root: Path, file_path: Path, form_id: str, verdict:
     if form_id not in FORMS:
         raise ValueError(f"Unsupported document form: {form_id}")
     content = file_path.read_bytes()
+    digest = hashlib.sha256(content).hexdigest()
+    if digest in _benchmark_digests():
+        raise ValueError("Benchmark documents cannot be used as professional training cases")
     text = content.decode("utf-8-sig")
     if not text.strip():
         raise ValueError("Document is empty")
     row = dict(form_id=form_id, verdict=verdict.strip().lower(), reviewer=reviewer.strip(),
                role=role.strip(), case_id=case_id.strip(), evidence=evidence.strip(),
-               training_authorized=True, document_sha256=hashlib.sha256(content).hexdigest(),
+               training_authorized=True, document_sha256=digest,
                feature_schema=FEATURE_SCHEMA, features=_features(text, form_id, repo_root))
     _validate(row)
     payload = json.dumps(row, sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -116,7 +131,8 @@ def _load(root: Path, form_id: str, *, pending: dict[str, Any] | None = None) ->
         _validate(row)
         if row["form_id"] != form_id:
             raise ValueError("Expert review filed under the wrong form")
-        register(row)
+        if row["document_sha256"] not in _benchmark_digests():
+            register(row)
     if pending is not None:
         register(pending)
     return list(documents.values())

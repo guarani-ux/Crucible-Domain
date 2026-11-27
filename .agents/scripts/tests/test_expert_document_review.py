@@ -18,7 +18,7 @@ from crucible import expert_document_review as er
 
 def record(root, text, case, verdict, *, authorized=True, form="production_brief"):
     source = root / "specimen.md"
-    source.write_text(text, encoding="utf-8")
+    source.write_bytes(text.encode("utf-8"))
     return er.append_expert_label(root, source, form, verdict, reviewer="Fixture reviewer",
                                   role="Fixture production editor", case_id=case,
                                   evidence="Test-only signed review receipt", training_authorized=authorized)
@@ -154,3 +154,30 @@ def test_generic_label_routes_by_supplied_provenance(tmp_path, capsys):
     assert readiness == er.train_expert_model(tmp_path, "production_brief")
     assert readiness["case_count"] == 1 and not readiness["ok"]
     assert not (tmp_path / ".agents/bench/human_labels.jsonl").exists()
+
+
+def test_known_benchmarks_excluded_from_new_and_historical_reviews(tmp_path):
+    import hashlib
+
+    from crucible.doc_flow_engine import MUTATION_CATALOG
+
+    text = er.GOLDEN_SPECIMENS["research_note"]["text"]
+    _, mutate = MUTATION_CATALOG["hypothesis_before_signal"]
+    mutated = mutate(text)
+    assert mutated != text
+    for specimen in (text, mutated, "\ufeff" + text.replace("\n", "\r\n")):
+        with pytest.raises(ValueError, match="Benchmark"):
+            record(tmp_path, specimen, "case", "pass", form="research_note")
+    assert not (tmp_path / er.STORE).exists()
+
+    # Reconstruct an intact pre-exclusion record with its original feature vector.
+    record(tmp_path, "A separate editorial decision.", "reviewed", "pass", form="research_note")
+    directory = tmp_path / er.STORE / "research_note"
+    row = json.loads(next(directory.glob("*.json")).read_bytes())
+    row.update(case_id="historical", document_sha256=hashlib.sha256(text.encode()).hexdigest(),
+               features=er._features(text, "research_note", tmp_path))
+    payload = json.dumps(row, sort_keys=True, ensure_ascii=False).encode()
+    historical = directory / (hashlib.sha256(payload).hexdigest() + ".json")
+    historical.write_bytes(payload)
+    assert er.train_expert_model(tmp_path, "research_note")["case_count"] == 1
+    assert historical.read_bytes() == payload

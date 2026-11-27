@@ -15,6 +15,7 @@ import math
 import random
 import re
 import time
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -269,6 +270,26 @@ def append_human_label(
     return row
 
 
+def iter_benchmark_documents() -> Iterator[tuple[str, str, int | None, int]]:
+    """Yield benchmark text, form, target duration and expected label in training order."""
+    for spec in GOLDEN_SPECIMENS.values():
+        form_id = spec["form_id"]
+        target_dur = spec.get("target_duration_s")
+        text = spec["text"]
+
+        yield text, form_id, target_dur, 1
+
+        for mut_name, (forms, mut_fn) in MUTATION_CATALOG.items():
+            if form_id not in forms:
+                continue
+            if mut_name == "truncate_runtime_half" and (target_dur is None or target_dur < 60):
+                continue
+            mutated = mut_fn(text)
+            if mutated == text:
+                continue
+            yield mutated, form_id, target_dur, 0
+
+
 def _build_training_dataset(
     repo_root: Path,
     *,
@@ -279,34 +300,15 @@ def _build_training_dataset(
     ys: list[int] = []
     human_count = 0
 
-    for _spec_id, spec in GOLDEN_SPECIMENS.items():
-        form_id = spec["form_id"]
-        target_dur = spec.get("target_duration_s")
-        text = spec["text"]
-
-        # Positive golden specimen (upweighted 3x for class balance against 14 fault mutations)
-        f_pos, _ = extract_document_features(
+    for text, form_id, target_dur, label in iter_benchmark_documents():
+        features, _ = extract_document_features(
             text, form_id, target_duration_s=target_dur, repo_root=repo_root, charter=charter
         )
-        vec_pos = [f_pos[name] for name in FEATURE_NAMES]
-        for _ in range(3):
-            xs.append(vec_pos)
-            ys.append(1)
-
-        # Negative fault mutants
-        for mut_name, (forms, mut_fn) in MUTATION_CATALOG.items():
-            if form_id not in forms:
-                continue
-            if mut_name == "truncate_runtime_half" and (target_dur is None or target_dur < 60):
-                continue
-            mutated = mut_fn(text)
-            if mutated == text:
-                continue
-            f_neg, _ = extract_document_features(
-                mutated, form_id, target_duration_s=target_dur, repo_root=repo_root, charter=charter
-            )
-            xs.append([f_neg[name] for name in FEATURE_NAMES])
-            ys.append(0)
+        vector = [features[name] for name in FEATURE_NAMES]
+        # Retain the benchmark's 3:1 weighting for golden examples versus mutations.
+        for _ in range(3 if label else 1):
+            xs.append(vector)
+            ys.append(label)
 
     # Human labels (upweighted 4x because real stakeholder decisions are highest-signal)
     lp = default_human_labels_path(repo_root)
