@@ -37,6 +37,16 @@ class TestCrucibleIndexAndDoctor(unittest.TestCase):
         self.assertEqual(idx.counts_by_kind.get("exhibit", 0), 10)
         self.assertIn("ig-reconcile", idx.entries)
 
+    def test_local_plugin_routes_open_the_recognition_instructions(self) -> None:
+        idx = crucible_index.build_index(REPO_ROOT, global_config_dir=None)
+        for skill, recognize in (("story-lane", "storylane_recognize"), ("meeting-prep", "meetingprep_recognize")):
+            with self.subTest(skill=skill):
+                result = crucible_index.route_query(idx, skill)
+                self.assertEqual(result.match_mode, "exact")
+                entry = result.matches[0].entry
+                self.assertEqual((entry.id, entry.kind, entry.reachability), (skill, "skill", "local"))
+                self.assertIn(recognize, Path(entry.path).read_text(encoding="utf-8"))
+
     def test_all_ten_chatgpt_skill_bindings_resolve_locally(self) -> None:
         idx = crucible_index.build_index(REPO_ROOT, global_config_dir=crucible_index.DEFAULT_GLOBAL_CONFIG_DIR)
         self.assertEqual(len(idx.chatgpt_bindings), 10)

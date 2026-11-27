@@ -286,7 +286,10 @@ def _scan_skill_dir(
         folder_name = skill_file.parent.name
         if include_only is not None and folder_name not in include_only:
             continue
-        raw = skill_file.read_text(encoding="utf-8", errors="replace")
+        try:
+            raw = skill_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue  # A missing or unreadable instruction file cannot be a route target.
         fm, fm_bytes = _parse_frontmatter(raw)
         name = fm.get("name") or folder_name
         desc = fm.get("description") or ""
@@ -320,8 +323,12 @@ def _index_skills(
     alias_map: dict[str, str],
 ) -> int:
     fm_bytes = 0
-    ig_skills = root / ".agents" / "plugins" / "inner-gravity" / "skills"
-    fm_bytes += _scan_skill_dir(ig_skills, entries, alias_map, reachability="local")
+    plugins_dir = root / ".agents" / "plugins"
+    # Keep established Inner Gravity IDs first when a local plugin repeats a name.
+    skill_dirs = sorted(plugins_dir.glob("*/skills"),
+                        key=lambda path: (path.parent.name != "inner-gravity", path.parent.name))
+    for skills_dir in skill_dirs:
+        fm_bytes += _scan_skill_dir(skills_dir, entries, alias_map, reachability="local")
     if global_config_dir and global_config_dir.is_dir():
         fm_bytes += _scan_skill_dir(global_config_dir / "skills", entries, alias_map, reachability="host_global")
         skills_json = global_config_dir / "skills.json"
